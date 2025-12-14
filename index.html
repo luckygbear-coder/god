@@ -249,7 +249,27 @@
       </div>
     </div>
   </div>
+  <!-- ✅ 重新開始確認視窗（取代 confirm） -->
+  <div id="modalRestart" class="modal hidden">
+    <div class="modal-card small">
+      <div class="modal-head">
+        <div class="modal-title">🔁 重新開始</div>
+        <button class="iconbtn" id="closeRestart" type="button">✕</button>
+      </div>
 
+      <div class="modal-body">
+        <div class="hint" style="white-space:pre-line;">
+          你確定要重新開始嗎？
+          這會清除本局所有存檔、公告與投票紀錄，並回到開局設定。
+        </div>
+      </div>
+
+      <div class="modal-actions">
+        <button id="btnRestartCancel" class="btn ghost" type="button">取消</button>
+        <button id="btnRestartConfirm" class="btn primary" type="button">確認重新開始</button>
+      </div>
+    </div>
+  </div>
   <script src="./app.js"></script>
 </body>
 </html>
