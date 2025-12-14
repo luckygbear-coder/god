@@ -1,609 +1,526 @@
-/* =========================
-   Fairy PWA UI (no main scroll)
-   - 主畫面不捲動
-   - 彈窗內容可捲動
-   - 上帝視角深色模式
-   - 翻牌特效
-========================= */
+/* =========================================================
+   狼人殺｜上帝輔助 PWA - style.css（童話手機版）
+   ✅ 不捲軸（固定高度）
+   ✅ 按久不選字（防文字選取/長按放大）
+   ✅ 座位圓點、彈窗、翻牌動畫
+========================================================= */
 
+/* ====== 全域防選字 + 行為 ====== */
+* {
+  -webkit-tap-highlight-color: transparent;
+  -webkit-touch-callout: none;
+  -webkit-text-size-adjust: 100%;
+  user-select: none;
+}
+input, textarea, pre {
+  user-select: text; /* 只有輸入/文字區可選字 */
+  -webkit-touch-callout: default;
+}
+html, body {
+  height: 100%;
+  margin: 0;
+  padding: 0;
+  overflow: hidden; /* ✅ 不捲軸 */
+  background: #ffeec9;
+  font-family: "Noto Sans TC", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+  color: #3f2b1f;
+}
+
+/* iOS Safe Area */
 :root{
-  --cream:#ffefcf;
-  --cream2:#fff7e6;
-  --ink:#3a2b22;
-  --ink2:#6c5a4e;
-
-  --card:#ffffff;
-  --line:rgba(58,43,34,.12);
-
-  --accent:#ff8a3d;
-  --accent2:#7c4dff;
-  --good:#2bb673;
-  --bad:#e84a5f;
-
-  --shadow: 0 12px 28px rgba(60,35,25,.16);
-  --shadow2: 0 8px 20px rgba(60,35,25,.12);
-
-  --r:18px;
-  --r2:14px;
-  --tap:.97;
-
-  --safe-bottom: env(safe-area-inset-bottom, 0px);
   --safe-top: env(safe-area-inset-top, 0px);
+  --safe-bot: env(safe-area-inset-bottom, 0px);
+
+  --cream: #fff7e6;
+  --cream2:#ffe7bf;
+  --gold:  #f4a63a;
+  --gold2: #ffb54b;
+  --cocoa: #4a2a1a;
+  --ink:   #3f2b1f;
+  --line:  rgba(0,0,0,.10);
+  --shadow: 0 10px 26px rgba(0,0,0,.12);
+  --shadow2: 0 16px 40px rgba(0,0,0,.18);
+
+  --radius: 18px;
+  --radius2: 14px;
 }
 
-*{ box-sizing:border-box; -webkit-tap-highlight-color: transparent; }
-html,body{ height:100%; }
-body{
-  margin:0;
-  font-family:-apple-system,BlinkMacSystemFont,"Noto Sans TC","PingFang TC",sans-serif;
-  background:
-    radial-gradient(900px 520px at 20% -10%, rgba(255,138,61,.20), transparent 58%),
-    radial-gradient(820px 520px at 80% 10%, rgba(124,77,255,.16), transparent 60%),
-    var(--cream);
-  color:var(--ink);
-  overflow:hidden; /* ✅ 主畫面不捲動 */
+/* ====== App Shell ====== */
+.app-shell{
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  padding-top: var(--safe-top);
+  padding-bottom: var(--safe-bot);
 }
 
-/* ===== 上帝視角深色模式 ===== */
-body.god-on{
-  background:
-    radial-gradient(900px 520px at 20% -10%, rgba(124,77,255,.18), transparent 58%),
-    radial-gradient(820px 520px at 80% 10%, rgba(255,138,61,.10), transparent 60%),
-    #141018;
-  color:#fff;
-}
-body.god-on .card{ background: rgba(255,255,255,.06); border-color: rgba(255,255,255,.14); }
-body.god-on .title, body.god-on .subtitle{ color:#fff; }
-body.god-on .hint{ color: rgba(255,255,255,.70); }
-body.god-on .tag{ border-color: rgba(255,255,255,.16); background: rgba(255,255,255,.08); color: rgba(255,255,255,.85); }
-body.god-on .icon-btn{ background: rgba(255,255,255,.08); border-color: rgba(255,255,255,.14); color:#fff; }
-body.god-on .seg-btn{ background: rgba(255,255,255,.08); border-color: rgba(255,255,255,.14); color: rgba(255,255,255,.80); }
-body.god-on .seg-btn.active{ background: rgba(124,77,255,.26); border-color: rgba(124,77,255,.40); color:#fff; }
-body.god-on .btn.ghost{ background: rgba(255,255,255,.08); border-color: rgba(255,255,255,.14); color:#fff; }
-body.god-on .pillbig{ background: rgba(255,255,255,.10); border-color: rgba(255,255,255,.16); color:#fff; }
-body.god-on input[type="range"]{ accent-color: #bfa7ff; }
-
-/* =========================
-   App Layout
-========================= */
-.app{
-  max-width:480px;
-  margin:0 auto;
-  height:100vh;
-  height:100dvh;
-  padding-top: calc(8px + var(--safe-top));
-  position:relative;
-}
-
+/* ====== Topbar ====== */
 .topbar{
+  flex: 0 0 auto;
   display:flex;
   align-items:center;
   justify-content:space-between;
-  padding: 6px 12px 10px;
+  padding: 10px 12px;
+  background: linear-gradient(180deg, #fff3d9, #ffe9c2);
+  border-bottom: 1px solid var(--line);
+}
+.brand-title{
+  font-weight: 1000;
+  font-size: 16px;
+  letter-spacing:.2px;
+}
+.brand-sub{
+  font-size: 12px;
+  opacity: .75;
+  margin-top: 2px;
+}
+.top-actions{
+  display:flex;
   gap:10px;
 }
-
-.titlebox{
-  flex:1;
-  text-align:center;
-}
-.title{
-  font-weight:1000;
-  font-size:18px;
-  letter-spacing:.5px;
-}
-.subtitle{
-  font-size:12px;
-  color:var(--ink2);
-  margin-top:2px;
+.iconbtn{
+  width: 40px;
+  height: 40px;
+  border-radius: 14px;
+  border: 2px solid rgba(0,0,0,.10);
+  background: #fff;
+  box-shadow: 0 4px 14px rgba(0,0,0,.10);
+  font-size: 18px;
+  cursor: pointer;
 }
 
-.icon-btn{
-  width:44px;
-  height:44px;
-  border-radius:14px;
-  border:1px solid var(--line);
-  background: rgba(255,255,255,.62);
-  box-shadow: var(--shadow2);
-  color:var(--ink);
-  font-size:18px;
-}
-.icon-btn:active{ transform: scale(var(--tap)); }
-
-/* ===== stage (no scroll) ===== */
-.stage{
-  height: calc(100vh - (66px + var(--safe-top)));
-  height: calc(100dvh - (66px + var(--safe-top)));
-  padding: 0 12px 12px;
-  overflow:hidden; /* ✅ 不捲動 */
-  display:flex;
-  align-items:stretch;
+/* ====== Main + Screens（固定高度，不捲動） ====== */
+.main{
+  flex: 1 1 auto;
+  position: relative;
+  padding: 10px 10px 0;
+  box-sizing: border-box;
 }
 .screen{
+  position:absolute;
+  inset: 10px 10px 10px 10px;
   display:none;
-  width:100%;
+  flex-direction: column;
+  gap: 10px;
 }
 .screen.active{
   display:flex;
-  flex-direction:column;
-  gap:12px;
 }
 
-/* =========================
-   Cards
-========================= */
+/* ====== Card ====== */
 .card{
-  background: var(--card);
-  border:1px solid var(--line);
-  border-radius: var(--r);
+  background: var(--cream);
+  border-radius: var(--radius);
+  border: 2px solid rgba(0,0,0,.10);
   box-shadow: var(--shadow);
-  padding:14px;
+  padding: 12px 12px 12px;
+}
+.card.inner{
+  background: #fff3d9;
+  box-shadow: none;
+  border-style: dashed;
+  border-color: rgba(0,0,0,.12);
+  margin-top: 10px;
+}
+h2{
+  margin: 0 0 10px;
+  font-size: 16px;
+  font-weight: 1000;
 }
 
-.card.center{
-  text-align:center;
-}
-
-.card-h{
+/* ====== Row utils ====== */
+.row{
   display:flex;
-  align-items:center;
-  justify-content:space-between;
   gap:10px;
-  margin-bottom:10px;
+  align-items:center;
 }
+.row.spread{ justify-content: space-between; }
+.spacer{ flex: 1 1 auto; }
 
-.card-title{
-  font-weight:1000;
-  font-size:16px;
-}
-
-.tag{
-  padding:6px 10px;
-  border-radius:999px;
-  border:1px solid var(--line);
-  background: rgba(255,255,255,.55);
-  font-size:12px;
-  font-weight:900;
-  color:var(--ink2);
-}
-
-.spacer{ height:10px; }
-
-/* =========================
-   Segmented
-========================= */
-.seg{
-  display:flex;
-  width:100%;
-  border:1px solid var(--line);
-  background: rgba(255,255,255,.45);
-  border-radius:999px;
-  padding:4px;
-  box-shadow: var(--shadow2);
-}
-.seg.small{ margin-bottom:10px; }
-.seg-btn{
-  flex:1;
-  border:none;
-  background: transparent;
-  border-radius:999px;
-  padding:10px 8px;
-  font-weight:1000;
-  font-size:13px;
-  color: var(--ink2);
-}
-.seg-btn.active{
-  background: rgba(255,138,61,.18);
-  color: var(--ink);
-}
-
-/* =========================
-   Form elements
-========================= */
-.field{ margin-top:2px; }
 .label{
-  font-size:13px;
-  font-weight:1000;
-  color: var(--ink2);
-  margin-bottom:8px;
-}
-.row{ display:flex; gap:10px; align-items:center; }
-.row.wrap{ flex-wrap:wrap; }
-.row.between{ justify-content:space-between; }
-
-.pillbig{
-  flex:1;
-  text-align:center;
-  padding:12px 10px;
-  border-radius:16px;
-  border:1px solid var(--line);
-  background: rgba(255,255,255,.65);
-  font-weight:1000;
-  font-size:18px;
-}
-input[type="range"]{
-  width:100%;
-  margin-top:10px;
-  accent-color: var(--accent);
-}
-
-/* =========================
-   Buttons
-========================= */
-.btn{
-  border:none;
-  border-radius:16px;
-  padding:12px 14px;
-  font-weight:1000;
-  font-size:14px;
-  color:#fff;
-  background: linear-gradient(180deg, rgba(255,138,61,1), rgba(255,138,61,.82));
-  box-shadow: 0 12px 22px rgba(255,138,61,.18);
-}
-.btn:active{ transform:scale(var(--tap)); }
-
-.btn.primary{
-  width:100%;
-  padding:14px 14px;
-  font-size:15px;
-}
-
-.btn.ghost{
-  background: rgba(255,255,255,.68);
-  color: var(--ink);
-  border:1px solid var(--line);
-  box-shadow: var(--shadow2);
-}
-
-.btn.tiny{
-  padding:8px 10px;
-  font-size:12px;
-  border-radius:12px;
-}
-
-.bottom-cta{
-  margin-top:auto;
-  padding-bottom: calc(10px + var(--safe-bottom));
-}
-
-/* =========================
-   Deal / Flip
-========================= */
-.deal-text{
-  margin: 10px 0 12px;
-  font-size:16px;
-  font-weight:1000;
+  font-size: 12px;
+  font-weight: 900;
+  opacity: .9;
 }
 .hint{
-  margin: 10px 0 2px;
-  font-size:12px;
-  color: var(--ink2);
+  font-size: 12px;
+  opacity: .78;
+  line-height: 1.5;
 }
-.flip-btn{
-  width:100%;
-  padding:18px 14px;
-  border-radius: 18px;
-  border: 1px solid rgba(255,138,61,.25);
-  background: linear-gradient(180deg, rgba(255,138,61,.20), rgba(124,77,255,.12));
-  font-weight:1000;
-  font-size:16px;
-  color: var(--ink);
-  box-shadow: var(--shadow);
-}
-.flip-btn:active{ transform:scale(var(--tap)); }
-
-/* =========================
-   Script box
-========================= */
-.scriptbox{
-  border:1px dashed rgba(58,43,34,.20);
-  background: rgba(255,255,255,.55);
-  border-radius: 16px;
-  padding: 12px;
-}
-.script-title{
-  font-size:12px;
-  font-weight:1000;
-  color: var(--ink2);
-  margin-bottom:6px;
-}
-.script{
-  font-size:13px;
-  line-height:1.6;
-  white-space:pre-line;
-}
-
-/* =========================
-   Seat grid (dots)
-========================= */
-.seatgrid{
-  display:flex;
-  flex-wrap:wrap;
-  gap:10px;
-  justify-content:flex-start;
-  margin-top:10px;
-}
-.seat{
-  width:46px;
-  height:46px;
-  border-radius:999px;
-  border:1px solid var(--line);
-  background: rgba(255,255,255,.72);
-  display:flex;
-  align-items:center;
-  justify-content:center;
-  font-weight:1000;
-  box-shadow: var(--shadow2);
-  position:relative;
-  user-select:none;
-}
-.seat:active{ transform:scale(var(--tap)); }
-.seat.dead{
-  opacity:.40;
-  filter: grayscale(1);
-}
-.seat.selected{
-  outline: 3px solid rgba(255,138,61,.55);
-  box-shadow: 0 0 0 6px rgba(255,138,61,.16);
-}
-.seat.chief::after{
-  content:"🧢";
-  position:absolute;
-  top:-10px;
-  right:-8px;
-  font-size:16px;
-}
-
-/* =========================
-   Floating buttons
-========================= */
-.fab{
-  position:absolute;
-  right: 14px;
-  bottom: calc(14px + var(--safe-bottom));
-  width:54px;
-  height:54px;
-  border-radius: 18px;
-  border:1px solid rgba(58,43,34,.14);
-  background: rgba(255,255,255,.85);
-  box-shadow: var(--shadow);
-  font-size:20px;
-  color: var(--ink);
-}
-.fab:active{ transform:scale(var(--tap)); }
-.fab2{
-  right: 14px;
-  bottom: calc(78px + var(--safe-bottom));
-}
-
-/* =========================
-   Modal (overlay)
-========================= */
-.modal{
-  position:fixed;
-  inset:0;
-  background: rgba(20,12,10,.55);
-  display:flex;
-  align-items:center;
-  justify-content:center;
-  padding: 16px;
-  z-index: 99;
+.hint.small{ font-size: 11px; opacity:.7; }
+.warn{
+  margin-top: 8px;
+  padding: 8px 10px;
+  border-radius: 12px;
+  background: #fff0f0;
+  border: 2px solid rgba(255,0,0,.15);
+  color: #7d1a1a;
+  font-weight: 900;
 }
 .hidden{ display:none !important; }
 
-.modal-card{
-  width:min(460px, 100%);
-  max-height: min(78vh, 620px);
-  border-radius: 20px;
-  border:1px solid rgba(255,255,255,.25);
-  background:
-    radial-gradient(900px 520px at 20% -10%, rgba(255,138,61,.20), transparent 60%),
-    rgba(255,255,255,.96);
-  box-shadow: 0 22px 55px rgba(0,0,0,.35);
-  overflow:hidden;
+/* ====== Pills ====== */
+.pill{
+  flex: 1 1 auto;
+  height: 40px;
+  border-radius: 14px;
+  border: 2px solid rgba(0,0,0,.10);
+  background: #fff;
+  box-shadow: 0 6px 14px rgba(0,0,0,.08);
+  font-weight: 1000;
+  cursor: pointer;
 }
-body.god-on .modal-card{
-  background:
-    radial-gradient(900px 520px at 20% -10%, rgba(124,77,255,.20), transparent 60%),
-    rgba(25,18,30,.96);
-  border-color: rgba(255,255,255,.18);
+.pill.active{
+  background: linear-gradient(180deg, #ffe7bf, #ffd59a);
+  border-color: rgba(0,0,0,.16);
 }
 
-.modal-h{
-  display:flex;
-  align-items:center;
-  justify-content:space-between;
-  gap:10px;
-  padding: 12px 12px 10px;
-  border-bottom:1px solid rgba(58,43,34,.10);
+/* ====== Buttons ====== */
+.btn{
+  height: 44px;
+  border-radius: 16px;
+  border: 2px solid rgba(0,0,0,.12);
+  background: #fff;
+  box-shadow: 0 6px 14px rgba(0,0,0,.10);
+  padding: 0 14px;
+  font-weight: 1000;
+  cursor:pointer;
 }
-body.god-on .modal-h{ border-bottom-color: rgba(255,255,255,.10); }
-
-.modal-title{
-  font-weight:1000;
-  font-size:15px;
+.btn.primary{
+  background: linear-gradient(180deg, var(--gold2), var(--gold));
+  border-color: rgba(0,0,0,.14);
 }
-
-.modal-body{
-  padding: 12px;
-  overflow:auto;            /* ✅ 彈窗內容可捲動 */
-  max-height: 52vh;
-}
-.modal-actions{
-  padding: 10px 12px 12px;
-  border-top:1px solid rgba(58,43,34,.10);
-  display:flex;
-  gap:10px;
-}
-body.god-on .modal-actions{ border-top-color: rgba(255,255,255,.10); }
-.modal-actions .btn{ flex:1; }
-
-/* PIN */
-.pin{
-  width:100%;
-  padding:14px 12px;
-  border-radius:16px;
-  border:1px solid rgba(58,43,34,.16);
-  background: rgba(255,255,255,.85);
-  font-weight:1000;
-  font-size:16px;
-  text-align:center;
-  letter-spacing:4px;
-  margin-top:10px;
-}
-body.god-on .pin{
-  border-color: rgba(255,255,255,.18);
-  background: rgba(255,255,255,.10);
-  color:#fff;
-}
-
-/* Reveal flip card */
-.modal-card.reveal{
+.btn.ghost{
   background: transparent;
-  border:none;
-  box-shadow:none;
-  max-height:none;
+  box-shadow: none;
 }
-.reveal-title{
+.btn.tiny{
+  height: 34px;
+  border-radius: 12px;
+  padding: 0 10px;
+  font-size: 12px;
+}
+.btn:disabled{
+  opacity: .45;
+  cursor: not-allowed;
+}
+
+/* ====== Bottom Bar（固定不捲動） ====== */
+.bottombar{
+  margin-top: auto;
+  display:flex;
+  gap: 10px;
+  padding: 10px 0 0;
+}
+.bottombar .btn{
+  flex: 1 1 auto;
+}
+
+/* ====== Range ====== */
+.range{
+  width: 100%;
+  margin-top: 8px;
+}
+
+/* ====== Big number ====== */
+.big-num{
+  min-width: 64px;
   text-align:center;
-  color:#fff;
-  font-weight:1000;
-  margin-bottom:10px;
-  text-shadow:0 6px 22px rgba(0,0,0,.35);
+  font-weight: 1000;
+  font-size: 22px;
+  padding: 6px 10px;
+  border-radius: 14px;
+  background: #fff;
+  border: 2px solid rgba(0,0,0,.08);
 }
-.reveal-card{
-  width: min(320px, 92vw);
-  height: 220px;
-  margin: 0 auto;
-  perspective: 900px;
-  position:relative;
+
+/* ====== Deal ====== */
+.deal-area{
+  margin: 12px 0;
 }
-.reveal-front, .reveal-back{
+.hold-btn{
+  width: 100%;
+  height: 120px;
+  border-radius: 20px;
+  border: 2px dashed rgba(0,0,0,.20);
+  background: radial-gradient(circle at 30% 20%, #fff, #fff2d7);
+  box-shadow: 0 10px 22px rgba(0,0,0,.10);
+  font-weight: 1000;
+  font-size: 16px;
+  display:flex;
+  flex-direction: column;
+  align-items:center;
+  justify-content:center;
+  gap: 6px;
+}
+
+/* ====== Script Box ====== */
+.scriptbox{
+  white-space: pre-line;
+  line-height: 1.6;
+  padding: 10px 12px;
+  border-radius: 16px;
+  background: #fff;
+  border: 2px solid rgba(0,0,0,.10);
+}
+
+/* ====== Tag ====== */
+.tag{
+  padding: 6px 10px;
+  border-radius: 999px;
+  background: #fff;
+  border: 2px solid rgba(0,0,0,.10);
+  font-weight: 1000;
+  font-size: 12px;
+}
+
+/* ====== Seats ====== */
+.seats{
+  display:grid;
+  grid-template-columns: repeat(6, 1fr);
+  gap: 10px;
+  margin-top: 8px;
+}
+@media (max-width: 380px){
+  .seats{ grid-template-columns: repeat(5, 1fr); }
+}
+.seat{
+  height: 44px;
+  border-radius: 999px;
+  border: 2px solid rgba(0,0,0,.12);
+  background: #fff;
+  box-shadow: 0 6px 14px rgba(0,0,0,.10);
+  font-weight: 1000;
+  font-size: 14px;
+  position: relative;
+  cursor: pointer;
+}
+.seat.dead{
+  opacity: .35;
+  background: #f0f0f0;
+  box-shadow: none;
+}
+.seat.disabled{
+  opacity: .35;
+  cursor: not-allowed;
+}
+.seat.selected{
+  outline: 4px solid rgba(244,166,58,.45);
+}
+.seat.highlight{
+  outline: 4px solid rgba(99,180,255,.55);
+}
+.seat.chief::after{
+  content:"👑";
   position:absolute;
-  inset:0;
-  border-radius: 22px;
-  backface-visibility: hidden;
+  right:-4px;
+  top:-8px;
+  font-size: 16px;
+}
+
+/* ====== Day grid ====== */
+.day-grid{
+  display:grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+  margin-top: 6px;
+}
+.btn.big{
+  height: 64px;
+  border-radius: 18px;
+  font-size: 15px;
+}
+
+/* ====== FAB ====== */
+.fab{
+  position: fixed;
+  right: 14px;
+  width: 54px;
+  height: 54px;
+  border-radius: 18px;
+  border: 2px solid rgba(0,0,0,.12);
+  background: #fff;
+  box-shadow: var(--shadow2);
+  font-size: 22px;
+  cursor:pointer;
+  z-index: 50;
+}
+.fab-god{
+  bottom: calc(88px + var(--safe-bot));
+}
+.fab-ann{
+  bottom: calc(24px + var(--safe-bot));
+}
+
+/* ====== God Mode（背景變深，避免誤露） ====== */
+body.god-on{
+  background: #2a1b14;
+}
+body.god-on .topbar{
+  background: linear-gradient(180deg, #3a261d, #2a1b14);
+  color: #ffe8bf;
+  border-bottom-color: rgba(255,255,255,.10);
+}
+body.god-on .card{
+  background: rgba(255,247,230,.96);
+}
+body.god-on .iconbtn, body.god-on .fab{
+  background: #ffe8bf;
+}
+
+/* ====== Modal ====== */
+.modal{
+  position: fixed;
+  inset: 0;
+  background: rgba(0,0,0,.45);
   display:flex;
   align-items:center;
   justify-content:center;
-  box-shadow: 0 22px 55px rgba(0,0,0,.35);
-}
-.reveal-front{
-  background:
-    radial-gradient(320px 220px at 30% 20%, rgba(255,255,255,.65), transparent 55%),
-    linear-gradient(180deg, rgba(255,138,61,.95), rgba(124,77,255,.55));
-  color:#fff;
-  font-size:44px;
-  font-weight:1000;
-}
-.reveal-back{
-  transform: rotateY(180deg);
-  background:
-    radial-gradient(320px 220px at 30% 20%, rgba(255,255,255,.65), transparent 55%),
-    rgba(255,255,255,.96);
-  flex-direction:column;
   padding: 14px;
+  z-index: 80;
+}
+.modal-card{
+  width: min(480px, 100%);
+  max-height: calc(100vh - 28px);
+  overflow: hidden;
+  border-radius: 20px;
+  background: var(--cream);
+  border: 2px solid rgba(0,0,0,.12);
+  box-shadow: var(--shadow2);
+  display:flex;
+  flex-direction: column;
+}
+.modal-card.small{
+  width: min(420px, 100%);
+}
+.modal-head{
+  display:flex;
+  align-items:center;
+  justify-content: space-between;
+  padding: 10px 12px;
+  border-bottom: 1px solid var(--line);
+  background: #fff;
+}
+.modal-title{
+  font-weight: 1000;
+}
+.modal-body{
+  padding: 12px;
+  overflow: auto;
+  -webkit-overflow-scrolling: touch;
+}
+.modal-actions{
+  padding: 12px;
+  display:flex;
+  gap:10px;
+  border-top: 1px solid var(--line);
+  background: #fff;
+}
+.modal-body.center{
+  display:flex;
+  justify-content:center;
+  align-items:center;
+}
+
+/* ====== PIN ====== */
+.pin{
+  width: 100%;
+  height: 46px;
+  border-radius: 14px;
+  border: 2px solid rgba(0,0,0,.12);
+  padding: 0 12px;
+  font-size: 18px;
+  font-weight: 900;
+  letter-spacing: 6px;
   text-align:center;
-}
-body.god-on .reveal-back{
-  background: rgba(25,18,30,.96);
-  color:#fff;
-}
-.reveal-role{
-  font-size:28px;
-  font-weight:1000;
-  color: var(--accent2);
-}
-.reveal-tip{
-  margin-top:10px;
-  font-size:12px;
-  color: var(--ink2);
-}
-body.god-on .reveal-tip{ color: rgba(255,255,255,.70); }
-
-/* 翻牌狀態：由 app.js 加 .flipped */
-.reveal-card.flipped .reveal-front{ transform: rotateY(180deg); }
-.reveal-card.flipped .reveal-back{ transform: rotateY(360deg); }
-.reveal-front, .reveal-back{
-  transition: transform .42s ease;
+  background: #fff;
+  margin-top: 10px;
 }
 
-/* Ann box / logs */
-.ann-box{
-  border:1px solid rgba(58,43,34,.10);
-  background: rgba(255,255,255,.70);
+/* ====== Announcement box ====== */
+.prebox{
+  white-space: pre-wrap;
+  line-height: 1.55;
+  padding: 10px 12px;
   border-radius: 16px;
-  padding: 10px;
+  background: #fff;
+  border: 2px solid rgba(0,0,0,.10);
+  margin: 10px 0 0;
   min-height: 160px;
-  white-space: pre-line;
-  font-size:13px;
-  line-height:1.6;
-}
-body.god-on .ann-box{
-  border-color: rgba(255,255,255,.12);
-  background: rgba(255,255,255,.08);
-  color:#fff;
 }
 
+/* ====== Log list ====== */
 .loglist{
   display:flex;
-  flex-direction:column;
-  gap:10px;
+  flex-direction: column;
+  gap: 10px;
 }
 .logitem{
-  border:1px solid rgba(58,43,34,.12);
-  background: rgba(255,255,255,.70);
+  background:#fff;
   border-radius: 16px;
-  padding: 10px;
+  border: 2px solid rgba(0,0,0,.08);
+  padding: 10px 10px;
 }
-body.god-on .logitem{
-  border-color: rgba(255,255,255,.12);
-  background: rgba(255,255,255,.08);
-}
-
 .logtitle{
-  font-weight:1000;
-  font-size:13px;
-  color: var(--accent2);
-  margin-bottom:6px;
+  font-weight: 1000;
+  font-size: 12px;
+  opacity: .85;
+  margin-bottom: 6px;
 }
 .logtext{
-  white-space:pre-line;
-  font-size:13px;
-  line-height:1.6;
+  white-space: pre-wrap;
+  line-height: 1.55;
+  font-size: 12px;
 }
 
-/* warn */
-.warn{
-  margin-top:8px;
-  color: var(--bad);
-  font-weight:1000;
+/* ====== Flip Card ====== */
+.flipcard{
+  width: 220px;
+  height: 260px;
+  perspective: 1000px;
 }
-body.god-on .warn{ color: #ffb3be; }
+.flip-inner{
+  width: 100%;
+  height: 100%;
+  border-radius: 18px;
+  position: relative;
+  transform-style: preserve-3d;
+  transition: transform .45s cubic-bezier(.2,.9,.2,1);
+}
+.flip-front, .flip-back{
+  position:absolute;
+  inset:0;
+  border-radius: 18px;
+  backface-visibility: hidden;
+  border: 2px solid rgba(0,0,0,.12);
+  box-shadow: 0 10px 24px rgba(0,0,0,.18);
+  display:flex;
+  flex-direction: column;
+  align-items:center;
+  justify-content:center;
+  gap: 10px;
+  background: radial-gradient(circle at 30% 20%, #fff, #fff2d7);
+}
+.flip-front .front-mark{
+  font-size: 64px;
+}
+.flip-back{
+  transform: rotateY(180deg);
+  background: radial-gradient(circle at 30% 20%, #fff, #ffe7bf);
+}
+#revealCard.flipped .flip-inner{
+  transform: rotateY(180deg);
+}
+.rolebig{
+  font-size: 26px;
+  font-weight: 1000;
+}
 
-.summary{
-  margin-top:10px;
-  font-size:12px;
-  line-height:1.6;
-  color: var(--ink2);
-}
-body.god-on .summary{ color: rgba(255,255,255,.75); }
+/* ====== Small polish ====== */
+pre{ margin:0; }
 
-/* ====== 全站防止文字選取（App 行為） ====== */
-* {
-  -webkit-touch-callout: none; /* iOS 長按選單 */
-  -webkit-user-select: none;
-  -khtml-user-select: none;
-  -moz-user-select: none;
-  -ms-user-select: none;
-  user-select: none;
-}
-
-/* 但允許 input / textarea */
-input, textarea {
-  -webkit-user-select: auto;
-  user-select: auto;
-}
-html, body {
-  touch-action: manipulation;
+/* ====== Reduce motion (accessibility) ====== */
+@media (prefers-reduced-motion: reduce){
+  .flip-inner{ transition:none; }
+  .seat, .btn, .iconbtn, .fab{ transition:none; }
 }
