@@ -1,92 +1,119 @@
-import ROLES from "./roles.js";
-import BOARDS from "./boards.js";
+// 使用全域資料（不使用 import，GitHub Pages / iOS 最穩）
+const ROLES = window.ROLES;
+const BOARDS = window.BOARDS;
 
-/* ======================
-   全域狀態（讓 index.html 可讀 logs）
-====================== */
-export const Game = {
+const Game = {
   boardId: "basic",
   board: null,
   players: [],
-  phase: "setup", // setup | deal | night | day | vote
-  dealIndex: 0,
-
-  nightStepIndex: 0,
-  nightSteps: [],
+  phase: "setup", // setup | deal | night | day | police | speak | vote
   logs: [],
-
   settings: { playerCount: 9 },
 
-  night: {
-    wolfTarget: null,
-    guardTarget: null,
-    seerTarget: null,
-    seerResult: null,
-    witchSave: false,
-    witchPoisonTarget: null
+  dealIndex: 0,
+
+  night: { wolfTarget: null },
+
+  police: {
+    candidates: new Set(), // 上警名單
+    direction: "cw",       // cw | ccw | rand
+    order: [],
+    speakIndex: 0
   },
 
   vote: {
     round: 1,
-    candidates: null,      // null = 全部可投；陣列 = 只限名單（平票重投）
+    candidates: null,
     voterSeats: [],
     voterIndex: 0,
-    votes: {},             // { voterSeat: targetSeat|null }
-    done: false
+    votes: {}
   }
 };
+
 window.Game = Game;
 
-/* ======================
-   板子預設配置（你可自行再加）
-====================== */
+/* ========= 預設配置 ========= */
 const PRESETS = {
   basic: {
-    9:  { werewolf: 2, villager: 5, seer: 1, witch: 1 },
-    10: { werewolf: 3, villager: 5, seer: 1, witch: 1 },
-    11: { werewolf: 3, villager: 5, seer: 1, witch: 1, hunter: 1 },
-    12: { werewolf: 3, villager: 5, seer: 1, witch: 1, hunter: 1, guard: 1 }
+    9:  { werewolf:2, villager:5, seer:1, witch:1 },
+    10: { werewolf:3, villager:5, seer:1, witch:1 },
+    11: { werewolf:3, villager:5, seer:1, witch:1, hunter:1 },
+    12: { werewolf:3, villager:5, seer:1, witch:1, hunter:1, guard:1 }
   },
   wolfKings: {
-    10: { werewolf: 2, whiteWolfKing: 1, blackWolfKing: 1, villager: 4, seer: 1, witch: 1 },
-    11: { werewolf: 2, whiteWolfKing: 1, blackWolfKing: 1, villager: 5, seer: 1, witch: 1 },
-    12: { werewolf: 2, whiteWolfKing: 1, blackWolfKing: 1, villager: 6, seer: 1, witch: 1 }
+    10: { werewolf:2, whiteWolfKing:1, blackWolfKing:1, villager:4, seer:1, witch:1 },
+    11: { werewolf:2, whiteWolfKing:1, blackWolfKing:1, villager:5, seer:1, witch:1 },
+    12: { werewolf:2, whiteWolfKing:1, blackWolfKing:1, villager:6, seer:1, witch:1 }
   }
 };
 
-/* ======================
-   啟動
-====================== */
+/* ========= 啟動 ========= */
 document.addEventListener("DOMContentLoaded", () => {
-  renderSetup("basic");
+  renderSetup(Game.boardId);
+  injectMiniStyles();
 });
 
-/* ======================
-   Setup UI（選板子/人數/配置）
-====================== */
-function renderSetup(boardId) {
-  Game.phase = "setup";
-  Game.boardId = boardId;
-  Game.board = BOARDS[boardId];
+/* ========= 共用工具 ========= */
+const $ = (id) => document.getElementById(id);
 
-  const counts = Game.board.players || [9, 10, 11, 12];
-  if (!counts.includes(Game.settings.playerCount)) Game.settings.playerCount = counts[0];
+function alivePlayers() { return Game.players.filter(p=>p.alive); }
+function escapeHtml(s){ return String(s).replaceAll("&","&amp;").replaceAll("<","&lt;").replaceAll(">","&gt;"); }
 
-  const boardsHtml = Object.values(BOARDS).map(b => `
-    <button class="board-card ${b.id === boardId ? "active" : ""}" onclick="selectBoard('${b.id}')">
+function shuffle(arr){
+  const a=[...arr];
+  for(let i=a.length-1;i>0;i--){
+    const j=Math.floor(Math.random()*(i+1));
+    [a[i],a[j]]=[a[j],a[i]];
+  }
+  return a;
+}
+
+function buildRoleList(boardId, count){
+  const preset = PRESETS[boardId]?.[count];
+  if(!preset) throw new Error("沒有此人數預設配置");
+  const list=[];
+  for(const [id,n] of Object.entries(preset)){
+    for(let i=0;i<n;i++) list.push(id);
+  }
+  if(list.length!==count) throw new Error("角色數量不等於玩家數");
+  return shuffle(list);
+}
+
+function createPlayers(count, roleList){
+  return Array.from({length:count},(_,i)=>({
+    seat:i+1,
+    roleId: roleList[i],
+    alive:true
+  }));
+}
+
+/* ========= Setup：選板子/人數/開始 ========= */
+window.selectBoard = (id)=> renderSetup(id);
+window.setPlayerCount = (n)=>{ Game.settings.playerCount=n; renderSetup(Game.boardId); };
+
+function renderSetup(boardId){
+  Game.phase="setup";
+  Game.boardId=boardId;
+  Game.board=BOARDS[boardId];
+
+  const counts = Game.board.players || [9,10,11,12];
+  if(!counts.includes(Game.settings.playerCount)) Game.settings.playerCount=counts[0];
+
+  const boardsHtml = Object.values(BOARDS).map(b=>`
+    <button class="board-card ${b.id===boardId?"active":""}" onclick="selectBoard('${b.id}')">
       <div class="board-title">${b.name}</div>
-      <div class="board-intro">${b.intro || ""}</div>
-      <div class="board-meta">
-        人數 ${b.players.join("–")} ・ 女巫自救 ${b.rules?.witchSelfSave === "forbidden" ? "不可" : "可"}
-      </div>
+      <div class="board-intro">${b.intro||""}</div>
+      <div class="board-meta">人數 ${b.players.join("–")} ・ 女巫自救 ${b.rules?.witchSelfSave==="forbidden"?"不可":"可"}</div>
     </button>
   `).join("");
 
-  const countsHtml = counts.map(n => `
-    <button class="pill ${n === Game.settings.playerCount ? "active" : ""}" onclick="setPlayerCount(${n})">${n} 人</button>
+  const countsHtml = counts.map(n=>`
+    <button class="pill ${n===Game.settings.playerCount?"active":""}" onclick="setPlayerCount(${n})">${n} 人</button>
   `).join("");
 
-  document.getElementById("main").innerHTML = `
+  const roleSummary = presetSummary(boardId, Game.settings.playerCount);
+
+  $("main").innerHTML = `
     <section class="panel">
       <h2 class="h2">請選擇板子開始遊戲</h2>
       <div class="grid">${boardsHtml}</div>
@@ -98,78 +125,61 @@ function renderSetup(boardId) {
     </section>
 
     <section class="panel">
-      <h3 class="h3">本局角色配置（預設）</h3>
-      <div class="card">${presetSummary(boardId, Game.settings.playerCount)}</div>
+      <h3 class="h3">預設角色配置</h3>
+      <div class="card">${roleSummary}</div>
       <button class="primary" onclick="startDeal()">開始抽牌</button>
     </section>
   `;
 }
 
-window.selectBoard = id => renderSetup(id);
-window.setPlayerCount = n => { Game.settings.playerCount = n; renderSetup(Game.boardId); };
-
-function presetSummary(boardId, count) {
+function presetSummary(boardId,count){
   const preset = PRESETS[boardId]?.[count];
-  if (!preset) return `⚠️ 這個板子目前沒有 ${count} 人的預設配置。`;
-  return Object.entries(preset)
-    .filter(([,v])=>v>0)
-    .map(([k,v]) => `${ROLES[k]?.name || k} × ${v}`)
-    .join("、");
+  if(!preset) return `⚠️ 無 ${count} 人配置`;
+  return Object.entries(preset).filter(([,v])=>v>0).map(([id,v])=>`${ROLES[id].name}×${v}`).join("、");
 }
 
-/* ======================
-   抽牌（Pass & Play）
-====================== */
-window.startDeal = function () {
+/* ========= 抽牌 ========= */
+window.startDeal = function(){
   const roleList = buildRoleList(Game.boardId, Game.settings.playerCount);
   Game.players = createPlayers(Game.settings.playerCount, roleList);
-  Game.dealIndex = 0;
-  Game.phase = "deal";
+  Game.dealIndex=0;
+  Game.phase="deal";
   renderDeal();
 };
 
-function renderDeal() {
+function renderDeal(){
   const p = Game.players[Game.dealIndex];
-  document.getElementById("main").innerHTML = `
+  $("main").innerHTML = `
     <section class="panel">
+      <div class="tag">🎴 抽牌</div>
       <h2 class="h2">請 ${p.seat} 號查看身分</h2>
-      <div class="hint">看完請交給下一位</div>
+      <div class="hint">看完交給下一位</div>
       <button class="primary" onclick="showRole()">查看身分</button>
       <button class="ghost" onclick="renderSetup('${Game.boardId}')">返回選板子</button>
     </section>
   `;
 }
 
-window.showRole = function () {
-  const p = Game.players[Game.dealIndex];
-  const r = ROLES[p.roleId];
+window.showRole = function(){
+  const p=Game.players[Game.dealIndex];
+  const r=ROLES[p.roleId];
   alert(`你是【${r.name}】\n\n${r.skill}`);
   Game.dealIndex++;
-  if (Game.dealIndex >= Game.players.length) startNight();
+  if(Game.dealIndex>=Game.players.length) startNight();
   else renderDeal();
 };
 
-/* ======================
-   夜晚（簡化：狼人刀人；你要完整夜晚我也能再補回）
-====================== */
-function startNight() {
-  Game.phase = "night";
-  Game.night = {
-    wolfTarget: null,
-    guardTarget: null,
-    seerTarget: null,
-    seerResult: null,
-    witchSave: false,
-    witchPoisonTarget: null
-  };
+/* ========= 夜晚（先穩定版：狼人刀人） ========= */
+function startNight(){
+  Game.phase="night";
+  Game.night.wolfTarget=null;
 
-  document.getElementById("main").innerHTML = `
+  $("main").innerHTML=`
     <section class="panel">
       <div class="tag">🌙 夜晚</div>
       <h2 class="h2">狼人刀誰？</h2>
-      <div class="hint">點選要擊殺的座位</div>
       <div class="seats">
-        ${alivePlayers().map(p => `<button class="seat" onclick="nightWolfPick(${p.seat})">${p.seat}</button>`).join("")}
+        ${alivePlayers().map(p=>`<button class="seat" onclick="nightWolfPick(${p.seat})">${p.seat}</button>`).join("")}
       </div>
       <button class="ghost" onclick="nightWolfPick(null)">平安夜（不刀）</button>
     </section>
@@ -181,415 +191,376 @@ window.nightWolfPick = function(seat){
   resolveNight();
 };
 
-function resolveNight() {
-  const deaths = new Set();
+function resolveNight(){
+  const deaths=[];
+  if(Game.night.wolfTarget) deaths.push(Game.night.wolfTarget);
+  deaths.forEach(s=> killPlayer(s,"night"));
 
-  if (Game.night.wolfTarget) deaths.add(Game.night.wolfTarget);
-  deaths.forEach(seat => killPlayer(seat, "night"));
-
-  const deathList = [...deaths].map(s=>`${s} 號`).join("、") || "沒有人";
-  const announce = `天亮了，昨晚死亡的是：${deathList}`;
-  Game.logs.push(announce);
-
-  startDay(announce);
+  const txt = `天亮了，昨晚死亡的是：${deaths.length?deaths.join("、")+" 號":"沒有人"}`;
+  Game.logs.push(txt);
+  startDay(txt);
 }
 
-/* ======================
-   白天（含座位可點 + 投票入口）
-====================== */
-function startDay(announceText) {
-  Game.phase = "day";
+/* ========= 白天（上警＋發言順序＋投票入口） ========= */
+function startDay(announce){
+  Game.phase="day";
+  Game.police = { candidates:new Set(), direction:"cw", order:[], speakIndex:0 };
 
-  document.getElementById("main").innerHTML = `
+  $("main").innerHTML=`
     <section class="panel">
       <div class="tag">☀️ 白天</div>
 
       <div class="card">
         <div style="font-weight:900;margin-bottom:6px;">公告</div>
-        <div>${escapeHtml(announceText)}</div>
+        <div>${escapeHtml(announce)}</div>
         <div class="row" style="margin-top:10px;">
-          <button class="ghost" onclick="copyText(${JSON.stringify(announceText)})">一鍵複製公告</button>
-          <button class="ghost" onclick="startNight()">直接進入下一夜</button>
+          <button class="ghost" onclick="startNight()">進入下一夜</button>
+          <button class="ghost" onclick="startVote()">直接投票</button>
         </div>
       </div>
 
       <div class="card">
         <div style="font-weight:900;margin-bottom:6px;">👥 座位（上帝模式可點查看身分）</div>
         <div class="seats">
-          ${Game.players.map(p => `
-            <button class="seat-chip ${p.alive ? "" : "dead"}"
-              onclick="godPeek(${p.seat})"
-              ${p.alive ? "" : "disabled"}
-            >${p.seat}</button>
+          ${Game.players.map(p=>`
+            <button class="seat-chip ${p.alive?"":"dead"}"
+              onclick="godPeek(${p.seat})" ${p.alive?"":"disabled"}>${p.seat}</button>
           `).join("")}
         </div>
-        <div class="hint">玩家模式點了不會顯示身分</div>
+        <div class="hint">上帝模式（👁️）才會跳出身分</div>
       </div>
 
       <div class="card">
-        <div style="font-weight:900;margin-bottom:6px;">🗳️ 投票</div>
-        <div class="hint">按開始後，會依序提示每位存活玩家投票</div>
-        <button class="primary" onclick="startVote()">開始投票</button>
+        <div style="font-weight:900;margin-bottom:6px;">🚨 上警</div>
+        <div class="hint">點選上警玩家，再生成發言順序</div>
+        <button class="primary" onclick="startPolice()">開始上警</button>
       </div>
     </section>
   `;
-
-  injectMiniStyles();
 }
 
-/* ======================
-   👁️ 上帝查看身分（只有 body.god 才會顯示）
-====================== */
-window.godPeek = function (seat) {
-  if (!document.body.classList.contains("god")) return;
-  const p = Game.players.find(x => x.seat === seat);
-  if (!p) return;
+/* ========= 上帝點座位看身分 ========= */
+window.godPeek = function(seat){
+  if(!document.body.classList.contains("god")) return;
+  const p = Game.players.find(x=>x.seat===seat);
+  if(!p) return;
   const r = ROLES[p.roleId];
-  alert(`👁️ ${seat} 號\n角色：${r.name}\n\n${r.skill}\n\n（備註）${r.godNote || "—"}`);
+  alert(`👁️ ${seat} 號\n角色：${r.name}\n\n${r.skill}`);
 };
 
-/* ======================
-   ✅ 白天投票流程（逐一點票 + 統計 + 平票重投 + 處刑觸發）
-====================== */
-window.startVote = function () {
-  Game.phase = "vote";
+/* ========= 上警流程 ========= */
+window.startPolice = function(){
+  Game.phase="police";
+  const seats = alivePlayers().map(p=>p.seat);
+
+  $("main").innerHTML=`
+    <section class="panel">
+      <div class="tag">🚨 上警</div>
+      <h2 class="h2">請點選上警的玩家</h2>
+
+      <div class="seats">
+        ${seats.map(s=>`<button class="seat-chip" onclick="togglePolice(${s})">${s}</button>`).join("")}
+      </div>
+
+      <div class="card">
+        <div style="font-weight:900;margin-bottom:6px;">上警名單</div>
+        <div id="policeList" class="hint">（尚未選擇）</div>
+      </div>
+
+      <div class="card">
+        <div style="font-weight:900;margin-bottom:6px;">發言方向</div>
+        <div class="row">
+          <button class="pill active" id="dir-cw" onclick="setSpeakDir('cw')">順時針</button>
+          <button class="pill" id="dir-ccw" onclick="setSpeakDir('ccw')">逆時針</button>
+          <button class="pill" id="dir-rand" onclick="setSpeakDir('rand')">隨機</button>
+        </div>
+      </div>
+
+      <button class="primary" onclick="generateSpeakOrder()">生成發言順序</button>
+      <button class="ghost" onclick="startDay('（已取消上警）')">取消返回白天</button>
+    </section>
+  `;
+  refreshPoliceList();
+};
+
+window.togglePolice = function(seat){
+  if(Game.police.candidates.has(seat)) Game.police.candidates.delete(seat);
+  else Game.police.candidates.add(seat);
+  refreshPoliceList();
+};
+
+function refreshPoliceList(){
+  const el = document.getElementById("policeList");
+  if(!el) return;
+  const list = [...Game.police.candidates].sort((a,b)=>a-b);
+  el.innerHTML = list.length ? list.join("、")+" 號" : "（尚未選擇）";
+}
+
+window.setSpeakDir = function(dir){
+  Game.police.direction=dir;
+  ["cw","ccw","rand"].forEach(d=>{
+    const btn=document.getElementById(`dir-${d}`);
+    if(btn) btn.classList.toggle("active", d===dir);
+  });
+};
+
+window.generateSpeakOrder = function(){
+  const list = [...Game.police.candidates].sort((a,b)=>a-b);
+  if(list.length===0){
+    alert("請先選擇上警名單");
+    return;
+  }
+
+  let order = [];
+  if(Game.police.direction==="rand"){
+    order = shuffle(list);
+  } else {
+    // 順/逆：以「名單最小號」當起點（你也可以改成指定起點）
+    order = [...list];
+    if(Game.police.direction==="ccw") order.reverse();
+  }
+
+  Game.police.order = order;
+  Game.police.speakIndex = 0;
+  startSpeaking();
+};
+
+/* ========= 發言順序（一步一步提示下一位） ========= */
+function startSpeaking(){
+  Game.phase="speak";
+  renderSpeaking();
+}
+
+window.nextSpeaker = function(){
+  Game.police.speakIndex++;
+  renderSpeaking();
+};
+
+function renderSpeaking(){
+  const order = Game.police.order;
+  const i = Game.police.speakIndex;
+
+  if(i >= order.length){
+    // 發言結束 → 回白天，準備投票
+    Game.logs.push(`上警發言完成：${order.join("→")}`);
+    startDay(`（上警發言結束）可開始投票`);
+    return;
+  }
+
+  const seat = order[i];
+  $("main").innerHTML=`
+    <section class="panel">
+      <div class="tag">🎤 上警發言</div>
+      <h2 class="h2">下一位發言：${seat} 號</h2>
+      <div class="hint">可搭配白天倒數計時器（你要我加回來我也能直接塞）</div>
+
+      <div class="card">
+        <div style="font-weight:900;margin-bottom:6px;">順序</div>
+        <div>${order.map((s,idx)=> idx===i ? `<b>👉 ${s}</b>` : `${s}`).join(" ・ ")}</div>
+      </div>
+
+      <button class="primary" onclick="nextSpeaker()">下一位</button>
+      <button class="ghost" onclick="startVote()">直接進投票</button>
+      <button class="ghost" onclick="startDay('（中止上警發言）')">返回白天</button>
+    </section>
+  `;
+}
+
+/* ========= 投票（逐一點票 + 平票重投 + 處刑觸發） ========= */
+window.startVote = function(){
+  Game.phase="vote";
   Game.vote = {
     round: 1,
-    candidates: null, // null = 全部可投
-    voterSeats: alivePlayers().map(p => p.seat),
+    candidates: null,
+    voterSeats: alivePlayers().map(p=>p.seat),
     voterIndex: 0,
-    votes: {},
-    done: false
+    votes: {}
   };
   renderVoteStep();
 };
 
-function renderVoteStep() {
-  const v = Game.vote;
-  const voterSeat = v.voterSeats[v.voterIndex];
+function renderVoteStep(){
+  const v=Game.vote;
+  const voter = v.voterSeats[v.voterIndex];
+  const aliveSeats = alivePlayers().map(p=>p.seat);
+  const candidates = v.candidates ? v.candidates : aliveSeats;
+  const targets = candidates.filter(s=>s!==voter);
 
-  // 所有可投目標
-  const aliveSeats = alivePlayers().map(p => p.seat);
-  const allowedCandidates = v.candidates ? v.candidates : aliveSeats;
-
-  // 投票目標（通常不讓投自己）
-  const targets = allowedCandidates.filter(s => s !== voterSeat);
-
-  // 若候選名單只剩自己（理論上不太會），允許棄票
-  const targetButtons = targets.map(s => `
-    <button class="seat" onclick="castVote(${voterSeat}, ${s})">${s}</button>
-  `).join("");
-
-  document.getElementById("main").innerHTML = `
+  $("main").innerHTML=`
     <section class="panel">
       <div class="tag">🗳️ 投票第 ${v.round} 輪</div>
-      <h2 class="h2">請 ${voterSeat} 號投票</h2>
+      <h2 class="h2">請 ${voter} 號投票</h2>
+      <div class="hint">${v.candidates ? `本輪只可投：${v.candidates.join("、")} 號` : "可投任一存活玩家"}</div>
 
-      <div class="hint">
-        ${v.candidates ? `本輪只可投：${v.candidates.join("、")} 號（平票重投）` : "本輪可投任一存活座位"}
+      <div class="seats">
+        ${targets.map(s=>`<button class="seat" onclick="castVote(${voter},${s})">${s}</button>`).join("")}
       </div>
 
-      <div class="seats">${targetButtons}</div>
-
       <div class="row">
-        <button class="ghost" onclick="castVote(${voterSeat}, null)">棄票</button>
-        <button class="ghost" onclick="cancelVote()">取消投票（回白天）</button>
+        <button class="ghost" onclick="castVote(${voter},null)">棄票</button>
+        <button class="ghost" onclick="startDay('（取消投票）')">取消返回白天</button>
       </div>
 
       <div class="card">
-        <div style="font-weight:900;margin-bottom:6px;">已投進度</div>
+        <div style="font-weight:900;margin-bottom:6px;">進度</div>
         <div>${v.voterIndex} / ${v.voterSeats.length}</div>
       </div>
     </section>
   `;
-
-  injectMiniStyles();
 }
 
-window.castVote = function (voterSeat, targetSeat) {
-  const v = Game.vote;
-  v.votes[voterSeat] = targetSeat; // null = 棄票
+window.castVote = function(voter, target){
+  const v=Game.vote;
+  v.votes[voter]=target;
   v.voterIndex++;
-
-  if (v.voterIndex >= v.voterSeats.length) {
-    renderVoteResult();
-  } else {
-    renderVoteStep();
-  }
+  if(v.voterIndex>=v.voterSeats.length) renderVoteResult();
+  else renderVoteStep();
 };
 
-window.cancelVote = function () {
-  startDay("（已取消投票）");
-};
-
-/* 統計票數 */
-function tallyVotes(votes, candidateLimit=null) {
-  const tally = new Map(); // seat -> count
-  const entries = Object.entries(votes);
-
-  for (const [, target] of entries) {
-    if (target === null) continue; // 棄票
-    if (candidateLimit && !candidateLimit.includes(target)) continue;
-    tally.set(target, (tally.get(target) || 0) + 1);
+function tallyVotes(votes, limit=null){
+  const m=new Map();
+  for(const target of Object.values(votes)){
+    if(target===null) continue;
+    if(limit && !limit.includes(target)) continue;
+    m.set(target,(m.get(target)||0)+1);
   }
-
-  // 轉成陣列排序
-  const result = [...tally.entries()]
-    .map(([seat, count]) => ({ seat, count }))
-    .sort((a,b) => b.count - a.count);
-
-  return result;
+  return [...m.entries()].map(([seat,count])=>({seat, count})).sort((a,b)=>b.count-a.count);
 }
 
-function renderVoteResult() {
-  const v = Game.vote;
-  const tally = tallyVotes(v.votes, v.candidates);
+function renderVoteResult(){
+  const v=Game.vote;
+  const tally=tallyVotes(v.votes, v.candidates);
 
-  // 顯示每個人投了誰（上帝看）
-  const detailLines = v.voterSeats.map(seat => {
-    const t = v.votes[seat];
-    return `${seat} → ${t === null ? "棄票" : t + " 號"}`;
+  const detail = v.voterSeats.map(s=>{
+    const t=v.votes[s];
+    return `${s}→${t===null?"棄票":t+"號"}`;
   }).join("<br>");
 
-  // 沒有人得票
-  if (tally.length === 0) {
-    Game.logs.push(`投票結果：全部棄票 / 無有效票（第 ${v.round} 輪）`);
-    document.getElementById("main").innerHTML = `
+  if(tally.length===0){
+    Game.logs.push(`投票：全棄票/無效（第${v.round}輪）`);
+    $("main").innerHTML=`
       <section class="panel">
-        <div class="tag">🗳️ 投票結果</div>
-        <div class="card">
-          <div style="font-weight:900;margin-bottom:6px;">結果</div>
-          <div>全部棄票 / 無有效票</div>
-        </div>
-        <div class="card">
-          <div style="font-weight:900;margin-bottom:6px;">投票明細（上帝）</div>
-          <div style="line-height:1.8">${detailLines}</div>
-        </div>
-        <button class="primary" onclick="startDay('（本輪無處刑）')">回到白天</button>
+        <div class="tag">🗳️ 結果</div>
+        <div class="card">全部棄票 / 無有效票</div>
+        <div class="card"><div style="font-weight:900;margin-bottom:6px;">明細（上帝）</div>${detail}</div>
+        <button class="primary" onclick="startDay('（本輪無處刑）')">回白天</button>
       </section>
     `;
-    injectMiniStyles();
     return;
   }
 
-  const topCount = tally[0].count;
-  const topSeats = tally.filter(x => x.count === topCount).map(x => x.seat);
+  const top=tally[0].count;
+  const topSeats=tally.filter(x=>x.count===top).map(x=>x.seat);
 
-  // 平票 → 重投（只限平票者）
-  if (topSeats.length > 1) {
-    Game.logs.push(`投票平票：${topSeats.join("、")}（${topCount} 票），進入重投（第 ${v.round} 輪）`);
-    document.getElementById("main").innerHTML = `
+  if(topSeats.length>1){
+    Game.logs.push(`平票：${topSeats.join("、")}（${top}票）`);
+    $("main").innerHTML=`
       <section class="panel">
         <div class="tag">🗳️ 平票</div>
-
-        <div class="card">
-          <div style="font-weight:900;margin-bottom:6px;">平票名單</div>
-          <div>${topSeats.join("、")} 號（${topCount} 票）</div>
-        </div>
-
-        <div class="card">
-          <div style="font-weight:900;margin-bottom:6px;">投票明細（上帝）</div>
-          <div style="line-height:1.8">${detailLines}</div>
-        </div>
-
+        <div class="card">平票名單：${topSeats.join("、")}（${top}票）</div>
+        <div class="card"><div style="font-weight:900;margin-bottom:6px;">明細（上帝）</div>${detail}</div>
         <div class="row">
           <button class="primary" onclick="revote(${JSON.stringify(topSeats)})">平票重投</button>
-          <button class="ghost" onclick="startDay('（平票未處刑）')">不重投，回白天</button>
+          <button class="ghost" onclick="startDay('（平票不處刑）')">回白天</button>
         </div>
       </section>
     `;
-    injectMiniStyles();
     return;
   }
 
-  // 有唯一最高票
-  const executedSeat = topSeats[0];
-  Game.logs.push(`投票結果：${executedSeat} 號最高票（${topCount} 票），待確認處刑（第 ${v.round} 輪）`);
-
-  document.getElementById("main").innerHTML = `
+  const executed=topSeats[0];
+  Game.logs.push(`最高票：${executed}（${top}票）`);
+  $("main").innerHTML=`
     <section class="panel">
-      <div class="tag">🗳️ 投票結果</div>
-
-      <div class="card">
-        <div style="font-weight:900;margin-bottom:6px;">最高票</div>
-        <div>${executedSeat} 號（${topCount} 票）</div>
-      </div>
-
-      <div class="card">
-        <div style="font-weight:900;margin-bottom:6px;">票數統計</div>
-        <div>
-          ${tally.map(x => `• ${x.seat} 號：${x.count} 票`).join("<br>")}
-        </div>
-      </div>
-
-      <div class="card">
-        <div style="font-weight:900;margin-bottom:6px;">投票明細（上帝）</div>
-        <div style="line-height:1.8">${detailLines}</div>
-      </div>
-
+      <div class="tag">🗳️ 結果</div>
+      <div class="card"><b>${executed} 號</b> 最高票（${top}票）</div>
+      <div class="card"><div style="font-weight:900;margin-bottom:6px;">統計</div>${tally.map(x=>`• ${x.seat}號：${x.count}票`).join("<br>")}</div>
+      <div class="card"><div style="font-weight:900;margin-bottom:6px;">明細（上帝）</div>${detail}</div>
       <div class="row">
-        <button class="primary" onclick="confirmExecute(${executedSeat})">確認處刑</button>
-        <button class="ghost" onclick="startDay('（取消處刑，回白天）')">取消</button>
+        <button class="primary" onclick="confirmExecute(${executed})">確認處刑</button>
+        <button class="ghost" onclick="startDay('（取消處刑）')">回白天</button>
       </div>
     </section>
   `;
-  injectMiniStyles();
 }
 
-window.revote = function (candidates) {
-  // 進入第 2 輪（重投）
+window.revote = function(cands){
   Game.vote = {
-    round: Game.vote.round + 1,
-    candidates,
-    voterSeats: alivePlayers().map(p => p.seat),
+    round: Game.vote.round+1,
+    candidates: cands,
+    voterSeats: alivePlayers().map(p=>p.seat),
     voterIndex: 0,
-    votes: {},
-    done: false
+    votes: {}
   };
   renderVoteStep();
 };
 
-window.confirmExecute = function (seat) {
-  // 處刑死亡（reason=vote）
-  killPlayer(seat, "vote");
-
-  const aliveText = alivePlayers().map(p=>p.seat).join("、") || "無";
-  Game.logs.push(`處刑：${seat} 號出局。存活：${aliveText}`);
-
-  // 回到白天（或你要直接進夜晚也行）
+window.confirmExecute = function(seat){
+  killPlayer(seat,"vote");
+  Game.logs.push(`處刑：${seat}號出局`);
   startDay(`處刑：${seat} 號出局`);
 };
 
-/* ======================
-   死亡處理（處刑/夜晚/毒殺/自爆）
-   - 白狼王：被票出（vote）可帶走一人
-   - 黑狼王：非毒殺、非自爆，可帶走一人（被票出也可）
-   - 獵人：死亡可開槍（此版：毒殺也可，若你要限制我再幫你加規則）
-====================== */
-function killPlayer(seat, reason) {
-  const p = Game.players.find(x => x.seat === seat);
-  if (!p || !p.alive) return;
-
-  p.alive = false;
+/* ========= 死亡觸發：獵人/白狼王/黑狼王 ========= */
+function killPlayer(seat, reason){
+  const p = Game.players.find(x=>x.seat===seat);
+  if(!p || !p.alive) return;
+  p.alive=false;
 
   const role = ROLES[p.roleId];
 
-  // 觸發：白狼王（僅被票出）
-  if (role.id === "whiteWolfKing" && reason === "vote") {
-    return promptCarry(seat, "白狼王", "白狼王發動技能：帶走誰？", (target) => {
-      killPlayer(target, "wolfKingClaw");
-      Game.logs.push(`白狼王帶走：${target} 號`);
-      startDay(`處刑結算完成（白狼王帶走 ${target} 號）`);
+  if(role.id==="whiteWolfKing" && reason==="vote"){
+    return promptCarry(seat,"白狼王","白狼王帶走誰？",(t)=>{
+      killPlayer(t,"claw");
+      Game.logs.push(`白狼王帶走：${t}號`);
+      startDay(`結算完成（白狼王帶走 ${t} 號）`);
     });
   }
 
-  // 觸發：黑狼王（非毒殺、非自爆）
-  if (role.id === "blackWolfKing" && reason !== "poison" && reason !== "explode") {
-    return promptCarry(seat, "黑狼王", "黑狼王發動【狼王之爪】：帶走誰？", (target) => {
-      killPlayer(target, "wolfKingClaw");
-      Game.logs.push(`黑狼王帶走：${target} 號`);
-      startDay(`結算完成（黑狼王帶走 ${target} 號）`);
+  if(role.id==="blackWolfKing" && reason!=="poison" && reason!=="explode"){
+    return promptCarry(seat,"黑狼王","黑狼王【狼王之爪】帶走誰？",(t)=>{
+      killPlayer(t,"claw");
+      Game.logs.push(`黑狼王帶走：${t}號`);
+      startDay(`結算完成（黑狼王帶走 ${t} 號）`);
     });
   }
 
-  // 觸發：獵人（任何死亡都可）
-  if (role.id === "hunter") {
-    return promptCarry(seat, "獵人", "獵人開槍：帶走誰？", (target) => {
-      killPlayer(target, "hunterShot");
-      Game.logs.push(`獵人帶走：${target} 號`);
-      startDay(`結算完成（獵人帶走 ${target} 號）`);
+  if(role.id==="hunter"){
+    return promptCarry(seat,"獵人","獵人開槍帶走誰？",(t)=>{
+      killPlayer(t,"shot");
+      Game.logs.push(`獵人帶走：${t}號`);
+      startDay(`結算完成（獵人帶走 ${t} 號）`);
     });
   }
 }
 
-/* 共同：選一個對象帶走（上帝操作） */
-function promptCarry(fromSeat, title, msg, onPick) {
-  const targets = alivePlayers()
-    .map(p => p.seat)
-    .filter(s => s !== fromSeat);
+function promptCarry(fromSeat, title, msg, onPick){
+  const targets = alivePlayers().map(p=>p.seat).filter(s=>s!==fromSeat);
 
-  document.getElementById("main").innerHTML = `
+  $("main").innerHTML=`
     <section class="panel">
       <div class="tag">⚡ ${title}技能</div>
       <h2 class="h2">${escapeHtml(msg)}</h2>
       <div class="seats">
-        ${targets.map(s => `<button class="seat" onclick="carryPick(${s})">${s}</button>`).join("")}
+        ${targets.map(s=>`<button class="seat" onclick="carryPick(${s})">${s}</button>`).join("")}
       </div>
       <button class="ghost" onclick="startDay('（${title}選擇不帶人）')">不帶人</button>
     </section>
   `;
 
-  window.carryPick = function (seat) {
+  window.carryPick = function(seat){
     onPick(seat);
     delete window.carryPick;
   };
-
-  injectMiniStyles();
 }
 
-/* ======================
-   工具
-====================== */
-function alivePlayers() {
-  return Game.players.filter(p => p.alive);
-}
-
-function buildRoleList(boardId, count) {
-  const preset = PRESETS[boardId]?.[count];
-  if (!preset) throw new Error("找不到預設配置");
-  const list = [];
-  for (const [roleId, qty] of Object.entries(preset)) {
-    for (let i = 0; i < qty; i++) list.push(roleId);
-  }
-  if (list.length !== count) throw new Error("角色數量不等於玩家數");
-  return shuffle(list);
-}
-
-function createPlayers(count, roles) {
-  return Array.from({ length: count }, (_, i) => ({
-    seat: i + 1,
-    roleId: roles[i],
-    alive: true,
-    isChief: false,
-    status: {}
-  }));
-}
-
-function shuffle(arr) {
-  const a = [...arr];
-  for (let i = a.length - 1; i > 0; i--) {
-    const j = Math.floor(Math.random() * (i + 1));
-    [a[i], a[j]] = [a[j], a[i]];
-  }
-  return a;
-}
-
-window.copyText = async function (txt) {
-  try {
-    await navigator.clipboard.writeText(txt);
-    alert("已複製 ✅");
-  } catch {
-    alert("複製失敗（iOS 有時會限制，請長按自行複製）");
-  }
-};
-
-function escapeHtml(str) {
-  return String(str)
-    .replaceAll("&", "&amp;")
-    .replaceAll("<", "&lt;")
-    .replaceAll(">", "&gt;")
-    .replaceAll('"', "&quot;")
-    .replaceAll("'", "&#039;");
-}
-
-/* ======================
-   內建小樣式（不改 style.css 也能像 App）
-====================== */
-let _miniInjected = false;
+/* ========= 小樣式（不改 style.css 也能像 App） ========= */
+let _miniInjected=false;
 function injectMiniStyles(){
   if(_miniInjected) return;
-  _miniInjected = true;
-  const css = `
+  _miniInjected=true;
+
+  const css=`
   .panel{padding:14px}
   .h2{margin:0 0 10px;font-size:22px}
   .h3{margin:0 0 8px;font-size:16px;opacity:.85}
@@ -612,7 +583,7 @@ function injectMiniStyles(){
   .seat-chip{display:inline-flex;align-items:center;justify-content:center;width:44px;height:44px;border-radius:14px;background:#f0f0f0;font-weight:900;border:0}
   .seat-chip.dead{opacity:.35;text-decoration:line-through}
   `;
-  const style = document.createElement("style");
-  style.textContent = css;
-  document.head.appendChild(style);
+  const st=document.createElement("style");
+  st.textContent=css;
+  document.head.appendChild(st);
 }
