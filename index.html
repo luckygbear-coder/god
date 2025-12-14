@@ -12,25 +12,23 @@
 </head>
 
 <body>
-  <!-- =====================
-       App Shell
-  ====================== -->
   <div class="app-shell">
 
-    <!-- ===== Topbar ===== -->
     <header class="topbar">
       <div class="brand">
         <div class="brand-title">🐺 狼人殺上帝輔助</div>
         <div class="brand-sub">PWA｜手機版</div>
       </div>
+
       <div class="top-actions">
-        <!-- 🔁 restart will be auto-inserted by app.js -->
+        <!-- ✅ 補齊：btnMenu（app.js 有綁） -->
+        <button class="iconbtn" id="btnMenu" title="選單">☰</button>
+
         <button class="iconbtn" id="btnOpenAnnouncement" title="公告中心">📣</button>
         <button class="iconbtn" id="btnGodToggle" title="上帝視角">🔒</button>
       </div>
     </header>
 
-    <!-- ===== Main ===== -->
     <main class="main">
 
       <!-- =====================
@@ -68,6 +66,7 @@
                 <button class="btn ghost" id="btnOpenRoleConfig" type="button">調整角色</button>
               </div>
             </div>
+
             <div id="warnRoleTotal" class="warn hidden">
               ⚠️ 角色總數必須等於玩家人數
             </div>
@@ -75,9 +74,7 @@
         </div>
 
         <div class="bottombar">
-          <button id="btnStart" class="btn primary" type="button">
-            開始 → 抽身分
-          </button>
+          <button id="btnStart" class="btn primary" type="button">開始 → 抽身分</button>
         </div>
       </section>
 
@@ -103,9 +100,7 @@
         </div>
 
         <div class="bottombar">
-          <button id="btnFinishDeal" class="btn primary" type="button">
-            全部抽完 → 進入夜晚
-          </button>
+          <button id="btnFinishDeal" class="btn primary" type="button">全部抽完 → 進入夜晚</button>
         </div>
       </section>
 
@@ -119,10 +114,13 @@
             <div class="tag" id="nightTag">第 1 夜</div>
           </div>
 
-          <div class="scriptbox" id="nightScript">
-            夜晚指引文字
+          <!-- ✅ 補齊：btnOpenAnnouncement2 / btnOpenLog（app.js 有綁） -->
+          <div class="row spread" style="margin:8px 0 10px;">
+            <button id="btnOpenAnnouncement2" class="btn ghost" type="button">📣 公告</button>
+            <button id="btnOpenLog" class="btn ghost" type="button">📜 紀錄</button>
           </div>
 
+          <div class="scriptbox" id="nightScript">夜晚指引文字</div>
           <div class="seats" id="nightSeats"></div>
         </div>
 
@@ -151,27 +149,19 @@
         </div>
 
         <div class="bottombar">
-          <button id="btnDayNext" class="btn primary" type="button">
-            下一步 → 進入下一夜
-          </button>
+          <button id="btnDayNext" class="btn primary" type="button">下一步 → 進入下一夜</button>
         </div>
       </section>
 
     </main>
   </div>
 
-  <!-- =====================
-       Floating Buttons
-  ====================== -->
+  <!-- Floating -->
   <button id="fabGod" class="fab fab-god" type="button" title="上帝視角">🔒</button>
   <button id="fabAnn" class="fab fab-ann" type="button" title="公告中心">📣</button>
 
-  <!-- =====================
-       Modals (Containers)
-       app.js will fill content
-  ====================== -->
+  <!-- ===== Modals ===== -->
 
-  <!-- 公告中心 -->
   <div id="modalAnn" class="modal hidden">
     <div class="modal-card">
       <div class="modal-head">
@@ -192,7 +182,6 @@
     </div>
   </div>
 
-  <!-- Log -->
   <div id="modalLog" class="modal hidden">
     <div class="modal-card">
       <div class="modal-head">
@@ -209,7 +198,6 @@
     </div>
   </div>
 
-  <!-- 上帝 PIN -->
   <div id="modalGod" class="modal hidden">
     <div class="modal-card small">
       <div class="modal-head">
@@ -219,7 +207,7 @@
       <div class="modal-body center">
         <div style="width:100%">
           <div class="hint">輸入 4 位數 PIN</div>
-          <input id="pinInput" class="pin" type="password" maxlength="4" />
+          <input id="pinInput" class="pin" type="password" maxlength="4" inputmode="numeric" />
           <div id="pinWarn" class="warn hidden">PIN 錯誤</div>
         </div>
       </div>
@@ -230,7 +218,6 @@
     </div>
   </div>
 
-  <!-- 翻牌 -->
   <div id="modalReveal" class="modal hidden">
     <div class="modal-card small">
       <div class="modal-body center">
@@ -249,7 +236,6 @@
     </div>
   </div>
 
-  <!-- Role Config -->
   <div id="modalRole" class="modal hidden">
     <div class="modal-card">
       <div class="modal-head">
@@ -264,7 +250,6 @@
     </div>
   </div>
 
-  <!-- app.js -->
   <script src="./app.js"></script>
 </body>
 </html>
