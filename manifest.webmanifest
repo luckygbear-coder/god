@@ -1,0 +1,22 @@
+{
+  "name": "狼人殺上帝輔助",
+  "short_name": "狼人殺上帝",
+  "description": "狼人殺主持人專用輔助工具，夜晚流程、技能結算、白天計時一次搞定。",
+  "start_url": "./index.html",
+  "display": "standalone",
+  "background_color": "#f5f0e6",
+  "theme_color": "#3b2f2f",
+  "orientation": "portrait",
+  "icons": [
+    {
+      "src": "icon-192.png",
+      "sizes": "192x192",
+      "type": "image/png"
+    },
+    {
+      "src": "icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png"
+    }
+  ]
+}
