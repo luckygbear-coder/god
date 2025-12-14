@@ -604,3 +604,6 @@ input, textarea {
   -webkit-user-select: auto;
   user-select: auto;
 }
+html, body {
+  touch-action: manipulation;
+}
