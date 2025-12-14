@@ -1,0 +1,101 @@
+* {
+  box-sizing: border-box;
+  font-family: "Noto Sans TC", system-ui, sans-serif;
+}
+
+body {
+  margin: 0;
+  background: #f5f0e6;
+}
+
+.app {
+  max-width: 480px;
+  margin: auto;
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+}
+
+/* Header */
+.top-bar {
+  background: #3b2f2f;
+  color: #fff;
+  padding: 10px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.top-bar button {
+  font-size: 20px;
+}
+
+/* Main */
+.main {
+  flex: 1;
+  padding: 14px;
+}
+
+/* Footer */
+.bottom-bar {
+  display: flex;
+  border-top: 1px solid #ccc;
+}
+
+.bottom-bar button {
+  flex: 1;
+  padding: 12px;
+  font-size: 14px;
+}
+
+/* Cards */
+.card {
+  background: #fff;
+  padding: 12px;
+  border-radius: 10px;
+  margin-bottom: 10px;
+}
+
+/* Modal */
+.modal {
+  position: fixed;
+  inset: 0;
+  background: rgba(0,0,0,0.6);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.modal-card {
+  background: #fff;
+  padding: 16px;
+  width: 90%;
+  max-width: 420px;
+  border-radius: 12px;
+}
+
+.scroll {
+  max-height: 80vh;
+  overflow-y: auto;
+}
+
+.hidden {
+  display: none;
+}
+
+/* God mode visual */
+body.god .top-bar {
+  background: #5a0000;
+}
+
+body.god::after {
+  content: "👁️ 上帝模式";
+  position: fixed;
+  top: 50px;
+  right: 10px;
+  font-size: 12px;
+  color: #fff;
+  background: #5a0000;
+  padding: 4px 8px;
+  border-radius: 6px;
+}
