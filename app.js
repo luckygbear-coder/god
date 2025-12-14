@@ -63,7 +63,28 @@
   function loadState(){ try{ const r=localStorage.getItem(STORAGE_KEY); return r?JSON.parse(r):null; }catch(e){ return null; } }
   function saveState(s){ try{ localStorage.setItem(STORAGE_KEY, JSON.stringify(s)); }catch(e){} }
   function clearState(){ try{ localStorage.removeItem(STORAGE_KEY); }catch(e){} }
+/* =========================
+   Restart modal (replace confirm)
+========================= */
+function openRestartModal(){
+  const m = $("modalRestart");
+  if(!m) return;
+  m.classList.remove("hidden");
+}
+function closeRestartModal(){
+  const m = $("modalRestart");
+  if(!m) return;
+  m.classList.add("hidden");
+}
 
+on($("closeRestart"), "click", closeRestartModal);
+on($("btnRestartCancel"), "click", closeRestartModal);
+
+on($("btnRestartConfirm"), "click", () => {
+  // 清存檔 + 重新載入，最乾淨、最不會漏狀態
+  try{ clearState(); }catch(e){}
+  location.reload();
+});
   /* =========================
      Suggested config
   ========================= */
