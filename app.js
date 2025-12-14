@@ -1,22 +1,23 @@
-/*************************
- * 狼人殺上帝輔助 App
- * 核心流程控制 app.js
- *************************/
-
 import ROLES from "./roles.js";
 import BOARDS from "./boards.js";
 
 /* ======================
-   全域遊戲狀態
+   全域遊戲狀態（讓 index.html 可讀）
 ====================== */
-
-const Game = {
+export const Game = {
+  boardId: null,
   board: null,
   players: [],
-  phase: "setup", // setup | deal | night | day | vote | end
+  phase: "setup", // setup | deal | night | day
+  dealIndex: 0,
+
   nightStepIndex: 0,
   nightSteps: [],
   logs: [],
+
+  settings: {
+    playerCount: 9
+  },
 
   night: {
     wolfTarget: null,
@@ -27,301 +28,221 @@ const Game = {
     witchPoisonTarget: null
   }
 };
+window.Game = Game;
 
 /* ======================
-   玩家結構
+   板子預設配置（9–12）
 ====================== */
+const PRESETS = {
+  basic: {
+    9:  { werewolf: 2, villager: 5, seer: 1, witch: 1 },
+    10: { werewolf: 3, villager: 5, seer: 1, witch: 1 },
+    11: { werewolf: 3, villager: 5, seer: 1, witch: 1, hunter: 1 },
+    12: { werewolf: 3, villager: 5, seer: 1, witch: 1, hunter: 1, guard: 1 }
+  },
+  wolfKings: {
+    10: { werewolf: 2, whiteWolfKing: 1, blackWolfKing: 1, villager: 4, seer: 1, witch: 1 },
+    11: { werewolf: 2, whiteWolfKing: 1, blackWolfKing: 1, villager: 5, seer: 1, witch: 1 },
+    12: { werewolf: 2, whiteWolfKing: 1, blackWolfKing: 1, villager: 6, seer: 1, witch: 1 }
+  }
+};
 
-function createPlayers(count, roleList) {
-  const shuffledRoles = shuffle(roleList);
-  return Array.from({ length: count }, (_, i) => ({
-    seat: i + 1,
-    roleId: shuffledRoles[i],
-    alive: true,
-    isChief: false,
-    status: {}
-  }));
+/* ======================
+   啟動：顯示選板子
+====================== */
+document.addEventListener("DOMContentLoaded", () => {
+  renderSetup("basic");
+});
+
+/* ======================
+   Setup UI
+====================== */
+function renderSetup(boardId) {
+  Game.phase = "setup";
+  Game.boardId = boardId;
+  Game.board = BOARDS[boardId];
+
+  const counts = Game.board.players;
+  if (!counts.includes(Game.settings.playerCount)) {
+    Game.settings.playerCount = counts[0];
+  }
+
+  const boardsHtml = Object.values(BOARDS).map(b => `
+    <button class="board-card ${b.id === boardId ? "active" : ""}"
+      onclick="selectBoard('${b.id}')">
+      <div class="board-title">${b.name}</div>
+      <div class="board-intro">${b.intro}</div>
+      <div class="board-meta">
+        人數 ${b.players.join("–")} ・ 女巫自救 ${b.rules.witchSelfSave === "forbidden" ? "不可" : "可"}
+      </div>
+    </button>
+  `).join("");
+
+  const countsHtml = counts.map(n => `
+    <button class="pill ${n === Game.settings.playerCount ? "active" : ""}"
+      onclick="setPlayerCount(${n})">${n} 人</button>
+  `).join("");
+
+  document.getElementById("main").innerHTML = `
+    <section class="panel">
+      <h2 class="h2">請選擇板子開始遊戲</h2>
+      <div class="grid">${boardsHtml}</div>
+    </section>
+
+    <section class="panel">
+      <h3 class="h3">玩家人數</h3>
+      <div class="row">${countsHtml}</div>
+    </section>
+
+    <section class="panel">
+      <h3 class="h3">本局角色配置</h3>
+      <div class="card">${presetSummary(boardId, Game.settings.playerCount)}</div>
+      <button class="primary" onclick="startDeal()">開始抽牌</button>
+    </section>
+  `;
+}
+
+window.selectBoard = id => renderSetup(id);
+window.setPlayerCount = n => {
+  Game.settings.playerCount = n;
+  renderSetup(Game.boardId);
+};
+
+function presetSummary(boardId, count) {
+  const preset = PRESETS[boardId][count];
+  return Object.entries(preset)
+    .map(([k, v]) => `${ROLES[k].name} × ${v}`)
+    .join("、");
 }
 
 /* ======================
-   開始遊戲
+   抽牌
 ====================== */
-
-window.startGame = function (boardId, playerCount, roleList) {
-  Game.board = BOARDS[boardId];
-  Game.players = createPlayers(playerCount, roleList);
+window.startDeal = function () {
+  const roleList = buildRoleList(Game.boardId, Game.settings.playerCount);
+  Game.players = createPlayers(Game.settings.playerCount, roleList);
+  Game.dealIndex = 0;
   Game.phase = "deal";
   renderDeal();
 };
 
-/* ======================
-   抽牌（Pass & Play）
-====================== */
-
-let dealIndex = 0;
-
 function renderDeal() {
-  const p = Game.players[dealIndex];
+  const p = Game.players[Game.dealIndex];
   document.getElementById("main").innerHTML = `
-    <h2>請 ${p.seat} 號查看身分</h2>
-    <button onclick="showRole(${dealIndex})">按住查看角色</button>
+    <section class="panel">
+      <h2 class="h2">請 ${p.seat} 號查看身分</h2>
+      <button class="primary" onclick="showRole()">查看身分</button>
+    </section>
   `;
 }
 
-window.showRole = function (index) {
-  const p = Game.players[index];
-  const role = ROLES[p.roleId];
-  alert(`你是【${role.name}】\n\n${role.skill}`);
-  dealIndex++;
-  if (dealIndex >= Game.players.length) {
-    startNight();
-  } else {
-    renderDeal();
-  }
+window.showRole = function () {
+  const p = Game.players[Game.dealIndex];
+  alert(`你是【${ROLES[p.roleId].name}】\n\n${ROLES[p.roleId].skill}`);
+  Game.dealIndex++;
+  Game.dealIndex >= Game.players.length ? startNight() : renderDeal();
 };
 
 /* ======================
-   夜晚流程
+   夜晚（簡化版）
 ====================== */
-
 function startNight() {
   Game.phase = "night";
   Game.nightStepIndex = 0;
-  Game.night = {
-    wolfTarget: null,
-    guardTarget: null,
-    seerTarget: null,
-    seerResult: null,
-    witchSave: false,
-    witchPoisonTarget: null
-  };
-
   Game.nightSteps = Game.board.nightOrder.slice();
-  renderNightStep();
-}
-
-function renderNightStep() {
-  const step = Game.nightSteps[Game.nightStepIndex];
-  if (!step) {
-    resolveNight();
-    return;
-  }
-
-  switch (step) {
-    case "guard":
-      pickTarget("守衛守誰？", "guardTarget");
-      break;
-    case "werewolf":
-      pickTarget("狼人刀誰？", "wolfTarget");
-      break;
-    case "seer":
-      pickTarget("預言家驗誰？", "seerTarget", true);
-      break;
-    case "witch":
-      renderWitch();
-      break;
-    case "cupid":
-      pickTwoTargets("邱比特選擇情侶");
-      break;
-    default:
-      nextNightStep();
-  }
+  Game.night = { wolfTarget: null, guardTarget: null, seerTarget: null, witchSave: false };
+  nextNightStep();
 }
 
 function nextNightStep() {
-  Game.nightStepIndex++;
-  renderNightStep();
-}
-
-/* ======================
-   夜晚選人工具
-====================== */
-
-function pickTarget(title, key, reveal = false) {
-  const buttons = Game.players
-    .filter(p => p.alive)
-    .map(
-      p => `<button onclick="confirmTarget('${key}',${p.seat})">${p.seat} 號</button>`
-    )
-    .join("");
+  const step = Game.nightSteps[Game.nightStepIndex++];
+  if (!step) return resolveNight();
 
   document.getElementById("main").innerHTML = `
-    <h2>${title}</h2>
-    ${buttons}
-  `;
-
-  window.confirmTarget = function (k, seat) {
-    Game.night[k] = seat;
-    if (reveal) {
-      const target = Game.players.find(p => p.seat === seat);
-      const team = ROLES[target.roleId].team === "wolf" ? "狼人" : "好人";
-      Game.night.seerResult = team;
-      alert(`查驗結果：${team}`);
-    }
-    nextNightStep();
-  };
-}
-
-function renderWitch() {
-  const target = Game.night.wolfTarget;
-  const witchSeat = Game.players.find(p => ROLES[p.roleId].id === "witch")?.seat;
-
-  let saveDisabled =
-    target === witchSeat && Game.board.rules.witchSelfSave === "forbidden";
-
-  document.getElementById("main").innerHTML = `
-    <h2>女巫行動</h2>
-    <p>今晚被刀的是：${target ? target + " 號" : "無"}</p>
-    <button ${saveDisabled ? "disabled" : ""} onclick="witchSave()">用解藥</button>
-    <button onclick="witchPoison()">用毒藥</button>
-    <button onclick="nextNightStep()">不用</button>
+    <section class="panel">
+      <h2 class="h2">🌙 ${step} 行動</h2>
+      <div class="seats">
+        ${Game.players.filter(p=>p.alive).map(p=>`
+          <button class="seat" onclick="nightPick('${step}',${p.seat})">${p.seat}</button>
+        `).join("")}
+      </div>
+    </section>
   `;
 }
 
-window.witchSave = function () {
-  Game.night.witchSave = true;
+window.nightPick = function (step, seat) {
+  if (step === "werewolf") Game.night.wolfTarget = seat;
   nextNightStep();
 };
 
-window.witchPoison = function () {
-  pickTarget("女巫毒誰？", "witchPoisonTarget");
-};
-
-/* ======================
-   夜晚結算
-====================== */
-
 function resolveNight() {
-  const deaths = new Set();
-
-  // 狼刀
-  if (Game.night.wolfTarget) {
-    let blocked =
-      Game.night.wolfTarget === Game.night.guardTarget ||
-      Game.night.witchSave;
-
-    if (!blocked) deaths.add(Game.night.wolfTarget);
-  }
-
-  // 女巫毒
-  if (Game.night.witchPoisonTarget) {
-    deaths.add(Game.night.witchPoisonTarget);
-  }
-
-  deaths.forEach(seat => killPlayer(seat, "night"));
-
-  const deathList = [...deaths].map(s => `${s} 號`).join("、") || "沒有人";
-  Game.logs.push(`天亮了，昨晚死亡的是：${deathList}`);
-
-  startDay(deathList);
+  const deaths = [];
+  if (Game.night.wolfTarget) deaths.push(Game.night.wolfTarget);
+  deaths.forEach(seat => Game.players.find(p=>p.seat===seat).alive=false);
+  const text = deaths.length ? `死亡：${deaths.join("、")} 號` : "平安夜";
+  Game.logs.push(text);
+  startDay(text);
 }
 
 /* ======================
-   死亡處理（含狼王）
+   白天 + 上帝點座位看身分
 ====================== */
-
-function killPlayer(seat, reason) {
-  const p = Game.players.find(p => p.seat === seat);
-  if (!p || !p.alive) return;
-
-  p.alive = false;
-
-  const role = ROLES[p.roleId];
-
-  if (role.id === "blackWolfKing") {
-    if (reason !== "poison" && reason !== "explode") {
-      alert("黑狼王發動【狼王之爪】");
-      pickTarget("黑狼王帶誰？", "__blackWolfClaw");
-    }
-  }
-
-  if (role.id === "whiteWolfKing" && reason === "vote") {
-    alert("白狼王發動技能");
-    pickTarget("白狼王帶誰？", "__whiteWolfClaw");
-  }
-}
-
-/* ======================
-   白天流程
-====================== */
-
-function startDay(deathText) {
+function startDay(text) {
   Game.phase = "day";
   document.getElementById("main").innerHTML = `
-    <h2>白天</h2>
-    <p>${deathText}</p>
-    <div id="speechTimer"></div>
+    <section class="panel">
+      <h2 class="h2">☀️ 白天</h2>
+      <div class="card">${text}</div>
+
+      <div class="card">
+        <h3 class="h3">座位（上帝可點查看身分）</h3>
+        <div class="seats">
+          ${Game.players.map(p=>`
+            <button class="seat-chip ${p.alive?"":"dead"}"
+              onclick="godPeek(${p.seat})">${p.seat}</button>
+          `).join("")}
+        </div>
+      </div>
+
+      <button class="primary" onclick="startNight()">進入下一夜</button>
+    </section>
   `;
-  renderSpeechTimer();
 }
 
 /* ======================
-   白天發言倒數計時器
+   👁️ 上帝查看身分
 ====================== */
-
-const speechTimer = {
-  duration: 120,
-  remaining: 120,
-  running: false,
-  interval: null
+window.godPeek = function (seat) {
+  if (!document.body.classList.contains("god")) return;
+  const p = Game.players.find(x=>x.seat===seat);
+  if (!p) return;
+  const r = ROLES[p.roleId];
+  alert(`👁️ ${seat} 號\n角色：${r.name}\n\n${r.skill}`);
 };
-
-function renderSpeechTimer() {
-  document.getElementById("speechTimer").innerHTML = `
-    <h3>🕒 發言倒數</h3>
-    <button onclick="setSpeechMinutes(1)">1 分</button>
-    <button onclick="setSpeechMinutes(2)">2 分</button>
-    <button onclick="setSpeechMinutes(3)">3 分</button>
-    <h1 id="timerDisplay">02:00</h1>
-    <button onclick="startSpeechTimer()">開始</button>
-    <button onclick="pauseSpeechTimer()">暫停</button>
-    <button onclick="resetSpeechTimer()">重置</button>
-  `;
-  updateTimerDisplay();
-}
-
-window.setSpeechMinutes = function (m) {
-  if (speechTimer.running) return;
-  speechTimer.duration = m * 60;
-  speechTimer.remaining = m * 60;
-  updateTimerDisplay();
-};
-
-window.startSpeechTimer = function () {
-  if (speechTimer.running) return;
-  speechTimer.running = true;
-  speechTimer.interval = setInterval(() => {
-    speechTimer.remaining--;
-    if (speechTimer.remaining <= 0) {
-      pauseSpeechTimer();
-      alert("⏰ 發言時間到！");
-    }
-    updateTimerDisplay();
-  }, 1000);
-};
-
-window.pauseSpeechTimer = function () {
-  clearInterval(speechTimer.interval);
-  speechTimer.running = false;
-};
-
-window.resetSpeechTimer = function () {
-  pauseSpeechTimer();
-  speechTimer.remaining = speechTimer.duration;
-  updateTimerDisplay();
-};
-
-function updateTimerDisplay() {
-  const m = Math.floor(speechTimer.remaining / 60);
-  const s = speechTimer.remaining % 60;
-  document.getElementById("timerDisplay").innerText =
-    `${String(m).padStart(2, "0")}:${String(s).padStart(2, "0")}`;
-}
 
 /* ======================
    工具
 ====================== */
+function buildRoleList(boardId, count) {
+  const preset = PRESETS[boardId][count];
+  const list = [];
+  Object.entries(preset).forEach(([k,v])=>{
+    for(let i=0;i<v;i++) list.push(k);
+  });
+  return shuffle(list);
+}
 
-function shuffle(arr) {
-  return [...arr].sort(() => Math.random() - 0.5);
+function createPlayers(count, roles) {
+  return Array.from({length:count},(_,i)=>({
+    seat:i+1, roleId:roles[i], alive:true
+  }));
+}
+
+function shuffle(a) {
+  const arr=[...a];
+  for(let i=arr.length-1;i>0;i--){
+    const j=Math.floor(Math.random()*(i+1));
+    [arr[i],arr[j]]=[arr[j],arr[i]];
+  }
+  return arr;
 }
