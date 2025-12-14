@@ -434,3 +434,38 @@ h2{ margin:0 0 10px; font-size: 18px; }
 body.god-on .topbar{
   background: rgba(55, 20, 60, .06);
 }
+/* =========================
+   Restart Modal polish
+========================= */
+#modalRestart .modal-card.small{
+  max-width: 380px;
+}
+
+/* 讓 modal-actions 在手機更像 app：兩顆按鈕疊起來更好按 */
+@media (max-width: 420px){
+  .modal-actions{
+    flex-direction: column;
+  }
+  .modal-actions .btn{
+    width: 100%;
+  }
+}
+
+/* Primary 按鈕在 modal 裡不要過大造成擠壓 */
+.modal-actions .btn.primary{
+  width: auto;
+  flex: 1 1 auto;
+  padding: 12px 14px;
+  font-size: 15px;
+}
+
+/* 取消鍵在 modal 裡更像 iOS */
+.modal-actions .btn.ghost{
+  background: rgba(255,255,255,.82);
+}
+
+/* modal 內容過短時別貼邊 */
+#modalRestart .modal-body{
+  padding-top: 16px;
+  padding-bottom: 16px;
+}
