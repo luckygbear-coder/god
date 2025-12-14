@@ -1,0 +1,133 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+  <meta charset="UTF-8" />
+  <title>狼人殺上帝輔助</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <link rel="stylesheet" href="./style.css" />
+</head>
+<body>
+
+<div class="app">
+
+  <!-- Header -->
+  <header class="top-bar">
+    <h1>🐺 狼人殺上帝</h1>
+    <button id="godToggle" onclick="toggleGodMode()">🔒</button>
+  </header>
+
+  <!-- 主內容 -->
+  <main id="main" class="main">
+    <h2>請選擇板子開始遊戲</h2>
+  </main>
+
+  <!-- Footer 操作列 -->
+  <footer class="bottom-bar">
+    <button onclick="showRoleBook()">📖 角色圖鑑</button>
+    <button onclick="showLogs()">📜 紀錄</button>
+  </footer>
+
+</div>
+
+<!-- 上帝 PIN -->
+<div id="godLock" class="modal hidden">
+  <div class="modal-card">
+    <h3>上帝模式</h3>
+    <input type="password" id="godPin" placeholder="輸入 PIN" />
+    <button onclick="unlockGod()">解鎖</button>
+  </div>
+</div>
+
+<!-- 角色圖鑑 -->
+<div id="roleBook" class="modal hidden">
+  <div class="modal-card scroll">
+    <h3>角色圖鑑</h3>
+    <div id="roleList"></div>
+    <button onclick="closeRoleBook()">關閉</button>
+  </div>
+</div>
+
+<!-- 紀錄 -->
+<div id="logModal" class="modal hidden">
+  <div class="modal-card scroll">
+    <h3>遊戲紀錄</h3>
+    <div id="logList"></div>
+    <button onclick="closeLogs()">關閉</button>
+  </div>
+</div>
+
+<script type="module" src="./app.js"></script>
+<script>
+/* ======================
+   上帝模式
+====================== */
+
+let godMode = false;
+const GOD_PIN = "1234";
+
+function toggleGodMode() {
+  if (!godMode) {
+    document.getElementById("godLock").classList.remove("hidden");
+  } else {
+    godMode = false;
+    document.getElementById("godToggle").innerText = "🔒";
+    document.body.classList.remove("god");
+  }
+}
+
+function unlockGod() {
+  const pin = document.getElementById("godPin").value;
+  if (pin === GOD_PIN) {
+    godMode = true;
+    document.getElementById("godToggle").innerText = "👁️";
+    document.body.classList.add("god");
+    document.getElementById("godLock").classList.add("hidden");
+  } else {
+    alert("PIN 錯誤");
+  }
+}
+
+/* ======================
+   角色圖鑑
+====================== */
+
+import ROLES from "./roles.js";
+
+function showRoleBook() {
+  const list = document.getElementById("roleList");
+  list.innerHTML = Object.values(ROLES)
+    .map(
+      r => `
+      <div class="card">
+        <h4>${r.name}</h4>
+        <p>${r.skill}</p>
+        ${godMode ? `<small>${r.godNote}</small>` : ""}
+      </div>`
+    )
+    .join("");
+  document.getElementById("roleBook").classList.remove("hidden");
+}
+
+function closeRoleBook() {
+  document.getElementById("roleBook").classList.add("hidden");
+}
+
+/* ======================
+   紀錄
+====================== */
+
+function showLogs() {
+  const list = document.getElementById("logList");
+  list.innerHTML = (window.Game?.logs || [])
+    .map(l => `<p>• ${l}</p>`)
+    .join("");
+  document.getElementById("logModal").classList.remove("hidden");
+}
+
+function closeLogs() {
+  document.getElementById("logModal").classList.add("hidden");
+}
+</script>
+
+</body>
+</html>
