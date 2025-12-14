@@ -209,12 +209,9 @@
     btn.textContent="🔁";
     topActions.insertBefore(btn, topActions.firstChild);
 
-    on(btn,"click",()=>{
-      const ok = confirm("確定要重新開始嗎？\n（會清除本局存檔與紀錄，回到板子/配置）");
-      if(!ok) return;
-      restartToSetup();
-    });
-  }
+btn.onclick = () => {
+  openRestartModal();
+};
 
   function closeAllModals(){
     [
