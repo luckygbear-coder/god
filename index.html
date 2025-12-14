@@ -2,159 +2,54 @@
 <html lang="zh-Hant">
 <head>
   <meta charset="UTF-8" />
-  <title>狼人殺上帝輔助</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+  <title>狼人殺上帝</title>
 
-  <!-- 手機設定 -->
-  <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <meta name="theme-color" content="#3b2f2f" />
+  <link rel="manifest" href="./manifest.webmanifest">
+  <meta name="theme-color" content="#5a0000" />
 
-  <!-- PWA -->
-  <link rel="manifest" href="./manifest.webmanifest" />
-
-  <!-- 樣式 -->
   <link rel="stylesheet" href="./style.css" />
 </head>
 <body>
+  <header class="topbar">
+    <div class="topbar-left">
+      <span class="logo">🐺</span>
+      <div class="title-wrap">
+        <div class="title">狼人殺上帝</div>
+        <div class="subtitle">上帝模式可查看身分與操作夜晚流程</div>
+      </div>
+    </div>
 
-<div class="app">
-
-  <!-- ===== Header ===== -->
-  <header class="top-bar">
-    <h1>🐺 狼人殺上帝</h1>
-    <button id="godToggle" onclick="toggleGodMode()">🔒</button>
+    <button id="godToggle" class="god-toggle" type="button" aria-label="上帝模式">
+      <span class="eye">👁️</span>
+      <span class="txt">上帝模式</span>
+    </button>
   </header>
 
-  <!-- ===== 主內容區 ===== -->
   <main id="main" class="main">
-    <h2>請選擇板子開始遊戲</h2>
-    <p style="opacity:.7;font-size:14px">
-      上帝模式可查看身分與操作夜晚流程
-    </p>
+    <!-- 若 JS 沒跑，會停在這裡；正常會被 app.js 渲染成板子選擇 -->
+    <section class="panel">
+      <h2 class="h2">請選擇板子開始遊戲</h2>
+      <p class="hint">（若你只看到這行，代表 app.js 沒有成功載入）</p>
+    </section>
   </main>
 
-  <!-- ===== Footer ===== -->
-  <footer class="bottom-bar">
-    <button onclick="showRoleBook()">📖 角色圖鑑</button>
-    <button onclick="showLogs()">📜 紀錄</button>
-  </footer>
+  <nav class="bottom-nav">
+    <button id="btnRoles" class="nav-btn" type="button">📖 角色圖鑑</button>
+    <button id="btnHome" class="nav-btn primary" type="button">🏠 首頁</button>
+    <button id="btnLogs" class="nav-btn" type="button">📜 紀錄</button>
+  </nav>
 
-</div>
+  <!-- ⚠️ 重要：順序一定要 roles.js、boards.js 在前，app.js 在後 -->
+  <script src="./roles.js"></script>
+  <script src="./boards.js"></script>
+  <script src="./app.js"></script>
 
-<!-- =====================
-     上帝模式 PIN
-===================== -->
-<div id="godLock" class="modal hidden">
-  <div class="modal-card">
-    <h3>👁️ 上帝模式</h3>
-    <p>請輸入 PIN</p>
-    <input type="password" id="godPin" placeholder="預設 1234" />
-    <button onclick="unlockGod()">解鎖</button>
-  </div>
-</div>
-
-<!-- =====================
-     角色圖鑑
-===================== -->
-<div id="roleBook" class="modal hidden">
-  <div class="modal-card scroll">
-    <h3>📖 角色圖鑑</h3>
-    <div id="roleList"></div>
-    <button onclick="closeRoleBook()">關閉</button>
-  </div>
-</div>
-
-<!-- =====================
-     紀錄
-===================== -->
-<div id="logModal" class="modal hidden">
-  <div class="modal-card scroll">
-    <h3>📜 遊戲紀錄</h3>
-    <div id="logList"></div>
-    <button onclick="closeLogs()">關閉</button>
-  </div>
-</div>
-
-<!-- =====================
-     主程式
-===================== -->
-<script type="module" src="./app.js"></script>
-
-<!-- =====================
-     UI / 上帝模式控制
-===================== -->
-<script type="module">
-import ROLES from "./roles.js";
-
-/* ===== 上帝模式 ===== */
-let godMode = false;
-const GOD_PIN = "1234";
-
-window.toggleGodMode = function () {
-  if (!godMode) {
-    document.getElementById("godLock").classList.remove("hidden");
-  } else {
-    godMode = false;
-    document.getElementById("godToggle").innerText = "🔒";
-    document.body.classList.remove("god");
-  }
-};
-
-window.unlockGod = function () {
-  const pin = document.getElementById("godPin").value;
-  if (pin === GOD_PIN) {
-    godMode = true;
-    document.getElementById("godToggle").innerText = "👁️";
-    document.body.classList.add("god");
-    document.getElementById("godLock").classList.add("hidden");
-    document.getElementById("godPin").value = "";
-  } else {
-    alert("PIN 錯誤");
-  }
-};
-
-/* ===== 角色圖鑑 ===== */
-window.showRoleBook = function () {
-  const list = document.getElementById("roleList");
-  list.innerHTML = Object.values(ROLES)
-    .map(r => `
-      <div class="card">
-        <h4>${r.name}</h4>
-        <p>${r.skill}</p>
-        ${godMode ? `<small style="opacity:.6">${r.godNote}</small>` : ""}
-      </div>
-    `)
-    .join("");
-  document.getElementById("roleBook").classList.remove("hidden");
-};
-
-window.closeRoleBook = function () {
-  document.getElementById("roleBook").classList.add("hidden");
-};
-
-/* ===== 紀錄 ===== */
-window.showLogs = function () {
-  const list = document.getElementById("logList");
-  list.innerHTML = (window.Game?.logs || [])
-    .map(l => `<p>• ${l}</p>`)
-    .join("");
-  document.getElementById("logModal").classList.remove("hidden");
-};
-
-window.closeLogs = function () {
-  document.getElementById("logModal").classList.add("hidden");
-};
-</script>
-
-<!-- =====================
-     PWA Service Worker
-===================== -->
-<script>
-if ("serviceWorker" in navigator) {
-  window.addEventListener("load", () => {
-    navigator.serviceWorker.register("./sw.js");
-  });
-}
-</script>
-
+  <script>
+    // PWA
+    if ("serviceWorker" in navigator) {
+      window.addEventListener("load", () => navigator.serviceWorker.register("./sw.js"));
+    }
+  </script>
 </body>
 </html>
