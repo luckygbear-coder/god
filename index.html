@@ -1,53 +1,18 @@
-<!DOCTYPE html>
+<!doctype html>
 <html lang="zh-Hant">
 <head>
-  <meta charset="UTF-8" />
-  <title>🐺 狼人殺｜上帝視角</title>
-  <meta name="viewport" content="width=device-width, initial-scale=1" />
-
-  <link rel="manifest" href="./manifest.webmanifest">
-  <meta name="theme-color" content="#1f1b24">
-
-  <link rel="stylesheet" href="./style.css">
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no,viewport-fit=cover" />
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-status-bar-style" content="default" />
+  <meta name="theme-color" content="#f7e6c7" />
+  <link rel="manifest" href="./manifest.webmanifest" />
+  <link rel="stylesheet" href="./style.css" />
+  <title>狼人殺上帝輔助（PWA）</title>
 </head>
+
 <body>
-
-<div class="app">
-
-  <header>
-    <h1>🐺 狼人殺</h1>
-    <label class="toggle">
-      <input type="checkbox" id="godToggle">
-      <span>上帝視角</span>
-    </label>
-  </header>
-
-  <section class="setup card">
-    <h2>🎲 開局設定</h2>
-    <label>玩家人數
-      <input type="number" id="playerCount" value="8" min="4" max="20">
-    </label>
-    <button id="startGame">開始分配角色</button>
-  </section>
-
-  <section id="gameArea" class="hidden">
-    <div class="card">
-      <h2>👥 玩家列表</h2>
-      <ul id="playerList"></ul>
-    </div>
-  </section>
-
-</div>
-
-<script src="./roles.js"></script>
-<script src="./boards.js"></script>
-<script src="./app.js"></script>
-
-<script>
-if ("serviceWorker" in navigator) {
-  navigator.serviceWorker.register("./sw.js");
-}
-</script>
-
-</body>
-</html>
+  <div class="app-wrap">
+    <!-- Top Bar -->
+    <header class="topbar">
+      <div class
