@@ -482,3 +482,11 @@ body.god-on .btn.primary {
   .fab-ann { bottom: max(18px, env(safe-area-inset-bottom)); }
   .fab-god { bottom: max(78px, calc(env(safe-area-inset-bottom) + 60px)); }
 }
+.hidden { display: none !important; }
+.modal.hidden { display: none !important; }
+
+/* 如果你有用到 backdrop */
+.backdrop.hidden { display: none !important; }
+
+/* 防呆：隱藏時不要吃點擊 */
+.modal.hidden, .backdrop.hidden { pointer-events: none !important; }
