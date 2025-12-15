@@ -1,104 +1,170 @@
 /* =========================================================
-   狼人殺｜角色資料（特殊板子 / 擴充包）
-   檔案：/data/roles/roles.special.js
-
-   - 放「特殊角色」：丘比特、騎士、白狼王、狼美人、盜賊…
-   - 僅定義角色屬性與提示文案
-   - 不寫流程邏輯（流程交給 /data/flow）
-   - 可自由增刪，不影響基本板子
+   WW_DATA Roles — Special Pack
+   目標：先把「特殊板子角色資料」補齊，流程稍後接 night.steps / rules
 ========================================================= */
 
-(() => {
-  const root = (window.WW_DATA = window.WW_DATA || {});
+(function(){
+  window.WW_DATA = window.WW_DATA || {};
+  const W = window.WW_DATA;
 
-  root.rolesSpecial = {
+  // 若 base 先載，這裡做合併
+  W.roles = W.roles || {};
+  W.rolesSpecial = W.rolesSpecial || {};
 
-    cupid: {
-      id: "cupid",
-      name: "丘比特",
-      team: "third",
-      icon: "💘",
-      tags: ["開局行動", "連結戀人"],
-      setupAction: "cupidLink",
-      godHints: {
-        short: "丘比特指定戀人",
-        say: "請說：「丘比特請睜眼，請指定兩位戀人。」"
-      },
-      playerHints: {
-        short: "開局指定兩名戀人，其中一人死亡，另一人殉情。",
-      }
-    },
-
-    knight: {
-      id: "knight",
-      name: "騎士",
-      team: "villager",
-      icon: "🗡",
-      tags: ["白天技能", "決鬥"],
-      dayAction: "knightDuel",
-      godHints: {
-        short: "騎士發動決鬥",
-        say: "請說：「騎士是否發動決鬥？請選擇一名玩家。」"
-      },
-      playerHints: {
-        short: "白天可指定一人決鬥，若對方是狼人則狼人死亡，否則自己死亡。",
-      }
-    },
-
-    whiteWolf: {
-      id: "whiteWolf",
-      name: "白狼王",
-      team: "wolf",
-      icon: "🐺👑",
-      tags: ["狼王", "死亡技能"],
-      deathAction: "whiteWolfExplode",
-      godHints: {
-        short: "白狼王死亡爆人",
-        say: "請說：「白狼王死亡，你要帶走誰？」"
-      },
-      playerHints: {
-        short: "死亡時可帶走一名玩家。",
-      }
-    },
-
-    wolfBeauty: {
-      id: "wolfBeauty",
-      name: "狼美人",
-      team: "wolf",
-      icon: "🌹🐺",
-      tags: ["夜晚行動", "魅惑"],
-      nightAction: "wolfBeautyCharm",
-      godHints: {
-        short: "狼美人魅惑",
-        say: "請說：「狼美人請睜眼，你要魅惑誰？」"
-      },
-      playerHints: {
-        short: "夜晚魅惑一人，被魅惑者隔天不能投你。",
-      }
-    },
-
-    thief: {
-      id: "thief",
-      name: "盜賊",
-      team: "third",
-      icon: "🃏",
-      tags: ["開局行動", "換牌"],
-      setupAction: "thiefSwap",
-      godHints: {
-        short: "盜賊選擇角色",
-        say: "請說：「盜賊請睜眼，請選擇要成為的角色。」"
-      },
-      playerHints: {
-        short: "開局可從備用角色中選一個替換自己。",
-      }
-    }
-
+  const add = (r) => {
+    W.rolesSpecial[r.id] = r;
+    // 合併到 roles 供 roleInfo() 直接查
+    W.roles[r.id] = r;
   };
 
-  // 合併到總角色表
-  root.roles = Object.assign(
-    {},
-    root.rolesBase || {},
-    root.rolesSpecial
-  );
+  /* =========================================================
+     特殊陣營/標籤說明
+     team:
+       - wolf: 邪惡陣營
+       - villager: 正義陣營
+       - third: 第三方陣營（勝負判定需特別處理）
+========================================================= */
+
+  // -------------------------
+  // 正義陣營（特殊）
+  // -------------------------
+  add({
+    id: "idiot",
+    name: "白痴",
+    team: "villager",
+    icon: "🤪",
+    tags: ["白天強化", "免死一次(常見規則)"],
+    nightOrderHint: null,
+    rulesHint: "常見規則：被投票放逐時翻牌免死，但失去投票權/發言權（依桌規）。"
+  });
+
+  add({
+    id: "dreamEater",
+    name: "攝夢人",
+    team: "villager",
+    icon: "🌀",
+    tags: ["夜晚技能", "連睡/入夢"],
+    nightOrderHint: "夜晚：攝夢人選擇一名玩家入夢（之後依規則影響其行動/狀態）。",
+    rulesHint: "桌規差異很大：入夢者可能無法行動、或被攝夢人牽連死亡。後續會在 rules 接可選規則。"
+  });
+
+  add({
+    id: "magician",
+    name: "魔術師",
+    team: "villager",
+    icon: "🎩",
+    tags: ["夜晚技能", "交換/改變目標(桌規)"],
+    nightOrderHint: "夜晚：魔術師可對某些目標做交換/干擾（依板子規則）。",
+    rulesHint: "不同流派差異大：可做『交換兩人座位/交換技能目標/移花接木』等。後續以設定開關實作。"
+  });
+
+  add({
+    id: "demonHunter",
+    name: "獵魔人",
+    team: "villager",
+    icon: "🪓",
+    tags: ["白天技能", "決鬥/審判(桌規)"],
+    nightOrderHint: null,
+    rulesHint: "常見玩法：白天可指定一人決鬥，輸者出局或公開身分（依桌規）。"
+  });
+
+  add({
+    id: "hellKnight",
+    name: "惡靈騎士",
+    team: "villager",
+    icon: "🐴",
+    tags: ["死亡技能", "帶走/復仇(桌規)"],
+    nightOrderHint: null,
+    rulesHint: "常見玩法：死亡時可帶走一人/或指定一人與自己同歸於盡（依桌規）。"
+  });
+
+  add({
+    id: "knight",
+    name: "騎士",
+    team: "villager",
+    icon: "🗡️",
+    tags: ["白天技能", "決鬥驗人"],
+    nightOrderHint: null,
+    rulesHint: "常見：白天可挑戰一人，若對方是狼人則狼人死亡；若不是狼人則騎士死亡（依桌規）。"
+  });
+
+  // -------------------------
+  // 邪惡陣營（特殊狼）
+  // -------------------------
+  add({
+    id: "blackWolfKing",
+    name: "黑狼王",
+    team: "wolf",
+    icon: "🐺👑",
+    tags: ["狼", "死亡技能"],
+    nightOrderHint: "夜晚：與狼人同刀（若板子規則另有技能再加）。",
+    rulesHint: "你指定規則：黑狼王被毒不能使用技能（後續 rules 會實作）。"
+  });
+
+  add({
+    id: "whiteWolfKing",
+    name: "白狼王",
+    team: "wolf",
+    icon: "🐺⚔️",
+    tags: ["狼", "特殊技能(桌規)"],
+    nightOrderHint: "夜晚：通常可選擇自爆帶走一人（依桌規）。",
+    rulesHint: "不同桌規：可自爆、可夜晚刀人附加效果。後續以設定開關實作。"
+  });
+
+  add({
+    id: "gargoyle",
+    name: "石像鬼",
+    team: "wolf",
+    icon: "🗿",
+    tags: ["狼", "夜晚強化(桌規)"],
+    nightOrderHint: "夜晚：可能有『守夜/石化』相關行動（依桌規）。",
+    rulesHint: "流派差異大：例如可免疫一次、或可夜晚守護狼人同伴。後續以可插拔規則做。"
+  });
+
+  // -------------------------
+  // 第三方陣營（特殊）
+  // -------------------------
+  add({
+    id: "cupid",
+    name: "邱比特",
+    team: "third",
+    icon: "💘",
+    tags: ["第三方", "綁情侶"],
+    nightOrderHint: "第一夜：邱比特選兩人綁成情侶（可能同陣營或跨陣營）。",
+    rulesHint: "常見：情侶一方死，另一方殉情；若最後只剩情侶存活則第三方勝利（依桌規）。"
+  });
+
+  add({
+    id: "secretCrush",
+    name: "暗戀者",
+    team: "third",
+    icon: "🌙",
+    tags: ["第三方", "暗戀/單戀(桌規)"],
+    nightOrderHint: "第一夜或特定時機：選一人作為暗戀目標（依桌規）。",
+    rulesHint: "桌規差異大：可能需要保護目標到最後、或與目標同存活即勝。後續以設定開關定義。"
+  });
+
+  // -------------------------
+  // 中立功能型（可視為第三方或村民，依板子規則）
+  // -------------------------
+  add({
+    id: "blackMarketDealer",
+    name: "黑市商人",
+    team: "third",
+    icon: "🧳",
+    tags: ["第三方/功能", "交換/買賣(桌規)"],
+    nightOrderHint: "夜晚：可能提供交換、道具、或資訊交易（依桌規）。",
+    rulesHint: "後續會以『道具/交換』模組做。此角色勝利條件需依你板子確定。"
+  });
+
+  add({
+    id: "luckyOne",
+    name: "幸運兒",
+    team: "villager",
+    icon: "🍀",
+    tags: ["被動", "免疫一次(桌規)"],
+    nightOrderHint: null,
+    rulesHint: "常見：可免疫一次夜晚死亡/或一次技能效果（依桌規）。後續 rules 會做成可選。"
+  });
+
 })();
