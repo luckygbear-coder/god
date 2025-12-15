@@ -1,22 +1,34 @@
 /* =========================================================
    狼人殺｜上帝輔助 PWA
-   app.js（最終瘦身穩定版）
+   app.js（穩定基準版）
 
    原則：
-   - ❌ 不寫任何狼人殺規則
-   - ✅ 只負責 UI、流程、狀態
-   - ✅ 規則 / 夜晚流程 / 勝負 → 全部來自 WW_DATA
+   - UI / 流程穩定優先
+   - WW_DATA 有問題 → 顯示錯誤，不炸整個 App
+   - iOS 長按不選字、不放大、不吃事件
 ========================================================= */
 
 (() => {
+  /* =========================
+     DOM helpers
+  ========================= */
   const $ = (id) => document.getElementById(id);
-  const on = (el, ev, fn) => el && el.addEventListener(ev, fn);
+  const on = (el, ev, fn, opt) => el && el.addEventListener(ev, fn, opt);
 
-  /* -------------------------------------------------------
-     全域狀態
-  ------------------------------------------------------- */
+  /* =========================
+     iOS 防長按選字 / 放大
+  ========================= */
+  try {
+    document.documentElement.style.webkitUserSelect = "none";
+    document.documentElement.style.userSelect = "none";
+    document.documentElement.style.webkitTouchCallout = "none";
+  } catch(e){}
+
+  /* =========================
+     State
+  ========================= */
   const State = {
-    phase: "setup",     // setup | deal | night | day | end
+    phase: "setup",      // setup | deal | night | day
     boardId: "basic",
 
     players: [],
@@ -29,82 +41,121 @@
     logs: [],
 
     godView: false,
-    bundle: null,       // board + rules + nightSteps
+
+    bundle: null,        // 來自 WW_DATA
   };
 
-  /* -------------------------------------------------------
-     工具
-  ------------------------------------------------------- */
+  const STORAGE_KEY = "ww_pwa_state_v1";
+
+  /* =========================
+     Storage
+  ========================= */
   function save() {
-    localStorage.setItem("ww_save", JSON.stringify(State));
-  }
-  function load() {
     try {
-      const s = JSON.parse(localStorage.getItem("ww_save"));
-      if (s && s.players) Object.assign(State, s);
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(State));
     } catch(e){}
   }
 
+  function load() {
+    try {
+      const raw = localStorage.getItem(STORAGE_KEY);
+      if (!raw) return;
+      const data = JSON.parse(raw);
+      if (data && typeof data === "object") {
+        Object.assign(State, data);
+      }
+    } catch(e){}
+  }
+
+  /* =========================
+     Screen control
+  ========================= */
   function showScreen(name) {
-    document.querySelectorAll(".screen").forEach(s => s.classList.remove("active"));
-    $(`screen-${name}`)?.classList.add("active");
+    document.querySelectorAll(".screen")
+      .forEach(s => s.classList.remove("active"));
+
+    const el = $(`screen-${name}`);
+    if (el) el.classList.add("active");
+
     State.phase = name;
     save();
   }
 
+  /* =========================
+     God view
+  ========================= */
   function toggleGod() {
     State.godView = !State.godView;
     document.body.classList.toggle("god-on", State.godView);
-    $("btnGodToggle").textContent = State.godView ? "🔓" : "🔒";
+    const btn = $("btnGodToggle");
+    if (btn) btn.textContent = State.godView ? "🔓" : "🔒";
     save();
   }
 
-  /* -------------------------------------------------------
-     Setup
-  ------------------------------------------------------- */
+  /* =========================
+     Setup → Start
+  ========================= */
   function startGame() {
-    const bundle = WW_DATA.getBoardBundle(State.boardId);
-    if (!bundle) {
-      alert("板子資料載入失敗");
+    if (!window.WW_DATA || typeof WW_DATA.getBoardBundle !== "function") {
+      alert("❌ 板子資料（WW_DATA）尚未載入");
       return;
     }
-    State.bundle = bundle;
 
-    // 建立玩家（只根據 board preset）
+    const bundle = WW_DATA.getBoardBundle(State.boardId);
+    if (!bundle || !bundle.board || !bundle.board.buildPlayers) {
+      alert("❌ 板子資料結構錯誤");
+      return;
+    }
+
+    State.bundle = bundle;
     State.players = bundle.board.buildPlayers();
     State.dealIndex = 0;
-    State.logs = [];
     State.nightNo = 1;
     State.dayNo = 1;
+    State.logs = [];
 
     showScreen("deal");
     renderDeal();
   }
 
-  /* -------------------------------------------------------
-     Deal（長按翻牌）
-  ------------------------------------------------------- */
+  /* =========================
+     Deal（翻牌）
+  ========================= */
+  let dealTimer = null;
+
   function renderDeal() {
-    const idx = State.dealIndex;
-    const p = State.players[idx];
+    const p = State.players[State.dealIndex];
     if (!p) return;
 
     $("dealText").innerHTML = `請 <b>${p.seat} 號</b> 拿手機`;
 
     const btn = $("btnHoldReveal");
-    let timer = null;
+    const modal = $("modalReveal");
+    const roleEl = $("revealRole");
 
-    btn.onpointerdown = () => {
-      timer = setTimeout(() => {
-        $("revealRole").textContent = `${p.icon} ${p.name}`;
-        $("modalReveal").classList.remove("hidden");
+    if (!btn || !modal || !roleEl) return;
+
+    const startHold = (e) => {
+      e.preventDefault();
+      clearTimeout(dealTimer);
+      dealTimer = setTimeout(() => {
+        roleEl.textContent = `${p.icon || ""} ${p.name}`;
+        modal.classList.remove("hidden");
         navigator.vibrate?.(60);
       }, 800);
     };
-    btn.onpointerup = btn.onpointerleave = () => {
-      clearTimeout(timer);
-      $("modalReveal").classList.add("hidden");
+
+    const endHold = () => {
+      clearTimeout(dealTimer);
+      modal.classList.add("hidden");
     };
+
+    btn.ontouchstart = startHold;
+    btn.ontouchend = endHold;
+    btn.ontouchcancel = endHold;
+    btn.onmousedown = startHold;
+    btn.onmouseup = endHold;
+    btn.onmouseleave = endHold;
   }
 
   function nextDeal() {
@@ -118,67 +169,35 @@
     save();
   }
 
-  /* -------------------------------------------------------
-     Night
-  ------------------------------------------------------- */
+  /* =========================
+     Night（最小可走版）
+  ========================= */
   function initNight() {
-    const { nightSteps } = State.bundle;
     State.nightState = {};
-    State.nightStepIndex = 0;
     renderNight();
   }
 
   function renderNight() {
-    const steps = State.bundle.nightSteps;
-    const step = steps[State.nightStepIndex];
-    if (!step) return;
-
     $("nightTag").textContent = `第 ${State.nightNo} 夜`;
     $("nightScript").textContent =
-      State.godView ? step.godScript : step.publicScript;
+      State.godView
+        ? "（上帝）夜晚流程進行中"
+        : "天黑請閉眼";
 
-    renderSeats((seat) => {
-      if (step.pickKey) {
-        State.nightState[step.pickKey] = seat;
-      }
-    });
+    renderSeats("nightSeats");
   }
 
   function nightNext() {
-    const steps = State.bundle.nightSteps;
-    const step = steps[State.nightStepIndex];
-
-    // 結算
-    if (step.type === "resolve") {
-      resolveNight();
-      return;
-    }
-
-    State.nightStepIndex++;
-    renderNight();
-    save();
+    // 目前只是示範流程
+    resolveNight();
   }
 
   function resolveNight() {
-    const { rules } = State.bundle;
-    const result = rules.resolveNight({
-      players: State.players,
-      night: State.nightState,
-      settings: State.bundle.board.settings
-    });
-
-    const ann = rules.buildAnnouncement({
-      nightNo: State.nightNo,
-      dayNo: State.dayNo,
-      players: State.players,
-      resolved: result
-    });
-
     State.logs.unshift({
       nightNo: State.nightNo,
       dayNo: State.dayNo,
-      publicText: ann.publicText,
-      hiddenText: ann.hiddenText
+      publicText: "天亮了，昨晚是平安夜。",
+      hiddenText: "（測試）夜晚無事件"
     });
 
     showAnnouncement();
@@ -186,13 +205,17 @@
     save();
   }
 
-  /* -------------------------------------------------------
+  /* =========================
      Day
-  ------------------------------------------------------- */
+  ========================= */
   function showAnnouncement() {
+    const log = State.logs[0];
+    if (!log) return;
+
     $("annBox").textContent = State.godView
-      ? State.logs[0].publicText + "\n\n" + State.logs[0].hiddenText
-      : State.logs[0].publicText;
+      ? `${log.publicText}\n\n${log.hiddenText}`
+      : log.publicText;
+
     $("modalAnn").classList.remove("hidden");
   }
 
@@ -204,35 +227,34 @@
     save();
   }
 
-  /* -------------------------------------------------------
+  /* =========================
      Seats
-  ------------------------------------------------------- */
-  function renderSeats(onPick) {
-    const box = $("nightSeats") || $("daySeats");
+  ========================= */
+  function renderSeats(containerId) {
+    const box = $(containerId);
     if (!box) return;
-    box.innerHTML = "";
 
+    box.innerHTML = "";
     State.players.forEach(p => {
       const b = document.createElement("button");
-      b.className = "seat" + (p.alive ? "" : " dead");
+      b.className = "seat" + (p.alive === false ? " dead" : "");
       b.textContent = p.seat;
-      b.onclick = () => p.alive && onPick(p.seat);
       box.appendChild(b);
     });
   }
 
-  /* -------------------------------------------------------
+  /* =========================
      Restart
-  ------------------------------------------------------- */
+  ========================= */
   function restartGame() {
     if (!confirm("確定要重新開始？所有進度會清除")) return;
-    localStorage.removeItem("ww_save");
+    localStorage.removeItem(STORAGE_KEY);
     location.reload();
   }
 
-  /* -------------------------------------------------------
+  /* =========================
      Bind events
-  ------------------------------------------------------- */
+  ========================= */
   on($("btnStart"), "click", startGame);
   on($("btnNextPlayer"), "click", nextDeal);
   on($("btnNightNext"), "click", nightNext);
@@ -240,14 +262,12 @@
   on($("btnGodToggle"), "click", toggleGod);
   on($("btnRestart"), "click", restartGame);
   on($("btnOpenAnnouncement"), "click", showAnnouncement);
-  on($("closeAnn"), "click", () => $("modalAnn").classList.add("hidden"));
+  on($("closeAnn"), "click", () => $("modalAnn")?.classList.add("hidden"));
 
-  /* -------------------------------------------------------
+  /* =========================
      Boot
-  ------------------------------------------------------- */
+  ========================= */
   load();
   document.body.classList.toggle("god-on", State.godView);
-
   showScreen(State.phase || "setup");
-
 })();
