@@ -1,150 +1,113 @@
 /* =========================================================
-   狼人殺｜夜晚流程步驟表（基本板子）
+   狼人殺｜上帝輔助 PWA
    檔案：/data/flow/night.steps.basic.js
 
-   - 只放「夜晚 Wizard 步驟」
-   - 每一步可設定：
-     key / type / needsRole / required / scripts / pickTarget / apply
-   - app.js 之後會改成「讀取這張表」來動態生成夜晚流程
-   - 全域掛載：window.WW_DATA.nightStepsBasic
+   基本板子夜晚步驟生成器（Wizard Steps）
+   - 依本局實際角色動態生成
+   - 女巫使用 app.js 彈窗處理（type:"witch"）
+
+   依賴：
+   - WW_DATA.roles（roles.index.js 已合併）
 ========================================================= */
 
-(() => {
-  const root = (window.WW_DATA = window.WW_DATA || {});
-  const roles = root.roles || {};
+(function () {
+  window.WW_DATA = window.WW_DATA || {};
 
-  // 工具：判斷這局是否有某角色
-  const hasRole = (players, roleId) => players?.some(p => p.roleId === roleId);
+  function hasRole(players, roleId) {
+    return players.some(p => p.roleId === roleId);
+  }
 
-  // 工具：上帝台詞模板
-  const SAY = {
-    close: "天黑請閉眼。",
-    open:  "天亮請睜眼。",
-
-    guardAsk: "請說：「守衛請睜眼，你要守誰？」",
-    wolfAsk:  "請說：「狼人請睜眼，你們要刀誰？」",
-
-    seerAsk:  "請說：「預言家請睜眼，你要查驗誰？」",
-    seerGood: "請說：「他的身分是——好人。」",
-    seerWolf: "請說：「他的身分是——狼人。」",
-
-    witchAsk: "請說：「女巫請睜眼，今晚被刀的是 X 號，你要用解藥/毒藥嗎？」"
-  };
-
-  /* ---------------------------------------------------------
-     步驟表：回傳一個陣列（依順序執行）
-     type:
-       - info     : 只顯示台詞
-       - pick     : 需要點選座位（存到 state.night[pickTarget]）
-       - seer     : 特化 pick（點選後計算好人/狼人）
-       - witch    : 特化（顯示狼刀目標 + 解/毒按鈕邏輯由 app.js 或 modal panel 處理）
-       - resolve  : 結算天亮公告（由 app.js 規則層處理）
-  --------------------------------------------------------- */
-  root.nightStepsBasic = function buildNightSteps(players, stateNight) {
+  // 給 app.js 呼叫：buildNightSteps(players, nightState, settings)
+  function buildNightStepsBasic(players, night, settings = {}) {
     const steps = [];
 
-    // 1) 天黑閉眼
+    // 0) 天黑
     steps.push({
       key: "close",
       type: "info",
-      title: "天黑",
-      publicScript: SAY.close,
-      godScript: SAY.close
+      publicScript: "天黑請閉眼。",
+      godScript: "天黑請閉眼。"
     });
 
-    // 2) 守衛（可選）
+    // 1) 守衛
     if (hasRole(players, "guard")) {
       steps.push({
         key: "guard",
         type: "pick",
-        title: "守衛",
-        needsRole: "guard",
-        required: false,
         pickTarget: "guardTarget",
-        publicScript: "守衛請睜眼。",
-        godScript: `${SAY.guardAsk}\n（點選座位）`,
-        ui: {
-          pickAliveOnly: true,
-          allowSelf: true
-        }
+        required: true,
+        roleId: "guard",
+        publicScript: "守衛請睜眼，請選擇你要守護的人。",
+        godScript:
+          "請說：『守衛請睜眼，你要守誰？』\n" +
+          "（提示）若規則開啟「不能連守」，請避免連續守同一人。"
       });
     }
 
-    // 3) 狼人（必有）
-    steps.push({
-      key: "wolf",
-      type: "pick",
-      title: "狼人",
-      needsRole: "werewolf", // 只要有狼人就算
-      required: true,
-      pickTarget: "wolfTarget",
-      publicScript: "狼人請睜眼。",
-      godScript: `${SAY.wolfAsk}\n（點選座位｜未選不能下一步）`,
-      ui: {
-        pickAliveOnly: true,
-        allowSelf: false // 狼刀自己通常不允許（你若要開放可改 true）
-      }
-    });
+    // 2) 狼人
+    if (hasRole(players, "werewolf") || players.some(p => (p.team === "wolf"))) {
+      steps.push({
+        key: "wolf",
+        type: "pick",
+        pickTarget: "wolfTarget",
+        required: false, // 可空刀由規則決定，規則層會檢查
+        roleId: "werewolf",
+        publicScript: "狼人請睜眼，請選擇你們要刀的人。",
+        godScript:
+          "請說：『狼人請睜眼，你們要刀誰？』\n" +
+          "（提示）若規則允許空刀，可不選人直接進下一步。"
+      });
+    }
 
-    // 4) 預言家（可選）
+    // 3) 預言家
     if (hasRole(players, "seer")) {
       steps.push({
         key: "seer",
         type: "seer",
-        title: "預言家",
-        needsRole: "seer",
-        required: false,
         pickTarget: "seerCheckTarget",
-        resultTarget: "seerResult",
-        publicScript: "預言家請睜眼。",
-        godScript: `${SAY.seerAsk}\n（點選座位）`,
-        ui: {
-          pickAliveOnly: true,
-          allowSelf: true
-        },
-        apply({ players, seat }) {
-          const target = players.find(p => p.seat === seat);
-          const isWolf = target?.team === "wolf";
-          return { seerResult: isWolf ? "wolf" : "villager" };
-        },
-        afterScript({ seerResult }) {
+        required: true,
+        roleId: "seer",
+        publicScript: "預言家請睜眼，請選擇你要查驗的人。",
+        godScript:
+          "請說：『預言家請睜眼，你要查驗誰？』\n" +
+          "選擇後請告知預言家結果（好人/狼人）。",
+        afterScript: ({ seerResult }) => {
           if (!seerResult) return "";
-          return `\n（上帝視角）查驗結果：${seerResult === "wolf" ? "狼人" : "好人"}\n` +
-            (seerResult === "wolf" ? SAY.seerWolf : SAY.seerGood);
+          return `\n（上帝）查驗結果：${seerResult === "wolf" ? "狼人" : "好人"}`;
         }
       });
     }
 
-    // 5) 女巫（可選）
+    // 4) 女巫（彈窗）
     if (hasRole(players, "witch")) {
       steps.push({
         key: "witch",
         type: "witch",
-        title: "女巫",
-        needsRole: "witch",
-        required: false,
-        publicScript: "女巫請睜眼。",
-        godScript: `${SAY.witchAsk}\n（解藥/毒藥在面板操作）`,
-        ui: {
-          // 由 app.js 的 modal panel 接手
-          panel: "witchPanel"
-        },
-        infoForWitch({ wolfTarget }) {
-          return wolfTarget ? `今晚被刀：${wolfTarget} 號` : "今晚未選狼刀目標";
-        }
+        roleId: "witch",
+        publicScript:
+          "女巫請睜眼。（需要上帝視角操作女巫用藥）",
+        godScript:
+          "請說：『女巫請睜眼。』\n" +
+          "（上帝操作）接下來會開啟女巫彈窗：\n" +
+          "1) 顯示今晚刀口（若解藥已用過則不顯示）\n" +
+          "2) 選擇救 / 不救\n" +
+          "3) 選擇毒 / 不毒\n" +
+          "完成後回到夜晚流程。"
       });
     }
 
-    // 6) 天亮結算
+    // 5) 天亮結算
     steps.push({
-      key: "dawn",
+      key: "resolve",
       type: "resolve",
-      title: "天亮",
-      publicScript: SAY.open,
-      godScript: `${SAY.open}\n（系統結算並生成公告）`
+      publicScript: "天亮請睜眼。",
+      godScript:
+        "請說：『天亮了，請大家睜眼。』\n" +
+        "接著系統將自動結算死亡名單並生成公告。"
     });
 
     return steps;
-  };
+  }
 
+  window.WW_DATA.nightStepsBasic = buildNightStepsBasic;
 })();
