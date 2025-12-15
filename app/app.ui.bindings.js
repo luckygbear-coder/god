@@ -1,171 +1,521 @@
 /* =========================================================
    app/app.ui.bindings.js
-   - bind all UI events
-   - required ids check + report
+   UI helpers used by new app.js
+   - God PIN modal wiring
+   - Announcement modal control
+   - Role config modal hook (basic)
+   - Deal reveal modal (flip)
+   - Witch modal (flow: cut -> save? -> poison?)
+   - Export JSON, Copy text
+   - Game over modal
+   - Prevent iOS text selection / callout on long press
 ========================================================= */
 
 (function(){
-  window.WW_APP = window.WW_APP || {};
-  const A = window.WW_APP;
+  const A = window.WW_APP || (window.WW_APP = {});
+  const UI = A.UI || (A.UI = {});
+  const $ = (id)=>document.getElementById(id);
 
-  const $ = (id) => document.getElementById(id);
-  const on = (id, ev, fn, opt) => {
-    const el = $(id);
-    if(!el) return false;
-    el.addEventListener(ev, fn, opt);
-    return true;
+  /* =========================
+     Small helpers
+  ========================= */
+  function el(tag, cls, text){
+    const e=document.createElement(tag);
+    if(cls) e.className=cls;
+    if(typeof text==="string") e.textContent=text;
+    return e;
+  }
+  function clamp(n,a,b){ return Math.max(a, Math.min(b, n)); }
+
+  /* =========================
+     God view CSS toggle
+  ========================= */
+  UI.setGodView = function(on){
+    document.body.classList.toggle("god-on", !!on);
+    const icon = on ? "🔓" : "🔒";
+    const btn1 = $("btnGodToggle");
+    const btn2 = $("fabGod");
+    if(btn1) btn1.textContent = icon;
+    if(btn2) btn2.textContent = icon;
   };
 
-  // 你目前 UI 最核心會用到的 ids（先做 MVP 必須存在）
-  const REQUIRED = [
-    // global
-    "btnGodToggle","fabGod","btnOpenAnnouncement","fabAnn",
-    "modalGod","pinInput","pinOk","pinCancel","closeGod","pinWarn",
+  /* =========================
+     Announcement modal
+  ========================= */
+  let annMode = "today";
+  UI.setAnnMode = (m)=>{ annMode = (m==="history") ? "history" : "today"; };
+  UI.getAnnMode = ()=>annMode;
 
-    // screens
-    "screen-setup","screen-deal","screen-night","screen-day",
+  UI.openAnnouncement = function(mode="today"){
+    UI.setAnnMode(mode);
+    const modal = $("modalAnn");
+    if(modal) modal.classList.remove("hidden");
 
-    // setup
-    "boardBasic","boardB1",
-    "playerCount","btnMinus","btnPlus","rangeCount",
-    "btnSuggest","btnOpenRoleConfig","btnStart",
-    "roleTotal","playerTotal","warnRoleTotal",
-    "modalRole","roleConfigBody","closeRole","roleReset","roleApply",
+    const t = $("annToday");
+    const h = $("annHistory");
+    t && t.classList.toggle("active", annMode==="today");
+    h && h.classList.toggle("active", annMode==="history");
+  };
 
-    // deal
-    "dealText","btnHoldReveal","btnNextPlayer","btnFinishDeal","btnDealBack",
-
-    // night
-    "nightTag","nightScript","nightSeats","btnNightPrev","btnNightNext",
-
-    // day
-    "dayTag","btnPolice","btnTalkOrder","btnVote","btnDayNext",
-
-    // announcement
-    "modalAnn","closeAnn","annToday","annHistory","annBox","btnCopyAnn",
-
-    // log/export/reset
-    "btnExport","btnClearSave"
-  ];
-
-  function checkRequiredIds(){
-    return REQUIRED.filter(id => !$(id));
-  }
-
-  function reportMissingIds(missing){
-    if(!missing.length) return;
-    console.warn("[WW] Missing IDs:", missing);
-
-    // 畫面上也提示（不擋操作）
-    let bar = document.getElementById("ww-missing-bar");
-    if(!bar){
-      bar = document.createElement("div");
-      bar.id = "ww-missing-bar";
-      bar.style.position="fixed";
-      bar.style.left="10px";
-      bar.style.right="10px";
-      bar.style.bottom="76px";
-      bar.style.zIndex="9999";
-      bar.style.background="rgba(255,235,205,.95)";
-      bar.style.border="2px solid rgba(0,0,0,.12)";
-      bar.style.borderRadius="14px";
-      bar.style.padding="10px 12px";
-      bar.style.fontSize="12px";
-      bar.style.lineHeight="1.5";
-      bar.style.boxShadow="0 10px 30px rgba(0,0,0,.18)";
-      document.body.appendChild(bar);
-    }
-    bar.textContent = `⚠️ UI 缺少 ${missing.length} 個 id，部分按鈕可能無反應：${missing.slice(0,6).join(", ")}${missing.length>6?"…":""}（詳見 console）`;
-  }
-
-  function bindAll(state){
-    // --- 防 iOS 長按選字（補一層保險：全站禁止選字） ---
-    try{
-      document.documentElement.style.webkitUserSelect="none";
-      document.documentElement.style.userSelect="none";
-      document.body && (document.body.style.webkitUserSelect="none");
-      document.body && (document.body.style.userSelect="none");
-    }catch(e){}
-
-    // --- global ---
-    on("btnGodToggle","click",()=> A.UI.toggleGod());
-    on("fabGod","click",()=> A.UI.toggleGod());
-
-    on("pinOk","click",()=> A.UI.pinOk());
-    on("pinCancel","click",()=> A.UI.closeModal("modalGod"));
-    on("closeGod","click",()=> A.UI.closeModal("modalGod"));
-
-    // announcement
-    on("btnOpenAnnouncement","click",()=> A.UI.openAnnouncement("today"));
-    on("fabAnn","click",()=> A.UI.openAnnouncement("today"));
-    on("closeAnn","click",()=> A.UI.closeModal("modalAnn"));
-    on("annToday","click",()=> A.UI.setAnnMode("today"));
-    on("annHistory","click",()=> A.UI.setAnnMode("history"));
-    on("btnCopyAnn","click",()=> {
-      const text = $("annBox")?.textContent || "";
-      navigator.clipboard?.writeText(text).then(()=>alert("已複製")).catch(()=>alert("複製失敗"));
-    });
-
-    // setup: boards
-    on("boardBasic","click",()=> A.UI.selectBoard("basic"));
-    on("boardB1","click",()=> A.UI.selectBoard("b1"));
-
-    // setup: count
-    on("btnMinus","click",()=> A.UI.changeCount(-1));
-    on("btnPlus","click",()=> A.UI.changeCount(+1));
-    on("rangeCount","input",(e)=> A.UI.setCount(Number(e.target.value)));
-
-    // setup: roles
-    on("btnSuggest","click",()=> A.UI.suggestRoles());
-    on("btnOpenRoleConfig","click",()=> A.UI.openRoleModal());
-    on("roleReset","click",()=> A.UI.resetRoles());
-    on("roleApply","click",()=> A.UI.closeModal("modalRole"));
-    on("closeRole","click",()=> A.UI.closeModal("modalRole"));
-
-    // setup: start
-    on("btnStart","click",()=> A.UI.startGame());
-
-    // deal
-    on("btnNextPlayer","click",()=> A.UI.dealNext());
-    on("btnFinishDeal","click",()=> A.UI.dealFinish());
-    on("btnDealBack","click",()=> A.UI.goSetup());
-
-    // night
-    on("btnNightPrev","click",()=> A.UI.nightPrev());
-    on("btnNightNext","click",()=> A.UI.nightNext());
-
-    // night seat pick (delegate)
-    const nightSeats = $("nightSeats");
-    if(nightSeats){
-      nightSeats.addEventListener("click",(e)=>{
-        const btn = e.target.closest("button.seat");
-        if(!btn) return;
-        const seat = Number(btn.dataset.seat || btn.textContent);
-        if(!Number.isFinite(seat)) return;
-        A.UI.onNightSeatPick(seat);
+  /* close button exists in index.html */
+  (function wireAnnClose(){
+    const close = $("closeAnn");
+    if(close){
+      close.addEventListener("click", ()=>{
+        $("modalAnn")?.classList.add("hidden");
       });
     }
+  })();
 
-    // day buttons (後續 police / vote / speech 會再接更多 modal)
-    on("btnPolice","click",()=> alert("上警 UI：下一檔會補完整（police + speech + vote 模組）"));
-    on("btnTalkOrder","click",()=> alert("發言 UI：下一檔會補完整（police + speech + vote 模組）"));
-    on("btnVote","click",()=> alert("投票 UI：下一檔會補完整（police + speech + vote 模組）"));
-    on("btnDayNext","click",()=> A.UI.goNextNight());
-
-    // export / clear
-    on("btnExport","click",()=> A.UI.exportReplay());
-    on("btnClearSave","click",()=> {
-      if(confirm("確定清除本局存檔並回到設定？")){
-        A.State.clear();
-        location.reload();
+  /* =========================
+     Copy / Download
+  ========================= */
+  UI.copyText = async function(text){
+    try{
+      await navigator.clipboard.writeText(text||"");
+      alert("已複製");
+    }catch(e){
+      // fallback
+      try{
+        const ta=document.createElement("textarea");
+        ta.value = text||"";
+        document.body.appendChild(ta);
+        ta.select();
+        document.execCommand("copy");
+        ta.remove();
+        alert("已複製");
+      }catch(err){
+        alert("複製失敗（可能需要 HTTPS / PWA 安裝）");
       }
+    }
+  };
+
+  UI.downloadJSON = function(filename, obj){
+    const blob = new Blob([JSON.stringify(obj,null,2)], {type:"application/json"});
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href=url;
+    a.download=filename || `export_${Date.now()}.json`;
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    setTimeout(()=>URL.revokeObjectURL(url), 600);
+  };
+
+  /* =========================
+     God PIN modal
+  ========================= */
+  let pinSubmitHandler = null;
+
+  UI.openGodPin = function(){
+    $("pinInput") && ($("pinInput").value="");
+    UI.showPinWarn(false);
+    $("modalGod")?.classList.remove("hidden");
+    $("pinInput")?.focus?.();
+  };
+
+  UI.closeGodPin = function(){
+    $("modalGod")?.classList.add("hidden");
+  };
+
+  UI.showPinWarn = function(on){
+    $("pinWarn")?.classList.toggle("hidden", !on);
+  };
+
+  UI.onGodPinSubmit = function(fn){
+    pinSubmitHandler = fn;
+  };
+
+  (function wireGodPin(){
+    const close = $("closeGod");
+    const cancel = $("pinCancel");
+    const ok = $("pinOk");
+    close && close.addEventListener("click", UI.closeGodPin);
+    cancel && cancel.addEventListener("click", UI.closeGodPin);
+    ok && ok.addEventListener("click", ()=>{
+      const v = ($("pinInput")?.value || "").trim();
+      pinSubmitHandler && pinSubmitHandler(v);
+    });
+  })();
+
+  /* =========================
+     Role config modal hook
+     - app.js will call UI.openRoleConfig(state, roles)
+     - Here we only open the modal and let app.render handle the content,
+       OR provide a minimal fallback UI if needed.
+  ========================= */
+  UI.openRoleConfig = function(state, roles){
+    // Ensure modal exists
+    const modal = $("modalRole");
+    if(!modal) return alert("缺少 modalRole（index.html）");
+
+    modal.classList.remove("hidden");
+    // Render body minimally if render module didn't
+    const body = $("roleConfigBody");
+    if(!body) return;
+
+    if(body.dataset.built === "1") return;
+
+    // minimal: build rows by existing state.rolesCount keys
+    body.innerHTML = "";
+    const tip = el("div","hint","提示：角色總數必須等於玩家人數，才能開始。");
+    tip.style.marginBottom="10px";
+    body.appendChild(tip);
+
+    const list = Object.keys(state.rolesCount||{});
+    list.forEach(rid=>{
+      const info = (roles && roles[rid]) || {name:rid, icon:"❔"};
+      const row = el("div","");
+      row.style.display="flex";
+      row.style.alignItems="center";
+      row.style.justifyContent="space-between";
+      row.style.padding="10px 4px";
+      row.style.borderBottom="1px dashed rgba(0,0,0,.08)";
+
+      const left = el("div","");
+      left.style.fontWeight="1000";
+      left.textContent = `${info.icon?info.icon+" ":""}${info.name||rid}`;
+
+      const right = el("div","");
+      right.style.display="flex";
+      right.style.alignItems="center";
+      right.style.gap="10px";
+
+      const minus = el("button","btn ghost","－");
+      minus.type="button";
+      minus.style.padding="8px 10px";
+      const num = el("div","");
+      num.style.minWidth="34px";
+      num.style.textAlign="center";
+      num.style.fontWeight="1000";
+      num.textContent = String(state.rolesCount[rid]||0);
+      const plus = el("button","btn ghost","＋");
+      plus.type="button";
+      plus.style.padding="8px 10px";
+
+      minus.onclick=()=>{
+        state.rolesCount[rid]=Math.max(0,(state.rolesCount[rid]||0)-1);
+        num.textContent=String(state.rolesCount[rid]||0);
+        window.WW_APP?.State?.save?.(state);
+        window.WW_APP?.Render?.renderSetup?.(state);
+      };
+      plus.onclick=()=>{
+        state.rolesCount[rid]=(state.rolesCount[rid]||0)+1;
+        num.textContent=String(state.rolesCount[rid]||0);
+        window.WW_APP?.State?.save?.(state);
+        window.WW_APP?.Render?.renderSetup?.(state);
+      };
+
+      right.append(minus,num,plus);
+      row.append(left,right);
+      body.appendChild(row);
+    });
+
+    body.dataset.built="1";
+
+    // close/apply/reset wired in index.html (buttons exist); add safety:
+    $("closeRole")?.addEventListener("click", ()=>modal.classList.add("hidden"));
+    $("roleApply")?.addEventListener("click", ()=>modal.classList.add("hidden"));
+    $("roleReset")?.addEventListener("click", ()=>{
+      body.dataset.built="0";
+      body.innerHTML="";
+      modal.classList.add("hidden");
+      alert("請按「建議配置」重新套用（或我下一步補 boards preset reset）。");
+    });
+  };
+
+  /* =========================
+     Prevent long press selection (helper)
+  ========================= */
+  UI.stopTouchSelect = function(dom){
+    if(!dom) return;
+    try{
+      dom.style.webkitUserSelect="none";
+      dom.style.userSelect="none";
+      dom.style.webkitTouchCallout="none";
+    }catch(e){}
+    // Must be passive:false to prevent iOS callout
+    dom.addEventListener("touchstart", (e)=>{ e.preventDefault(); }, {passive:false});
+  };
+
+  /* =========================
+     Deal Reveal modal (auto inject)
+  ========================= */
+  function ensureRevealModal(){
+    if($("modalReveal")) return;
+
+    const modal = el("div","modal hidden");
+    modal.id="modalReveal";
+    modal.innerHTML = `
+      <div class="modal-card">
+        <div class="modal-head">
+          <div class="modal-title">身分卡</div>
+          <button class="iconbtn" id="closeReveal">✕</button>
+        </div>
+        <div class="modal-body">
+          <div class="card" id="revealCard" style="text-align:center;">
+            <div class="hint" id="revealSeat" style="margin-bottom:8px;">座位</div>
+            <div style="font-size:42px;line-height:1;" id="revealIcon">❔</div>
+            <div style="font-weight:1000;font-size:20px;margin-top:10px;" id="revealRole">—</div>
+            <div class="hint" style="margin-top:10px;">放開會立刻關閉（防偷看）</div>
+          </div>
+        </div>
+      </div>
+    `;
+    document.body.appendChild(modal);
+
+    $("closeReveal")?.addEventListener("click", ()=>{
+      UI.closeReveal();
     });
   }
 
-  A.Bindings = {
-    REQUIRED,
-    checkRequiredIds,
-    reportMissingIds,
-    bindAll
+  UI.openReveal = function({seat, role}){
+    ensureRevealModal();
+    $("revealSeat") && ($("revealSeat").textContent = `請 ${seat} 號確認身分`);
+    $("revealIcon") && ($("revealIcon").textContent = role?.icon || "❔");
+    $("revealRole") && ($("revealRole").textContent = role?.name || role?.id || "—");
+    $("modalReveal")?.classList.remove("hidden");
+    // optional flip class for later
+    $("revealCard")?.classList.add("flipped");
   };
+
+  UI.closeReveal = function(){
+    $("revealCard")?.classList.remove("flipped");
+    $("modalReveal")?.classList.add("hidden");
+  };
+
+  /* =========================
+     Witch Panel (auto inject)
+     flow rule:
+     - If saveUsed: do NOT show knife target; only poison choice
+     - else show knife target and ask save? then poison?
+     - Respect witchCannotSelfSave by disabling "save" when wolfTarget==witchSeat
+  ========================= */
+  function ensureWitchModal(){
+    if($("modalWitch")) return;
+
+    const modal = el("div","modal hidden");
+    modal.id="modalWitch";
+    modal.innerHTML = `
+      <div class="modal-card">
+        <div class="modal-head">
+          <div class="modal-title">🧪 女巫操作</div>
+          <button class="iconbtn" id="closeWitch">✕</button>
+        </div>
+
+        <div class="modal-body">
+          <div class="hint" id="witchTopHint"></div>
+
+          <div class="card inner" id="witchCutBox">
+            <div class="label">今晚被刀</div>
+            <div class="scriptbox" id="witchCutText" style="margin-top:8px;"></div>
+          </div>
+
+          <div class="card inner" id="witchSaveBox" style="margin-top:12px;">
+            <div class="label">解藥</div>
+            <div class="row wrap" style="margin-top:8px;">
+              <button class="btn" id="witchBtnSave" type="button">用解藥救他</button>
+              <button class="btn ghost" id="witchBtnNoSave" type="button">不用解藥</button>
+            </div>
+            <div class="hint" id="witchSaveHint" style="margin-top:8px;"></div>
+          </div>
+
+          <div class="card inner" id="witchPoisonBox" style="margin-top:12px;">
+            <div class="label">毒藥</div>
+            <div class="hint small" style="margin-top:6px;">選擇要毒的座位（或不毒）</div>
+            <div class="seats" id="witchPoisonSeats"></div>
+            <div class="row" style="margin-top:10px;">
+              <button class="btn ghost" id="witchBtnNoPoison" type="button">不用毒藥</button>
+            </div>
+            <div class="hint" id="witchPoisonHint" style="margin-top:8px;"></div>
+          </div>
+        </div>
+
+        <div class="modal-actions">
+          <button class="btn ghost" id="witchCancel" type="button">取消</button>
+          <button class="btn primary" id="witchDone" type="button">確認完成</button>
+        </div>
+      </div>
+    `;
+    document.body.appendChild(modal);
+
+    $("closeWitch")?.addEventListener("click", ()=>UI.closeWitch());
+    $("witchCancel")?.addEventListener("click", ()=>UI.closeWitch());
+  }
+
+  UI.closeWitch = function(){
+    $("modalWitch")?.classList.add("hidden");
+    // resolve promise if waiting
+    if(UI._witchResolve){
+      UI._witchResolve(null);
+      UI._witchResolve=null;
+    }
+  };
+
+  UI.openWitchPanel = function(ctx, witchFlow){
+    ensureWitchModal();
+    const modal = $("modalWitch");
+    modal.classList.remove("hidden");
+
+    const st = ctx.state;
+    const rules = ctx.rules || {};
+    const wolfTarget = ctx.wolfTarget || null;
+
+    const saveUsed = !!st.night.witchSaveUsed;
+    const poisonUsed = !!st.night.witchPoisonUsed;
+
+    let save = !!st.night.witchSave;
+    let poisonSeat = st.night.witchPoisonTarget ?? null;
+
+    // top hint
+    const topHint = $("witchTopHint");
+    topHint.textContent =
+      `解藥：${saveUsed?"已用過":"可用"}｜毒藥：${poisonUsed?"已用過":"可用"}`;
+
+    // cut box: if saveUsed => hide
+    const cutBox=$("witchCutBox");
+    const saveBox=$("witchSaveBox");
+    const cutText=$("witchCutText");
+    if(saveUsed){
+      cutBox.classList.add("hidden");
+      saveBox.classList.add("hidden");
+    }else{
+      cutBox.classList.remove("hidden");
+      saveBox.classList.remove("hidden");
+      cutText.textContent = wolfTarget ? `${wolfTarget} 號` : "（狼人尚未選刀口 / 或狼人空刀）";
+    }
+
+    // save buttons
+    const btnSave=$("witchBtnSave");
+    const btnNoSave=$("witchBtnNoSave");
+    const saveHint=$("witchSaveHint");
+
+    // self save rule
+    const cannotSelf = !!rules.witchCannotSelfSave;
+    const isSelf = (wolfTarget && ctx.witchSeat && wolfTarget===ctx.witchSeat);
+    const saveDisabled = (!wolfTarget) || cannotSelf && isSelf;
+
+    btnSave.disabled = saveUsed || saveDisabled;
+    btnNoSave.disabled = saveUsed;
+
+    if(saveUsed){
+      saveHint.textContent = "解藥已使用，今晚不能再救人。";
+    }else if(!wolfTarget){
+      saveHint.textContent = "今晚沒有刀口（可能空刀），不需要解藥。";
+    }else if(cannotSelf && isSelf){
+      saveHint.textContent = "⚠️ 規則：女巫不能自救。";
+    }else{
+      saveHint.textContent = save ? "✅ 已選擇用解藥" : "尚未選擇（可用解藥救刀口）";
+    }
+
+    btnSave.onclick=()=>{
+      if(btnSave.disabled) return;
+      save = true;
+      btnSave.textContent = "✅ 已用解藥";
+      saveHint.textContent = "✅ 已選擇用解藥。";
+    };
+    btnNoSave.onclick=()=>{
+      save = false;
+      btnSave.textContent = "用解藥救他";
+      saveHint.textContent = "已選擇不用解藥。";
+    };
+
+    // poison seats
+    const poisonBox=$("witchPoisonBox");
+    const poisonSeats=$("witchPoisonSeats");
+    const poisonHint=$("witchPoisonHint");
+    const btnNoPoison=$("witchBtnNoPoison");
+
+    poisonSeats.innerHTML="";
+    poisonHint.textContent = poisonUsed ? "毒藥已使用，不能再毒人。" : (poisonSeat ? `☠️ 已選擇毒 ${poisonSeat} 號` : "尚未選擇（可不毒）");
+    btnNoPoison.disabled = poisonUsed;
+
+    // if poison used => disable all
+    const seats = st.players.filter(p=>p.alive).map(p=>p.seat);
+    seats.forEach(seat=>{
+      const b = el("button","seat");
+      b.type="button";
+      b.textContent=String(seat);
+      b.dataset.seat=String(seat);
+      if(poisonSeat===seat) b.classList.add("selected");
+
+      // cannot poison self? (not specified, allow)
+      b.disabled = poisonUsed;
+      if(!st.players.find(p=>p.seat===seat)?.alive) b.classList.add("dead");
+
+      b.onclick=()=>{
+        if(poisonUsed) return;
+        poisonSeat = seat;
+        [...poisonSeats.querySelectorAll(".seat")].forEach(x=>x.classList.remove("selected"));
+        b.classList.add("selected");
+        poisonHint.textContent = `☠️ 已選擇毒 ${poisonSeat} 號`;
+      };
+      poisonSeats.appendChild(b);
+    });
+
+    btnNoPoison.onclick=()=>{
+      if(poisonUsed) return;
+      poisonSeat=null;
+      [...poisonSeats.querySelectorAll(".seat")].forEach(x=>x.classList.remove("selected"));
+      poisonHint.textContent="已選擇不用毒藥。";
+    };
+
+    // done
+    const done=$("witchDone");
+    done.onclick=()=>{
+      // guard: if saveUsed, force save=false
+      if(saveUsed) save=false;
+      // if no wolfTarget, force save=false
+      if(!wolfTarget) save=false;
+      // cannot self save enforced
+      if(cannotSelf && isSelf) save=false;
+      // poison used => keep null
+      if(poisonUsed) poisonSeat=null;
+
+      modal.classList.add("hidden");
+      const out = { save, poisonSeat };
+      if(UI._witchResolve){ UI._witchResolve(out); UI._witchResolve=null; }
+    };
+
+    return new Promise((resolve)=>{
+      UI._witchResolve = resolve;
+    });
+  };
+
+  /* =========================
+     Game Over modal
+  ========================= */
+  function ensureGameOver(){
+    if($("modalGameOver")) return;
+    const modal = el("div","modal hidden");
+    modal.id="modalGameOver";
+    modal.innerHTML = `
+      <div class="modal-card">
+        <div class="modal-head">
+          <div class="modal-title">🏁 遊戲結束</div>
+          <button class="iconbtn" id="closeGameOver">✕</button>
+        </div>
+        <div class="modal-body">
+          <div class="scriptbox" id="gameOverText"></div>
+        </div>
+        <div class="modal-actions">
+          <button class="btn primary" id="gameOverOk" type="button">知道了</button>
+        </div>
+      </div>
+    `;
+    document.body.appendChild(modal);
+    $("closeGameOver")?.addEventListener("click", ()=>modal.classList.add("hidden"));
+    $("gameOverOk")?.addEventListener("click", ()=>modal.classList.add("hidden"));
+  }
+
+  UI.openGameOver = function(verdict){
+    ensureGameOver();
+    const modal=$("modalGameOver");
+    const text=$("gameOverText");
+    const msg = verdict?.message
+      || (verdict?.winner ? `勝利陣營：${verdict.winner}` : "遊戲結束");
+    text.textContent = msg;
+    modal.classList.remove("hidden");
+  };
+
 })();
