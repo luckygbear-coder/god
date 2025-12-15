@@ -22,7 +22,7 @@
       </div>
 
       <div class="top-actions">
-        <!-- app.js 會自動插入 btnRestart -->
+        <button class="iconbtn" id="btnRestart" type="button" title="重新開始">🔁</button>
         <button class="iconbtn" id="btnOpenAnnouncement" type="button" title="公告中心">📣</button>
         <button class="iconbtn" id="btnGodToggle" type="button" title="上帝視角">🔒</button>
       </div>
@@ -109,7 +109,7 @@
         </div>
 
         <div class="bottombar">
-          <button id="btnFinishDeal" class="btn primary" type="button">全部抽完 → 確認進入夜晚</button>
+          <button id="btnFinishDeal" class="btn primary" type="button">全部抽完 → 進入夜晚</button>
         </div>
       </section>
 
@@ -132,7 +132,7 @@
             <div class="label">座位圈（點選目標）</div>
             <div class="seats" id="nightSeats"></div>
             <div class="hint small">
-              若需要女巫毒人：按「女巫毒藥」後回到這裡點座位。
+              若需要女巫毒人：在女巫面板按「用毒藥」後回這裡點座位。
             </div>
           </div>
 
@@ -143,7 +143,7 @@
 
           <div class="row spread" style="margin-top:10px;">
             <button id="btnOpenAnnouncement2" class="btn ghost" type="button">📣 公告中心</button>
-            <button id="btnGodToggle2" class="btn ghost" type="button" onclick="document.getElementById('btnGodToggle').click()">🔒/🔓 切換視角</button>
+            <button id="btnGodToggle2" class="btn ghost" type="button">🔒/🔓 切換視角</button>
           </div>
         </div>
       </section>
@@ -165,12 +165,12 @@
 
           <div class="card inner">
             <div class="label">今日公告</div>
-            <div class="hint">會在夜晚結算後自動跳出，也可點下方📣查看今日/歷史。</div>
-            <button class="btn ghost" type="button" id="btnOpenAnnouncement3" onclick="document.getElementById('btnOpenAnnouncement').click()">📣 打開公告中心</button>
+            <div class="hint">夜晚結算後會自動跳出公告，也可點📣查看。</div>
+            <button class="btn ghost" type="button" id="btnOpenAnnouncement3">📣 打開公告中心</button>
           </div>
 
           <div class="row spread" style="margin-top:10px;">
-            <button class="btn ghost" type="button" onclick="document.getElementById('btnGodToggle').click()">🔒/🔓 切換視角</button>
+            <button id="btnGodToggle3" class="btn ghost" type="button">🔒/🔓 切換視角</button>
             <button id="btnDayNext" class="btn primary" type="button">下一步 → 進入下一夜</button>
           </div>
         </div>
@@ -256,28 +256,12 @@
     </div>
   </div>
 
-  <!-- Deal Confirm Modal -->
-  <div id="modalDealConfirm" class="modal hidden">
-    <div class="modal-card">
-      <div class="modal-head">
-        <div class="modal-title">確認進入夜晚</div>
-      </div>
-      <div class="modal-body">
-        <div class="hint">確認所有玩家都已看過身分？</div>
-      </div>
-      <div class="modal-actions">
-        <button id="dealConfirmNo" class="btn ghost" type="button">再檢查一下</button>
-        <button id="dealConfirmYes" class="btn primary" type="button">確認進入夜晚</button>
-      </div>
-    </div>
-  </div>
-
   <!-- Witch Modal -->
   <div id="modalWitch" class="modal hidden">
     <div class="modal-card">
       <div class="modal-head">
         <div class="modal-title">女巫操作</div>
-        <button class="iconbtn" type="button" onclick="document.getElementById('modalWitch').classList.add('hidden')">✕</button>
+        <button class="iconbtn" id="closeWitch" type="button">✕</button>
       </div>
 
       <div class="modal-body">
@@ -285,7 +269,7 @@
           <div class="label">今晚刀口</div>
           <div class="hint">被刀：<b id="witchKnife">—</b></div>
           <div class="hint small" id="witchStatus">—</div>
-          <div class="hint small" id="witchStepHint">流程：先決定救不救 → 再決定要不要毒</div>
+          <div class="hint small">流程：先決定救不救 → 再決定要不要毒</div>
         </div>
 
         <div class="row" style="gap:10px;margin-top:10px;">
@@ -306,33 +290,31 @@
   </div>
 
   <!-- =====================
-       Scripts (建議順序)
-       你先把檔案放齊，缺的會在 console warn
+       你的資料檔（直接載入，不靠 ww.data.js）
   ====================== -->
-  <!-- Roles -->
+
+  <!-- roles -->
   <script src="./data/roles/roles.base.js"></script>
   <script src="./data/roles/roles.b1.js"></script>
 
-  <!-- Boards -->
+  <!-- boards -->
   <script src="./data/boards/boards.config.js"></script>
 
-  <!-- Rules -->
+  <!-- rules -->
   <script src="./data/rules/rules.basic.js"></script>
   <script src="./data/rules/rules.b1.js"></script>
 
-  <!-- Night steps -->
+  <!-- night steps -->
   <script src="./data/night/night.steps.basic.js"></script>
   <script src="./data/night/night.steps.b1.js"></script>
 
-  <!-- Engines -->
+  <!-- engines（可有可無，app.js 會容錯） -->
   <script src="./engine/night.engine.js"></script>
   <script src="./engine/day.engine.js"></script>
   <script src="./engine/win.engine.js"></script>
 
-  <!-- Data hub -->
-  <script src="./data/ww.data.js"></script>
-
-  <!-- App -->
+  <!-- App core -->
   <script src="./app.js"></script>
+  <script src="./script.js"></script>
 </body>
 </html>
