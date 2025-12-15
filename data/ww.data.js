@@ -1,22 +1,31 @@
 /* =========================================================
-   狼人殺｜統一資料入口（Data Hub）
+   狼人殺｜WW_DATA 統一資料中樞
    檔案：data/ww.data.js
 
-   依賴載入順序（建議在 index.html 依序 script 引入）：
-   1) data/roles/roles.base.js
-   2) data/roles/roles.b1.js
-   3) data/boards/boards.config.js
-   4) data/rules/rules.basic.js
-   5) data/rules/rules.b1.js
-   6) data/night/night.steps.basic.js
-   7) data/night/night.steps.b1.js
-   8) engine/*.js (night/day/win)
-   9) data/ww.data.js   ← 最後載入（本檔）
+   功能：
+   - 統一彙整 roles / boards / rules / nightSteps / engines
+   - 提供安全 fallback（避免 undefined 直接炸）
+   - 提供 board bundle 取用介面
 ========================================================= */
 
 (function () {
+  const W = window;
 
-  function mergeRoles(...maps) {
+  /* -------------------------------------------------------
+     工具
+  ------------------------------------------------------- */
+  const noop = () => null;
+  const warn = (msg) => console.warn("⚠️ WW_DATA:", msg);
+
+  function safe(obj, name) {
+    if (!obj) {
+      warn(`缺少 ${name}`);
+      return {};
+    }
+    return obj;
+  }
+
+  function mergeMaps(...maps) {
     const out = {};
     maps.forEach(m => {
       if (!m) return;
@@ -25,89 +34,107 @@
     return out;
   }
 
+  /* -------------------------------------------------------
+     收集原始資料（來自各檔）
+  ------------------------------------------------------- */
+
   // Roles
-  const rolesBase = window.WW_ROLES_BASE || null;
-  const rolesB1 = window.WW_ROLES_B1 || null;
-  const rolesAll = mergeRoles(rolesBase, rolesB1);
+  const rolesBase = W.WW_ROLES_BASE || null;
+  const rolesB1   = W.WW_ROLES_B1   || null;
+  const rolesAll  = mergeMaps(rolesBase, rolesB1);
 
   // Boards
-  const boards = window.WW_BOARDS || null;
+  const boards = W.WW_BOARDS || null;
 
   // Rules
-  const rulesBasic = window.WW_DATA?.rulesBasic || null;
-  const rulesB1 = window.WW_DATA?.rulesB1 || null;
+  const rulesBasic = W.WW_DATA?.rulesBasic || W.WW_RULES_BASIC || null;
+  const rulesB1    = W.WW_DATA?.rulesB1    || W.WW_RULES_B1    || null;
 
   // Night steps
-  const nightStepsBasic = window.WW_NIGHT_STEPS_BASIC || null;
-  const nightStepsB1 = window.WW_NIGHT_STEPS_B1 || null;
+  const nightStepsBasic = W.WW_NIGHT_STEPS_BASIC || null;
+  const nightStepsB1    = W.WW_NIGHT_STEPS_B1    || null;
 
   // Engines
-  const nightEngine = window.WW_NIGHT_ENGINE || null;
-  const dayEngine = window.WW_DAY_ENGINE || null;
-  const winEngine = window.WW_WIN_ENGINE || null;
+  const nightEngine = W.WW_NIGHT_ENGINE || null;
+  const dayEngine   = W.WW_DAY_ENGINE   || null;
+  const winEngine   = W.WW_WIN_ENGINE   || null;
 
-  // --- 健檢 ---
-  const missing = [];
-  if (!rolesBase) missing.push("WW_ROLES_BASE (data/roles/roles.base.js)");
-  if (!rolesB1) missing.push("WW_ROLES_B1 (data/roles/roles.b1.js)");
-  if (!boards) missing.push("WW_BOARDS (data/boards/boards.config.js)");
-  if (!rulesBasic) missing.push("WW_DATA.rulesBasic (data/rules/rules.basic.js)");
-  if (!rulesB1) missing.push("WW_DATA.rulesB1 (data/rules/rules.b1.js)");
-  if (!nightStepsBasic) missing.push("WW_NIGHT_STEPS_BASIC (data/night/night.steps.basic.js)");
-  if (!nightStepsB1) missing.push("WW_NIGHT_STEPS_B1 (data/night/night.steps.b1.js)");
-  if (!nightEngine) missing.push("WW_NIGHT_ENGINE (engine/night.engine.js)");
-  if (!dayEngine) missing.push("WW_DAY_ENGINE (engine/day.engine.js)");
-  if (!winEngine) missing.push("WW_WIN_ENGINE (engine/win.engine.js)");
+  /* -------------------------------------------------------
+     掛載到 WW_DATA
+  ------------------------------------------------------- */
+  W.WW_DATA = W.WW_DATA || {};
 
-  if (missing.length) {
-    console.warn("⚠️ WW_DATA 依賴缺少：\n" + missing.map(x => " - " + x).join("\n"));
-  }
+  W.WW_DATA.roles = safe(rolesAll, "roles（roles.base / roles.b1）");
+  W.WW_DATA.boards = safe(boards, "boards（boards.config.js）");
 
-  // 統一掛上 WW_DATA
-  window.WW_DATA = window.WW_DATA || {};
-
-  window.WW_DATA.rolesBase = rolesBase || {};
-  window.WW_DATA.rolesB1 = rolesB1 || {};
-  window.WW_DATA.roles = rolesAll || {};
-
-  window.WW_DATA.boards = boards || {};
-
-  window.WW_DATA.rules = {
-    basic: rulesBasic,
-    b1: rulesB1
+  W.WW_DATA.rules = {
+    basic: rulesBasic || noop,
+    b1:    rulesB1    || noop
   };
 
-  window.WW_DATA.nightSteps = {
-    basic: nightStepsBasic,
-    b1: nightStepsB1
+  W.WW_DATA.nightSteps = {
+    basic: nightStepsBasic || [],
+    b1:    nightStepsB1    || []
   };
 
-  window.WW_DATA.engines = {
-    night: nightEngine,
-    day: dayEngine,
-    win: winEngine
+  W.WW_DATA.engines = {
+    night: nightEngine || noop,
+    day:   dayEngine   || noop,
+    win:   winEngine   || noop
   };
 
-  // 方便 UI 快速取用：依 boardType 取得 rules/steps
-  window.WW_DATA.getBoardBundle = function (boardType) {
-    const b = window.WW_DATA.boards?.[boardType];
-    if (!b) return null;
+  /* -------------------------------------------------------
+     對 UI 最重要的 API
+  ------------------------------------------------------- */
 
-    const rulesKey = b.rulesKey; // rulesBasic / rulesB1
-    const stepsKey = b.nightStepsKey; // WW_NIGHT_STEPS_BASIC / B1
+  /**
+   * 依板子取得完整 bundle
+   * @param {string} boardId - "basic" | "b1"
+   */
+  W.WW_DATA.getBoardBundle = function (boardId) {
+    const board = W.WW_DATA.boards?.[boardId];
+    if (!board) {
+      warn(`找不到板子：${boardId}`);
+      return null;
+    }
 
-    const rules = window.WW_DATA[rulesKey] || window.WW_DATA.rules?.[boardType] || null;
-    const steps = (stepsKey === "WW_NIGHT_STEPS_BASIC")
-      ? window.WW_DATA.nightSteps?.basic
-      : window.WW_DATA.nightSteps?.b1;
+    const rules =
+      board.rules === "b1"
+        ? W.WW_DATA.rules.b1
+        : W.WW_DATA.rules.basic;
 
-    return { board: b, rules, steps };
+    const nightSteps =
+      board.nightSteps === "b1"
+        ? W.WW_DATA.nightSteps.b1
+        : W.WW_DATA.nightSteps.basic;
+
+    return {
+      board,
+      rules,
+      nightSteps
+    };
   };
 
-  console.log("✅ WW_DATA ready:", {
-    roles: Object.keys(window.WW_DATA.roles || {}).length,
-    boards: Object.keys(window.WW_DATA.boards || {}).length,
-    engines: Object.keys(window.WW_DATA.engines || {}).length
-  });
+  /**
+   * 快速取得角色資料
+   */
+  W.WW_DATA.getRole = function (roleId) {
+    return W.WW_DATA.roles?.[roleId] || null;
+  };
+
+  /* -------------------------------------------------------
+     健檢輸出
+  ------------------------------------------------------- */
+  const summary = {
+    roles: Object.keys(W.WW_DATA.roles || {}).length,
+    boards: Object.keys(W.WW_DATA.boards || {}).length,
+    nightSteps: {
+      basic: W.WW_DATA.nightSteps.basic.length,
+      b1: W.WW_DATA.nightSteps.b1.length
+    },
+    engines: Object.keys(W.WW_DATA.engines || {}).length
+  };
+
+  console.log("✅ WW_DATA ready", summary);
 
 })();
