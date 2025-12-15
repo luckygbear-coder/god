@@ -1,105 +1,80 @@
 /* =========================================================
-   狼人殺｜基本板 夜晚步驟表
+   Night Steps - Basic Board
    檔案：data/night/night.steps.basic.js
-
-   依賴：
-   - WW_ROLES
-   - WW_RULES_CORE
 ========================================================= */
 
 (function () {
-  const CORE = window.WW_RULES_CORE;
+  window.WW_NIGHT_STEPS_BASIC = function (players, nightState, settings = {}) {
 
-  if (!CORE) {
-    console.error("❌ rules.core.js 未載入");
-    return;
-  }
+    const has = (roleId) => players.some(p => p.roleId === roleId);
 
-  function hasAliveRole(players, roleId) {
-    return CORE.alive(players).some(p => p.roleId === roleId);
-  }
-
-  /**
-   * 產生基本板夜晚步驟
-   * @param {Array} players
-   * @param {Object} rules
-   * @param {Object} nightState - 可選：給 UI 判斷女巫刀口顯示
-   */
-  function build(players, rules = {}, nightState = {}) {
     const steps = [];
 
-    // 0) start
+    // 0. 天黑
     steps.push({
-      id: "night_start",
+      key: "close",
       type: "info",
-      script: "天黑請閉眼。"
+      publicScript: "天黑請閉眼。",
+      godScript: "天黑請閉眼。"
     });
 
-    // 1) guard
-    if (hasAliveRole(players, "guard")) {
+    // 1. 守衛
+    if (has("guard")) {
       steps.push({
-        id: "guard",
+        key: "guard",
         type: "pick",
-        roleId: "guard",
-        key: "guardTarget",
+        pickKey: "guardTarget",
         required: true,
-        allowSkip: false,
-        script: rules.noConsecutiveGuard
-          ? "🛡️ 守衛請睜眼，你要守誰？（不能連守）"
-          : "🛡️ 守衛請睜眼，你要守誰？"
+        publicScript: "守衛請睜眼，請守一位玩家。",
+        godScript: "守衛守誰？（點座位）"
       });
     }
 
-    // 2) wolves
-    if (hasAliveRole(players, "werewolf") || hasAliveRole(players, "blackWolfKing") || hasAliveRole(players, "whiteWolfKing")) {
-      steps.push({
-        id: "wolf",
-        type: "pick",
-        roleId: "werewolf",
-        key: "wolfTarget",
-        required: !rules.wolfCanSkip,
-        allowSkip: !!rules.wolfCanSkip,
-        script: rules.wolfCanSkip
-          ? "🐺 狼人請睜眼，你們要刀誰？（可空刀）"
-          : "🐺 狼人請睜眼，你們要刀誰？"
-      });
-    }
-
-    // 3) seer
-    if (hasAliveRole(players, "seer")) {
-      steps.push({
-        id: "seer",
-        type: "pick",
-        roleId: "seer",
-        key: "checkTarget",
-        required: true,
-        allowSkip: false,
-        script: "🔮 預言家請睜眼，你要查驗誰？"
-      });
-    }
-
-    // 4) witch panel
-    if (hasAliveRole(players, "witch")) {
-      steps.push({
-        id: "witch",
-        type: "panel",
-        roleId: "witch",
-        // 重要：女巫的 UI 文案由 app/UI 層組合：
-        // - 若 witchSaveUsed=true → 不顯示刀口（只能毒/不毒）
-        // - 否則顯示「今晚被刀的是 X 號，要不要救？」
-        script: "🧪 女巫請睜眼。"
-      });
-    }
-
-    // 5) end/resolve
+    // 2. 狼人
     steps.push({
-      id: "night_end",
+      key: "wolf",
+      type: "pick",
+      pickKey: "wolfTarget",
+      required: !settings.wolfCanNoKill,
+      allowNull: !!settings.wolfCanNoKill,
+      publicScript: settings.wolfCanNoKill
+        ? "狼人請睜眼（可空刀），請選擇目標。"
+        : "狼人請睜眼，請選擇目標。",
+      godScript: settings.wolfCanNoKill
+        ? "狼人刀誰？（可不選＝空刀）"
+        : "狼人刀誰？（必選）"
+    });
+
+    // 3. 預言家
+    if (has("seer")) {
+      steps.push({
+        key: "seer",
+        type: "pick",
+        pickKey: "seerCheck",
+        required: true,
+        publicScript: "預言家請睜眼，請查驗一位玩家。",
+        godScript: "預言家查誰？（點座位）"
+      });
+    }
+
+    // 4. 女巫
+    if (has("witch")) {
+      steps.push({
+        key: "witch",
+        type: "witch",
+        publicScript: "女巫請睜眼。",
+        godScript: "女巫回合（救人 / 毒人）"
+      });
+    }
+
+    // 5. 天亮
+    steps.push({
+      key: "resolve",
       type: "resolve",
-      script: "天亮請睜眼。"
+      publicScript: "天亮請睜眼。",
+      godScript: "天亮：準備結算夜晚。"
     });
 
     return steps;
-  }
-
-  window.WW_NIGHT_STEPS_BASIC = { build };
+  };
 })();
