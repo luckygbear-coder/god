@@ -1,113 +1,117 @@
 /* =========================================================
-   狼人殺｜上帝輔助 PWA
-   檔案：/data/flow/night.steps.basic.js
-
-   基本板子夜晚步驟生成器（Wizard Steps）
-   - 依本局實際角色動態生成
-   - 女巫使用 app.js 彈窗處理（type:"witch"）
-
-   依賴：
-   - WW_DATA.roles（roles.index.js 已合併）
+   WW_DATA Night Steps — Basic (MVP)
+   產生夜晚 wizard steps（依現存角色動態生成）
+   - 守衛：不能連守（由 UI/規則一起防呆）
+   - 狼人：可空刀（wolfTarget = null 表示空刀）
+   - 預言家：驗人結果只給上帝看
+   - 女巫：刀口→救→毒；解藥已用過則不顯示刀口，只剩毒
 ========================================================= */
 
-(function () {
+(function(){
   window.WW_DATA = window.WW_DATA || {};
+  const W = window.WW_DATA;
 
-  function hasRole(players, roleId) {
-    return players.some(p => p.roleId === roleId);
-  }
+  W.nightStepsBasic = function buildNightSteps(players, night){
+    const hasAliveRole = (roleId) => players.some(p => p.alive && p.roleId === roleId);
+    const hasRole = (roleId) => players.some(p => p.roleId === roleId);
 
-  // 給 app.js 呼叫：buildNightSteps(players, nightState, settings)
-  function buildNightStepsBasic(players, night, settings = {}) {
     const steps = [];
 
-    // 0) 天黑
-    steps.push({
-      key: "close",
-      type: "info",
-      publicScript: "天黑請閉眼。",
-      godScript: "天黑請閉眼。"
+    // helper: common scripts
+    const info = (key, text) => ({
+      key, type:"info",
+      publicScript: text,
+      godScript: text
     });
 
-    // 1) 守衛
-    if (hasRole(players, "guard")) {
+    steps.push(info("close", "天黑請閉眼。"));
+
+    // 守衛
+    if(hasAliveRole("guard")){
       steps.push({
         key: "guard",
         type: "pick",
+        roleId: "guard",
         pickTarget: "guardTarget",
         required: true,
-        roleId: "guard",
-        publicScript: "守衛請睜眼，請選擇你要守護的人。",
+        allowNone: false,
+        restrict: { aliveOnly:true },
         godScript:
-          "請說：『守衛請睜眼，你要守誰？』\n" +
-          "（提示）若規則開啟「不能連守」，請避免連續守同一人。"
-      });
-    }
-
-    // 2) 狼人
-    if (hasRole(players, "werewolf") || players.some(p => (p.team === "wolf"))) {
-      steps.push({
-        key: "wolf",
-        type: "pick",
-        pickTarget: "wolfTarget",
-        required: false, // 可空刀由規則決定，規則層會檢查
-        roleId: "werewolf",
-        publicScript: "狼人請睜眼，請選擇你們要刀的人。",
-        godScript:
-          "請說：『狼人請睜眼，你們要刀誰？』\n" +
-          "（提示）若規則允許空刀，可不選人直接進下一步。"
-      });
-    }
-
-    // 3) 預言家
-    if (hasRole(players, "seer")) {
-      steps.push({
-        key: "seer",
-        type: "seer",
-        pickTarget: "seerCheckTarget",
-        required: true,
-        roleId: "seer",
-        publicScript: "預言家請睜眼，請選擇你要查驗的人。",
-        godScript:
-          "請說：『預言家請睜眼，你要查驗誰？』\n" +
-          "選擇後請告知預言家結果（好人/狼人）。",
-        afterScript: ({ seerResult }) => {
-          if (!seerResult) return "";
-          return `\n（上帝）查驗結果：${seerResult === "wolf" ? "狼人" : "好人"}`;
+          "守衛請睜眼。你要守誰？（點選座位）\n（規則）不能連守同一人。",
+        publicScript:
+          "守衛請睜眼。你要守誰？",
+        validatePick: ({ seat, nightState, settings }) => {
+          if(settings?.noConsecutiveGuard && nightState?.prevGuardTarget && seat === nightState.prevGuardTarget){
+            return { ok:false, reason:"不能連守同一人" };
+          }
+          return { ok:true };
         }
       });
     }
 
-    // 4) 女巫（彈窗）
-    if (hasRole(players, "witch")) {
+    // 狼人（可空刀）
+    if(hasAliveRole("werewolf") || hasAliveRole("blackWolfKing") || hasAliveRole("whiteWolfKing") || hasAliveRole("gargoyle")){
+      steps.push({
+        key: "wolf",
+        type: "pick",
+        roleId: "wolf",
+        pickTarget: "wolfTarget",
+        required: false,            // ✅ 因為可以空刀
+        allowNone: true,            // wolfTarget = null 即空刀
+        restrict: { aliveOnly:true },
+        godScript:
+          "狼人請睜眼。你們要刀誰？（點選座位）\n（可選）若空刀，請選擇「空刀」。",
+        publicScript:
+          "狼人請睜眼。你們要刀誰？"
+      });
+    }
+
+    // 預言家
+    if(hasAliveRole("seer")){
+      steps.push({
+        key: "seer",
+        type: "seer",
+        roleId: "seer",
+        pickTarget: "seerCheckTarget",
+        required: true,
+        allowNone: false,
+        restrict: { aliveOnly:true },
+        godScript:
+          "預言家請睜眼。你要查驗誰？（點選座位）\n（上帝）系統會顯示結果給你。",
+        publicScript:
+          "預言家請睜眼。你要查驗誰？",
+        afterScript: ({ seerResult, targetSeat }) => {
+          if(!targetSeat) return "";
+          if(seerResult === "wolf") return `請告訴預言家：${targetSeat} 號是「狼人」。`;
+          if(seerResult === "villager") return `請告訴預言家：${targetSeat} 號是「好人」。`;
+          return "";
+        }
+      });
+    }
+
+    // 女巫（刀口→救→毒）
+    // 如果場上有女巫（即使死了也可能不用出現；MVP：只在存活時出現）
+    if(hasAliveRole("witch")){
       steps.push({
         key: "witch",
         type: "witch",
         roleId: "witch",
-        publicScript:
-          "女巫請睜眼。（需要上帝視角操作女巫用藥）",
+        required: false,
         godScript:
-          "請說：『女巫請睜眼。』\n" +
-          "（上帝操作）接下來會開啟女巫彈窗：\n" +
-          "1) 顯示今晚刀口（若解藥已用過則不顯示）\n" +
-          "2) 選擇救 / 不救\n" +
-          "3) 選擇毒 / 不毒\n" +
-          "完成後回到夜晚流程。"
+          "女巫請睜眼。（將以彈窗操作）\n流程：先告知刀口→是否用解藥→是否用毒藥。\n若解藥已用過：不顯示刀口，只可選擇是否用毒。",
+        publicScript:
+          "女巫請睜眼。"
       });
     }
 
-    // 5) 天亮結算
     steps.push({
       key: "resolve",
       type: "resolve",
-      publicScript: "天亮請睜眼。",
-      godScript:
-        "請說：『天亮了，請大家睜眼。』\n" +
-        "接著系統將自動結算死亡名單並生成公告。"
+      publicScript: "天亮了，請睜眼。",
+      godScript: "天亮了，請睜眼。（系統結算並生成公告）"
     });
 
     return steps;
-  }
+  };
 
-  window.WW_DATA.nightStepsBasic = buildNightStepsBasic;
 })();
