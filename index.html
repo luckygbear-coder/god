@@ -14,7 +14,7 @@
 <body>
   <div class="app-shell">
 
-    <!-- Topbar -->
+    <!-- Topbar（全域） -->
     <header class="topbar">
       <div class="brand">
         <div class="brand-title">🐺 狼人殺上帝輔助</div>
@@ -22,13 +22,17 @@
       </div>
 
       <div class="top-actions">
-        <!-- app.js 會自動插入 btnRestart（🔁），你也可以自己先放 -->
+        <!-- ✅ 重新開始 -->
+        <button class="iconbtn" id="btnRestart" type="button" title="重新開始">🔁</button>
+
+        <!-- ✅ 公告中心（全域唯一） -->
         <button class="iconbtn" id="btnOpenAnnouncement" type="button" title="公告中心">📣</button>
+
+        <!-- ✅ 上帝視角（全域唯一） -->
         <button class="iconbtn" id="btnGodToggle" type="button" title="上帝視角">🔒</button>
       </div>
     </header>
 
-    <!-- Main -->
     <main class="main">
 
       <!-- =====================
@@ -94,20 +98,16 @@
       ====================== -->
       <section id="screen-deal" class="screen">
         <div class="card">
-          <div class="row spread">
-            <h2>抽身分</h2>
-            <button class="iconbtn" id="btnOpenAnnouncement2" type="button" title="公告中心">📣</button>
-          </div>
-
+          <h2>抽身分（輪流看）</h2>
           <div class="hint" id="dealText">請 1 號拿手機</div>
 
-          <!-- 你要的：可以點座位回去再長按看身分 -->
+          <!-- ✅ 點座位回去再長按確認身分 -->
           <div class="seats" id="dealSeats" aria-label="座位選擇"></div>
 
           <div class="deal-area">
             <button id="btnHoldReveal" class="hold-btn" type="button">
               按住 1.2 秒查看身分
-              <div class="hint small">放開立即關閉（防偷看）</div>
+              <div class="hint small">放開立刻關閉（防偷看）</div>
             </button>
           </div>
 
@@ -143,7 +143,7 @@
         </div>
 
         <div class="bottombar">
-          <button id="btnOpenAnnouncement2" class="btn ghost" type="button">📣 公告中心</button>
+          <button class="btn primary" type="button" id="btnNightNext2" style="display:none;">下一步 →</button>
         </div>
       </section>
 
@@ -157,7 +157,7 @@
             <div class="tag" id="dayTag">第 1 天</div>
           </div>
 
-          <div class="hint">請依序操作：上警 → 發言 → 投票。你也可以隨時打開公告中心回顧。</div>
+          <div class="hint">依序操作：上警 → 發言 → 投票。可隨時打開公告中心回顧。</div>
 
           <div class="row wrap" style="gap:10px;">
             <button id="btnPolice" class="btn" type="button">🛡 上警</button>
@@ -167,7 +167,6 @@
         </div>
 
         <div class="bottombar">
-          <button id="btnOpenAnnouncement2" class="btn ghost" type="button">📣 公告中心</button>
           <button id="btnDayNext" class="btn primary" type="button">下一步 → 進入下一夜</button>
         </div>
       </section>
@@ -175,9 +174,7 @@
     </main>
   </div>
 
-  <!-- =====================
-       Floating Buttons
-  ====================== -->
+  <!-- Floating Buttons（全域） -->
   <button id="fabAnn" class="fab fab-left" type="button" title="公告中心">📣</button>
   <button id="fabGod" class="fab" type="button" title="上帝視角">🔒</button>
 
@@ -257,7 +254,30 @@
     </div>
   </div>
 
-  <!-- Scripts（依你的分檔結構） -->
+  <!-- =====================
+       Modal: Restart Confirm
+  ====================== -->
+  <div id="modalRestart" class="modal hidden">
+    <div class="modal-card">
+      <div class="modal-head">
+        <div class="modal-title">重新開始</div>
+        <button class="iconbtn" id="closeRestart" type="button">✕</button>
+      </div>
+
+      <div class="modal-body">
+        <div class="warn" style="display:block;">
+          ⚠️ 重新開始會清除本局存檔、公告、投票與夜晚紀錄。確定要重新開始嗎？
+        </div>
+      </div>
+
+      <div class="modal-actions">
+        <button id="restartCancel" class="btn ghost" type="button">取消</button>
+        <button id="restartOk" class="btn primary" type="button">確定重新開始</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ✅ Scripts：順序很重要（data → app modules → app.js） -->
   <script src="./data/roles/roles.base.js"></script>
   <script src="./data/roles/roles.special.js"></script>
 
