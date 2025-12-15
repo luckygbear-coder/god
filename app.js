@@ -826,4 +826,199 @@
      Bind events (index.html ids)
   --------------------------- */
   function bind() {
-    ensureRestart
+    ensureRestartButton();
+
+    // God toggle
+    on($("btnGodToggle"), "click", toggleGod);
+    on($("fabGod"), "click", toggleGod);
+
+    // Announcement open
+    on($("btnOpenAnnouncement"), "click", () => openAnnouncementModal(true));
+    on($("fabAnn"), "click", () => openAnnouncementModal(true));
+    on($("btnOpenAnnouncement2"), "click", () => openAnnouncementModal(true));
+    on($("btnOpenAnnouncement3"), "click", () => openAnnouncementModal(true));
+
+    // Announcement modal controls
+    on($("closeAnn"), "click", () => $("modalAnn")?.classList.add("hidden"));
+    on($("annToday"), "click", () => {
+      annMode = "today";
+      $("annToday")?.classList.add("active");
+      $("annHistory")?.classList.remove("active");
+      renderAnnouncement();
+    });
+    on($("annHistory"), "click", () => {
+      annMode = "history";
+      $("annHistory")?.classList.add("active");
+      $("annToday")?.classList.remove("active");
+      renderAnnouncement();
+    });
+
+    on($("btnCopyAnn"), "click", async () => {
+      try {
+        await navigator.clipboard.writeText($("annBox")?.textContent || "");
+        alert("已複製");
+      } catch (e) {
+        alert("複製失敗（Safari 可能需要 HTTPS / 安裝成 PWA）");
+      }
+    });
+
+    // Export JSON（簡單匯出目前 State）
+    on($("btnExport"), "click", () => {
+      try {
+        const data = JSON.stringify(State, null, 2);
+        const blob = new Blob([data], { type: "application/json" });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement("a");
+        a.href = url;
+        a.download = `ww_export_${Date.now()}.json`;
+        document.body.appendChild(a);
+        a.click();
+        a.remove();
+        URL.revokeObjectURL(url);
+      } catch (e) {
+        alert("匯出失敗");
+      }
+    });
+
+    // Setup: board switch
+    on($("boardBasic"), "click", () => setBoard("basic"));
+    on($("boardSpecial"), "click", () => setBoard("b1"));
+
+    // Setup: player count
+    on($("btnMinus"), "click", () => setPlayerCount(State.playerCount - 1));
+    on($("btnPlus"), "click", () => setPlayerCount(State.playerCount + 1));
+    on($("rangeCount"), "input", (e) => setPlayerCount(e.target.value));
+
+    // Setup: suggest / role config
+    on($("btnSuggest"), "click", () => {
+      State.rolesCount = getSuggestedRolesCount(State.boardId, State.playerCount);
+      syncSetupUI();
+    });
+    on($("btnOpenRoleConfig"), "click", openRoleConfig);
+    on($("closeRole"), "click", () => $("modalRole")?.classList.add("hidden"));
+    on($("roleReset"), "click", () => {
+      State.rolesCount = getSuggestedRolesCount(State.boardId, State.playerCount);
+      openRoleConfig();
+      syncSetupUI();
+    });
+    on($("roleApply"), "click", () => {
+      $("modalRole")?.classList.add("hidden");
+      syncSetupUI();
+    });
+
+    // Start
+    on($("btnStart"), "click", startGame);
+
+    // Deal
+    on($("btnDealBack"), "click", () => showScreen("setup"));
+    on($("btnNextPlayer"), "click", nextDeal);
+    on($("btnFinishDeal"), "click", openDealConfirm);
+    on($("dealConfirmNo"), "click", closeDealConfirm);
+    on($("dealConfirmYes"), "click", () => {
+      closeDealConfirm();
+      resolveNightStepsForThisGame();
+      showScreen("night");
+      renderNight();
+    });
+
+    // Night
+    on($("btnNightPrev"), "click", nightPrev);
+    on($("btnNightNext"), "click", nightNext);
+
+    // Witch modal buttons
+    on($("btnWitchSave"), "click", () => {
+      const knifeSeat = State.nightState.wolfTarget || null;
+      if (!knifeSeat) return;
+
+      const witchSeat = State.players.find(p => p.roleId === "witch")?.seat || null;
+      if (State.settings.witchCannotSelfSave && witchSeat && knifeSeat === witchSeat) {
+        alert("⚠️ 規則：女巫不能自救（結算時可能判定無效）");
+      }
+
+      State.witch.save = true;
+      save();
+      renderWitchModal();
+    });
+
+    on($("btnWitchNoSave"), "click", () => {
+      State.witch.save = false;
+      save();
+      renderWitchModal();
+    });
+
+    on($("btnWitchPoisonPick"), "click", () => {
+      if (State.witch.poisonUsed) return;
+      State._pickPoisonMode = true;
+      alert("請回到座位圈，點選要毒的人。");
+      save();
+      $("modalWitch")?.classList.add("hidden");
+      renderNight();
+    });
+
+    on($("btnWitchNoPoison"), "click", () => {
+      State.witch.poisonTarget = null;
+      State._pickPoisonMode = false;
+      save();
+      renderWitchModal();
+    });
+
+    on($("btnWitchDone"), "click", () => {
+      $("modalWitch")?.classList.add("hidden");
+      State._pickPoisonMode = false;
+
+      // 女巫回合完成 → 下一步
+      State.nightStepIndex = Math.min(State.nightSteps.length - 1, State.nightStepIndex + 1);
+      save();
+      renderNight();
+    });
+
+    // Day
+    on($("btnDayNext"), "click", nextDayToNight);
+
+    // 一些主要按鈕防 iOS 長按
+    [
+      "btnStart","btnNextPlayer","btnFinishDeal","btnNightPrev","btnNightNext","btnDayNext",
+      "btnOpenAnnouncement","btnGodToggle","fabAnn","fabGod"
+    ].forEach(id => stopTextSelectOnTouch($(id)));
+  }
+
+  /* ---------------------------
+     Boot
+  --------------------------- */
+  function boot() {
+    load();
+
+    // 初始 rolesCount
+    if (!State.rolesCount) {
+      State.rolesCount = getSuggestedRolesCount(State.boardId, State.playerCount);
+    }
+
+    // 初始化 setup UI
+    $("rangeCount") && ($("rangeCount").value = String(State.playerCount));
+    setGod(!!State.godView);
+
+    // 先同步板子按鈕狀態
+    $("boardBasic")?.classList.toggle("active", State.boardId === "basic");
+    $("boardSpecial")?.classList.toggle("active", State.boardId === "b1");
+
+    syncSetupUI();
+
+    // 顯示目前畫面
+    showScreen(State.phase || "setup");
+
+    // 各畫面補渲染
+    if (State.phase === "deal") renderDeal();
+    if (State.phase === "night") {
+      if (!State.nightSteps || !State.nightSteps.length) resolveNightStepsForThisGame();
+      renderNight();
+    }
+    if (State.phase === "day") {
+      renderDayAlive();
+      renderAnnouncement();
+    }
+
+    bind();
+  }
+
+  boot();
+})();
