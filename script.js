@@ -1,23 +1,22 @@
-// 先放「穩定可跑」的核心資料（不依賴 WW_DATA）
-window.GAME = {
-  players: [],
-  nightStep: 0,
-  nightState: {},
-  witch: {
-    saveUsed: false,
-    poisonUsed: false,
-    poisonTarget: null,
-  },
-  // 先用內建 steps（第2批再換成你的 data/night/*.js）
-  steps: [
-    { key: "close", text: "天黑請閉眼" },
-    { key: "wolf", text: "狼人請選擇擊殺目標", pick: "wolfTarget" },
-    { key: "seer", text: "預言家請查驗一人", pick: "seerTarget" },
-    { key: "witch", text: "女巫請行動", witch: true },
-    { key: "open", text: "天亮請睜眼" }
-  ],
+// script.js：只放「啟動級」東西（SW + iOS 防雙點）
+// app.js 只處理遊戲邏輯與 UI
 
-  // 第1批：安全接回 roles 的容器
-  roles: {},      // { roleId: {name, icon, team...} }
-  rolesLoaded: false
-};
+// PWA service worker（有 sw.js 就會註冊）
+if ("serviceWorker" in navigator) {
+  window.addEventListener("load", () => {
+    navigator.serviceWorker.register("./sw.js").catch(()=>{});
+  });
+}
+
+// iOS Safari：再補一層「雙擊不放大」
+let lastTouchEnd = 0;
+document.addEventListener("touchend", (e) => {
+  const now = Date.now();
+  if (now - lastTouchEnd <= 300) e.preventDefault();
+  lastTouchEnd = now;
+}, { passive: false });
+
+// desktop 雙擊也不做縮放（避免意外）
+document.addEventListener("dblclick", (e) => {
+  e.preventDefault();
+}, { passive: false });
