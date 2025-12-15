@@ -1,107 +1,182 @@
 /* =========================================================
-   狼人殺｜上警與發言順序流程
+   狼人殺｜上帝輔助 PWA
    檔案：/data/flow/police.speech.js
 
-   功能：
+   ✅ 上警 + 發言順序引擎（穩定版）
    - createPoliceSession(players)
    - toggleCandidate(session, seat)
    - setDirection(session, "cw"|"ccw"|"rand")
    - buildOrder(session, startSeat)
-   - nextSpeaker(session)
    - currentSpeaker(session)
+   - nextSpeaker(session)
    - exportSession(session)
 
-   全域掛載：window.WW_DATA.policeSpeech
+   設計：
+   - candidates 空 => 全體存活發言
+   - candidates 有 => 警上發言（名單內依方向/隨機）
+   - startSeat 必須在候選名單中（若不在，會自動修正）
 ========================================================= */
 
-(() => {
-  const root = (window.WW_DATA = window.WW_DATA || {});
+(function () {
+  window.WW_DATA = window.WW_DATA || {};
 
-  const aliveSeats = (players) => players.filter(p => p.alive).map(p => p.seat);
+  function aliveSeats(players){
+    return players.filter(p=>p.alive).map(p=>p.seat);
+  }
 
-  function shuffle(arr){
+  function uniq(arr){
+    return Array.from(new Set((arr||[]).filter(Boolean)));
+  }
+
+  function sortNum(arr){
+    return (arr||[]).slice().sort((a,b)=>a-b);
+  }
+
+  function randShuffle(arr){
     const a = arr.slice();
     for(let i=a.length-1;i>0;i--){
       const j = Math.floor(Math.random()*(i+1));
-      [a[i], a[j]] = [a[j], a[i]];
+      [a[i],a[j]]=[a[j],a[i]];
     }
     return a;
   }
 
-  /* ---------------------------------------------------------
-     建立上警流程 Session
-  --------------------------------------------------------- */
+  // 以座位號循環產生順時針/逆時針序列（假設座位 1..N）
+  function buildCircleOrder({ pool, startSeat, direction, totalSeatsMax }) {
+    const set = new Set(pool);
+    const N = totalSeatsMax;
+
+    if(direction === "rand"){
+      const shuffled = randShuffle(pool);
+      // 強制把 startSeat 放第一個（如果存在）
+      if(startSeat && set.has(startSeat)){
+        const rest = shuffled.filter(s=>s!==startSeat);
+        return [startSeat, ...rest];
+      }
+      return shuffled;
+    }
+
+    // cw: 1->2->...->N->1
+    // ccw: 1<-2<-...<-N
+    const step = (direction === "ccw") ? -1 : 1;
+
+    let cur = startSeat;
+    const order = [];
+    const guard = N * 3; // 防呆
+    let cnt = 0;
+
+    while(order.length < pool.length && cnt < guard){
+      if(set.has(cur)) order.push(cur);
+      cur = cur + step;
+      if(cur > N) cur = 1;
+      if(cur < 1) cur = N;
+      cnt++;
+    }
+
+    // 若因資料異常沒生完，補齊
+    const missing = pool.filter(s=>!order.includes(s));
+    return order.concat(missing);
+  }
+
+  /* =========================================================
+     createPoliceSession
+  ========================================================= */
   function createPoliceSession(players){
+    const alive = aliveSeats(players);
+    const maxSeat = players.length ? Math.max(...players.map(p=>p.seat)) : alive.length;
+
     return {
-      alive: aliveSeats(players),
-      candidates: [],        // 上警座位（多選）
-      direction: "cw",       // cw 順時針 / ccw 逆時針 / rand 隨機
-      startSeat: null,       // 從哪一位開始發言（通常警上從某位開始）
-      order: [],             // 發言順序（計算後）
-      cursor: 0,             // 目前輪到第幾位
-      done: false
+      createdAt: new Date().toISOString(),
+      alive: alive,                 // 存活座位
+      maxSeat,
+
+      // 上警名單（多選）
+      candidates: [],
+
+      // 發言
+      direction: "cw",              // cw | ccw | rand
+      startSeat: null,
+      order: [],
+      cursor: 0,
+      done: false,
+
+      // 記錄（可選）
+      spoken: [] // 已發言座位
     };
   }
 
-  /* ---------------------------------------------------------
-     勾選/取消上警候選
-  --------------------------------------------------------- */
   function toggleCandidate(session, seat){
-    if(!session.alive.includes(seat)) return;
-    const idx = session.candidates.indexOf(seat);
-    if(idx >= 0) session.candidates.splice(idx, 1);
-    else session.candidates.push(seat);
+    if(!session) return;
+    const s = Number(seat);
+    if(!session.alive.includes(s)) return;
+
+    const set = new Set(session.candidates || []);
+    if(set.has(s)) set.delete(s);
+    else set.add(s);
+
+    session.candidates = sortNum(Array.from(set));
+
+    // 若 startSeat 不在名單中，清掉
+    if(session.startSeat && session.candidates.length && !set.has(session.startSeat)){
+      session.startSeat = null;
+    }
   }
 
   function setDirection(session, dir){
-    if(["cw","ccw","rand"].includes(dir)) session.direction = dir;
+    if(!session) return;
+    if(!["cw","ccw","rand"].includes(dir)) return;
+    session.direction = dir;
   }
 
-  /* ---------------------------------------------------------
-     依方向產生發言順序
-     startSeat：從哪位開始（若未給，預設用 candidates[0] 或 alive[0]）
-  --------------------------------------------------------- */
-  function buildOrder(session, startSeat = null){
-    const pool = session.candidates.length ? session.candidates.slice() : session.alive.slice();
+  function getSpeechPool(session){
+    // 有上警 => 警上發言，否則全體存活
+    const cand = session.candidates || [];
+    if(cand.length) return cand.filter(s=>session.alive.includes(s));
+    return session.alive.slice();
+  }
+
+  function buildOrder(session, startSeat){
+    if(!session) return;
+    session.alive = uniq(session.alive || []);
+
+    const pool = getSpeechPool(session);
     if(!pool.length){
       session.order = [];
       session.cursor = 0;
       session.done = true;
-      return session.order;
+      return;
     }
 
-    const start = startSeat ?? session.startSeat ?? pool[0];
+    // 起始位修正
+    let start = Number(startSeat || session.startSeat || pool[0]);
+    if(!pool.includes(start)) start = pool[0];
+
     session.startSeat = start;
 
-    let order = [];
+    session.order = buildCircleOrder({
+      pool,
+      startSeat: start,
+      direction: session.direction,
+      totalSeatsMax: session.maxSeat || Math.max(...session.alive)
+    });
 
-    if(session.direction === "rand"){
-      order = shuffle(pool);
-    } else {
-      // cw/ccw：按座位號繞一圈
-      const sorted = pool.slice().sort((a,b)=>a-b);
-      const idx = sorted.indexOf(start);
-      const rotated = idx >= 0
-        ? sorted.slice(idx).concat(sorted.slice(0, idx))
-        : sorted;
-
-      order = (session.direction === "cw") ? rotated : rotated.slice().reverse();
-    }
-
-    session.order = order;
     session.cursor = 0;
-    session.done = order.length === 0;
-    return order;
+    session.done = false;
+    session.spoken = [];
   }
 
   function currentSpeaker(session){
-    if(session.done) return null;
-    return session.order[session.cursor] ?? null;
+    if(!session || session.done) return null;
+    if(!session.order?.length) return null;
+    return session.order[session.cursor] || null;
   }
 
   function nextSpeaker(session){
-    if(session.done) return null;
-    session.cursor += 1;
+    if(!session || session.done) return null;
+    const cur = currentSpeaker(session);
+    if(cur) session.spoken.push(cur);
+
+    session.cursor++;
     if(session.cursor >= session.order.length){
       session.done = true;
       return null;
@@ -110,15 +185,21 @@
   }
 
   function exportSession(session){
+    if(!session) return null;
     return {
-      candidates: session.candidates.slice(),
+      createdAt: session.createdAt,
+      alive: session.alive,
+      candidates: session.candidates,
       direction: session.direction,
       startSeat: session.startSeat,
-      order: session.order.slice()
+      order: session.order,
+      cursor: session.cursor,
+      done: session.done,
+      spoken: session.spoken
     };
   }
 
-  root.policeSpeech = {
+  window.WW_DATA.policeSpeech = {
     createPoliceSession,
     toggleCandidate,
     setDirection,
