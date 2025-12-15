@@ -1,276 +1,335 @@
 /* =========================================================
    data/flow/rules.core.js
-   核心規則（Night Resolve / Announcement / Win Check）
+   Core rule engine for Werewolf God Assist PWA
+
+   ✅ Night resolve MVP + rule toggles:
+     - noConsecutiveGuard
+     - wolvesCanSkip
+     - witchCannotSelfSave
+     - milkPierce (guard+save => die; no peaceful night)
+     - hunterPoisonNoShoot
+     - blackWolfKingPoisonNoSkill
+
+   ✅ Vote tie policy:
+     - tieSecondNoExile (2nd tie => no exile, go night)
+
+   ✅ Win check framework:
+     - supports villager vs wolf
+     - supports third parties (Cupid lovers / crush etc) via hooks
 ========================================================= */
 
 (function(){
-  window.WW_DATA = window.WW_DATA || {};
+  const W = window.WW_DATA || (window.WW_DATA = {});
+  const roles = W.rolesAll || W.roles || {};
 
-  const nowISO = () => new Date().toISOString();
-
-  function deepClone(x){ return JSON.parse(JSON.stringify(x)); }
-  function uniq(arr){ return Array.from(new Set(arr)); }
+  function roleInfo(id){
+    return roles[id] || { id, name:id, team:"villager" };
+  }
 
   function getPlayer(players, seat){
     return players.find(p=>p.seat===seat) || null;
   }
 
-  function roleIdOf(players, seat){
-    return getPlayer(players, seat)?.roleId || null;
+  function alive(players){
+    return players.filter(p=>p.alive);
   }
 
-  function isAlive(players, seat){
-    return !!getPlayer(players, seat)?.alive;
+  function aliveByTeam(players, team){
+    return alive(players).filter(p=> (p.team || roleInfo(p.roleId).team) === team);
   }
 
-  function teamOf(players, seat){
-    return getPlayer(players, seat)?.team || "villager";
+  function uniq(arr){
+    return [...new Set((arr||[]).filter(Boolean))];
   }
 
-  function countAliveByTeam(players, team){
-    return players.filter(p=>p.alive && p.team===team).length;
+  function isPoisonDeath(resolved, seat){
+    return !!resolved?.meta?.poisonDeaths?.includes(seat);
   }
 
-  function countAlivePlayers(players){
-    return players.filter(p=>p.alive).length;
-  }
-
-  function seatListAlive(players){
-    return players.filter(p=>p.alive).map(p=>p.seat);
+  function isWolfKillDeath(resolved, seat){
+    return !!resolved?.meta?.wolfDeaths?.includes(seat);
   }
 
   /* =========================================================
-     Night Resolve
-     - guardTarget can be null
-     - wolfTarget can be null (空刀)
-     - witchSave only applies to wolfTarget (if exists)
-     - witchPoisonTarget can be null
-========================================================= */
+     Night resolve
+     Inputs:
+       - players: [{seat, roleId, team, alive, ...}]
+       - night: { guardTarget, prevGuardTarget, wolfTarget, seerCheckTarget, witchSave, witchPoisonTarget, witchSaveUsed, witchPoisonUsed }
+       - settings: rules toggles
+     Output:
+       {
+         deaths: [seat...],
+         meta: {
+            wolfTargetRaw, guardTargetRaw,
+            wolfDeaths:[], poisonDeaths:[],
+            blockedByGuard:boolean,
+            blockedBySave:boolean,
+            milkPierce:boolean,
+            notes:[...]
+         }
+       }
+  ========================================================= */
   function resolveNight({players, night, settings}){
-    const rules = settings || {};
+    const rules = Object.assign({
+      noConsecutiveGuard:true,
+      wolvesCanSkip:true,
+      witchCannotSelfSave:true,
+      milkPierce:true,
+      hunterPoisonNoShoot:true,
+      blackWolfKingPoisonNoSkill:true
+    }, settings || {});
+
     const meta = {
-      wolfTargetRaw: night.wolfTarget ?? null,
-      guardTargetRaw: night.guardTarget ?? null,
-      guardBlockedConsecutive: false,
-      wolfSkipped: false,
-      witchSaveChosen: !!night.witchSave,
-      witchPoisonTarget: night.witchPoisonTarget ?? null,
-      witchSaveEffective: false,
-      guardEffective: false,
-      guardHit: false,
-      saveHit: false,
-      saveBlockedSelf: false,
-      healPierce: false, // 奶穿
-      poisonDeaths: [],
+      wolfTargetRaw: night?.wolfTarget ?? null,
+      guardTargetRaw: night?.guardTarget ?? null,
       wolfDeaths: [],
-      finalDeaths: []
+      poisonDeaths: [],
+      blockedByGuard: false,
+      blockedBySave: false,
+      milkPierce: false,
+      notes: []
     };
 
-    // --- validate targets (dead targets ignored) ---
-    const alive = seatListAlive(players);
+    const deaths = [];
 
-    let guardTarget = night.guardTarget;
-    if(guardTarget && !alive.includes(guardTarget)) guardTarget = null;
+    // -------- Validate targets: must be alive to be meaningful
+    const wolfTarget = getPlayer(players, meta.wolfTargetRaw)?.alive ? meta.wolfTargetRaw : null;
+    const guardTarget = getPlayer(players, meta.guardTargetRaw)?.alive ? meta.guardTargetRaw : null;
 
-    let wolfTarget = (night.wolfTarget === null || night.wolfTarget === undefined) ? null : night.wolfTarget;
-    if(wolfTarget && !alive.includes(wolfTarget)) wolfTarget = null;
-
-    let poisonTarget = night.witchPoisonTarget;
-    if(poisonTarget && !alive.includes(poisonTarget)) poisonTarget = null;
-
-    // --- wolf can skip kill ---
-    if(rules.wolfCanSkipKill && (wolfTarget === null)){
-      meta.wolfSkipped = true;
+    // -------- Guard "no consecutive"
+    if(rules.noConsecutiveGuard && guardTarget && night?.prevGuardTarget && guardTarget === night.prevGuardTarget){
+      meta.notes.push(`守衛不能連守：本夜守衛目標 ${guardTarget} 無效`);
+      // treat as no guard
+      meta.guardTargetRaw = null;
     }
 
-    // --- no consecutive guard ---
-    if(rules.noConsecutiveGuard && guardTarget && (night.prevGuardTarget != null) && guardTarget === night.prevGuardTarget){
-      meta.guardBlockedConsecutive = true;
-      guardTarget = null;
+    // -------- Wolf can skip
+    // If wolvesCanSkip true and wolfTarget is null -> no wolf kill
+    // If wolvesCanSkip false -> require wolfTarget; but controller should enforce in steps.
+    let effectiveWolfTarget = wolfTarget;
+
+    if(!effectiveWolfTarget){
+      if(rules.wolvesCanSkip){
+        meta.notes.push("狼人空刀 / 無狼刀目標");
+      }else{
+        meta.notes.push("⚠️ 規則不允許空刀，但本夜未選刀口（視為無狼刀）");
+      }
     }
 
-    // --- Guard hit? ---
-    if(guardTarget && wolfTarget && guardTarget === wolfTarget){
-      meta.guardHit = true;
-      meta.guardEffective = true;
-    }
-
-    // --- Witch save effective? (cannot self save) ---
-    // Only meaningful if wolfTarget exists
-    let witchSaveEffective = false;
-    if(night.witchSave && wolfTarget){
+    // -------- Witch save only applies to wolf target
+    // Witch cannot self-save (optional)
+    let saveApplies = false;
+    if(night?.witchSave && effectiveWolfTarget){
       const witchSeat = players.find(p=>p.roleId==="witch")?.seat ?? null;
-      if(rules.witchCannotSelfSave && witchSeat && wolfTarget === witchSeat){
-        meta.saveBlockedSelf = true;
-        witchSaveEffective = false;
+      if(rules.witchCannotSelfSave && witchSeat && witchSeat === effectiveWolfTarget){
+        meta.notes.push("女巫不能自救：解藥判定無效");
+        saveApplies = false;
       }else{
-        witchSaveEffective = true;
-        meta.saveHit = true;
-      }
-    }
-    meta.witchSaveEffective = witchSaveEffective;
-
-    // --- Main resolve: wolf kill ---
-    let wolfDeath = null;
-
-    if(wolfTarget){
-      const guarded = meta.guardHit;
-      const saved = witchSaveEffective;
-
-      // 奶穿：guard + save 同時 -> 規則設定 guardAndSavePierce
-      if(rules.guardAndSavePierce && guarded && saved){
-        meta.healPierce = true;
-        wolfDeath = wolfTarget; // still dies
-      }else if(guarded){
-        wolfDeath = null; // guarded, no death
-      }else if(saved){
-        wolfDeath = null; // saved, no death
-      }else{
-        wolfDeath = wolfTarget;
+        saveApplies = true;
       }
     }
 
-    // --- Poison resolve ---
-    let poisonDeath = null;
-    if(poisonTarget){
-      poisonDeath = poisonTarget;
-    }
+    // -------- Guard blocks wolf kill unless milkPierce rule triggers with save
+    const guarded = (effectiveWolfTarget && meta.guardTargetRaw && effectiveWolfTarget === meta.guardTargetRaw);
 
-    const deaths = uniq([wolfDeath, poisonDeath].filter(Boolean));
-    meta.wolfDeaths = wolfDeath ? [wolfDeath] : [];
-    meta.poisonDeaths = poisonDeath ? [poisonDeath] : [];
-    meta.finalDeaths = deaths.slice();
-
-    return {
-      deaths,
-      meta,
-      // for seer
-      seer: {
-        target: night.seerCheckTarget ?? null,
-        result: night.seerResult ?? null
-      }
-    };
-  }
-
-  /* =========================================================
-     Announcement
-     - publicText: 玩家可看
-     - hiddenText: 上帝可看（包含細節）
-========================================================= */
-  function buildAnnouncement({nightNo, dayNo, players, night, resolved, settings}){
-    const m = resolved.meta || {};
-    const deaths = resolved.deaths || [];
-
-    // public deaths line
-    const deathText = deaths.length ? deaths.map(s=>`${s}號`).join("、") : "無人";
-    let publicLines = [];
-    publicLines.push(`☀️ 第${dayNo}天 天亮了`);
-    publicLines.push(`昨晚死亡：${deathText}`);
-
-    // Kids mode 由上層 UI/文案檔處理（這裡只提供原因提示給上層）
-    // Hidden lines (god)
-    let hidden = [];
-    hidden.push(`（上帝）第${nightNo}夜結算`);
-    hidden.push(`狼刀：${m.wolfTargetRaw ? (m.wolfTargetRaw+"號") : (settings.wolfCanSkipKill ? "空刀" : "—")}`);
-    hidden.push(`守衛：${m.guardTargetRaw ? (m.guardTargetRaw+"號") : "—"}${m.guardBlockedConsecutive ? "（連守無效）":""}`);
-
-    if(m.wolfTargetRaw){
-      if(m.guardHit) hidden.push(`守到刀口：是（阻擋=${!m.healPierce})`);
-      if(m.witchSaveChosen){
-        hidden.push(`女巫救：選擇是${m.saveBlockedSelf ? "（自救無效）":""}${m.witchSaveEffective ? "（有效）":"（無效）"}`);
-      }else{
-        hidden.push(`女巫救：否`);
-      }
-      if(m.healPierce) hidden.push(`⚠️ 奶穿：守+救同時，仍死亡`);
+    // CASE: milkPierce enabled and guarded + saved => target still dies (沒有平安夜)
+    if(rules.milkPierce && guarded && saveApplies){
+      meta.milkPierce = true;
+      meta.notes.push("奶穿：守 + 救 同目標 → 仍死亡（沒有平安夜）");
+      // death happens
+      deaths.push(effectiveWolfTarget);
+      meta.wolfDeaths.push(effectiveWolfTarget); // treated as wolf-death (knife still effective)
     }else{
-      if(m.wolfSkipped) hidden.push(`狼人：空刀`);
+      // Normal block logic
+      if(guarded){
+        meta.blockedByGuard = true;
+        meta.notes.push("守衛守中：狼刀無效");
+      }
+      if(saveApplies){
+        meta.blockedBySave = true;
+        meta.notes.push("女巫用解藥：狼刀無效");
+      }
+
+      if(effectiveWolfTarget){
+        if(!meta.blockedByGuard && !meta.blockedBySave){
+          deaths.push(effectiveWolfTarget);
+          meta.wolfDeaths.push(effectiveWolfTarget);
+        }
+      }
     }
 
-    hidden.push(`女巫毒：${m.witchPoisonTarget ? (m.witchPoisonTarget+"號") : "否"}`);
-
-    // Also mention seer result (hidden only)
-    if(night.seerCheckTarget){
-      hidden.push(`預言家驗：${night.seerCheckTarget}號 => ${night.seerResult==="wolf"?"狼人":"好人"}`);
+    // -------- Witch poison (independent)
+    const poisonTarget = getPlayer(players, night?.witchPoisonTarget ?? null)?.alive
+      ? (night?.witchPoisonTarget ?? null)
+      : null;
+    if(poisonTarget){
+      deaths.push(poisonTarget);
+      meta.poisonDeaths.push(poisonTarget);
     }
 
-    // Provide a gentle public hint about 平安夜/空刀/奶穿（不洩密）
-    if(!deaths.length){
-      // 平安夜：可能守到、女巫救、或狼人空刀
-      publicLines.push(`（提示）今晚平安：可能有守衛守到人、女巫救人、或狼人空刀。`);
-    }else if(deaths.length===1 && m.healPierce){
-      publicLines.push(`（提示）昨晚可能發生「奶穿」或其他規則導致仍有人倒下。`);
-    }
+    // -------- Unique
+    const finalDeaths = uniq(deaths);
 
-    return {
-      publicText: publicLines.join("\n"),
-      hiddenText: hidden.join("\n")
-    };
-  }
-
-  function makeLogItem({ts, nightNo, dayNo, publicText, hiddenText, votes, actions, resolvedMeta}){
-    return {
-      ts: ts || nowISO(),
-      nightNo, dayNo,
-      publicText: publicText || "",
-      hiddenText: hiddenText || "",
-      votes: votes || null,
-      actions: actions || null,
-      resolvedMeta: resolvedMeta || null
-    };
+    return { deaths: finalDeaths, meta };
   }
 
   /* =========================================================
-     Death skill trigger rule
-     - hunterPoisonNoShoot
-     - blackWolfKingPoisonNoSkill
-========================================================= */
-  function canTriggerDeathSkill({roleId, seat, resolved, settings}){
-    const rules = settings || {};
-    const poison = resolved?.meta?.poisonDeaths || [];
-    const diedByPoison = poison.includes(seat);
+     Announcement builder
+     - publicText: what players see
+     - hiddenText: god-only, includes causes & notes
+  ========================================================= */
+  function buildAnnouncement({nightNo, dayNo, players, night, resolved, settings}){
+    const rules = Object.assign({
+      milkPierce:true
+    }, settings||{});
 
-    if(roleId === "hunter" && rules.hunterPoisonNoShoot && diedByPoison) return false;
-    if(roleId === "blackWolfKing" && rules.blackWolfKingPoisonNoSkill && diedByPoison) return false;
+    const deaths = resolved?.deaths || [];
+    const publicDeaths = deaths.length ? deaths.map(s=>`${s} 號`).join("、") : "沒有人";
+
+    const publicText =
+      `【第 ${nightNo} 夜公告】\n` +
+      `天亮了，昨晚死亡的是：${publicDeaths}。\n` +
+      `（進入第 ${dayNo} 天流程）`;
+
+    // God hidden details
+    const lines = [];
+    lines.push(`【上帝視角｜第 ${nightNo} 夜結算】`);
+    lines.push(`狼人刀口：${resolved?.meta?.wolfTargetRaw ? resolved.meta.wolfTargetRaw+" 號" : "（空刀/未選）"}`);
+    lines.push(`守衛守護：${resolved?.meta?.guardTargetRaw ? resolved.meta.guardTargetRaw+" 號" : "（未守/無效）"}`);
+
+    // Witch info: if saveUsed already in controller, it will reflect; still show decisions
+    const saveTxt = night?.witchSave ? "用解藥" : "不用解藥";
+    const poisonTxt = night?.witchPoisonTarget ? `毒 ${night.witchPoisonTarget} 號` : "不毒";
+    lines.push(`女巫：${saveTxt}｜${poisonTxt}`);
+
+    if(resolved?.meta?.milkPierce && rules.milkPierce){
+      lines.push("⚠️ 奶穿：守+救同目標 → 仍死亡（沒有平安夜）");
+    }else{
+      if(resolved?.meta?.blockedByGuard) lines.push("守衛守中 → 狼刀無效");
+      if(resolved?.meta?.blockedBySave) lines.push("女巫救人 → 狼刀無效");
+    }
+
+    if(resolved?.meta?.notes?.length){
+      lines.push("【備註】");
+      resolved.meta.notes.forEach(n=>lines.push("- "+n));
+    }
+
+    const hiddenText = lines.join("\n");
+    return { publicText, hiddenText };
+  }
+
+  /* =========================================================
+     Vote tie policy helper
+     - You can use this from day/vote module.
+     Input:
+       tieRound: 0 for first vote, 1 for second tie, ...
+       settings.tieSecondNoExile: true => second tie => no exile
+     Output: "pk" | "revote" | "none"
+  ========================================================= */
+  function decideTieOutcome({tieRound, settings}){
+    const rules = Object.assign({ tieSecondNoExile:true }, settings||{});
+    // First tie: usually PK or revote (UI chooses)
+    if(tieRound <= 0) return "choose"; // UI decides
+    // Second tie: none
+    if(rules.tieSecondNoExile) return "none";
+    return "choose";
+  }
+
+  /* =========================================================
+     Death skill gating (poison restriction)
+     Inputs:
+       roleId, seat, resolved, settings
+     Output:
+       boolean allowed
+  ========================================================= */
+  function canTriggerDeathSkill({roleId, seat, resolved, settings}){
+    const rules = Object.assign({
+      hunterPoisonNoShoot:true,
+      blackWolfKingPoisonNoSkill:true
+    }, settings||{});
+
+    const poisoned = isPoisonDeath(resolved, seat);
+
+    if(roleId==="hunter" && rules.hunterPoisonNoShoot && poisoned){
+      return false;
+    }
+    if(roleId==="blackWolfKing" && rules.blackWolfKingPoisonNoSkill && poisoned){
+      return false;
+    }
     return true;
   }
 
   /* =========================================================
-     Win check (framework for third party)
-     - base win:
-        wolves == 0 => villager win
-        wolves >= others => wolf win
-     - third party:
-        reserved for future expansion
-========================================================= */
-  function checkWin(players){
-    const wolf = countAliveByTeam(players, "wolf");
-    const vill = countAliveByTeam(players, "villager");
-    const third = countAliveByTeam(players, "third");
-    const alive = countAlivePlayers(players);
-
-    // third party placeholder: if only third remains
-    if(alive > 0 && third === alive){
-      return { ended:true, winner:"third", reason:"場上只剩第三方陣營存活。" };
+     Win check framework
+     - Base rule (classic):
+       * if wolves == 0 => villagers win
+       * if wolves >= others => wolves win
+     - Third party hook:
+       Provide W.thirdWinCheck(players, settings) => {ended,winner,message} | null
+       If returns ended, it takes priority.
+  ========================================================= */
+  function checkWin({players, settings}){
+    // third-party hook (Cupid/lovers/crush etc) — you will extend later
+    if(typeof W.thirdWinCheck === "function"){
+      const r = W.thirdWinCheck(players, settings);
+      if(r && r.ended) return r;
     }
 
-    if(wolf === 0 && alive > 0){
-      return { ended:true, winner:"villager", reason:"所有邪惡陣營已被放逐。" };
-    }
+    const wolves = aliveByTeam(players, "wolf").length;
+    const good = alive(players).length - wolves;
 
-    // wolf parity rule: wolf >= non-wolf alive => wolf win
-    const nonWolf = alive - wolf;
-    if(wolf > 0 && wolf >= nonWolf){
-      return { ended:true, winner:"wolf", reason:"邪惡陣營人數已達到或超過其他陣營。" };
+    if(wolves <= 0){
+      return {
+        ended:true,
+        winner:"villager",
+        message:"🏁 遊戲結束：正義聯盟獲勝！\n（所有邪惡陣營已被放逐）"
+      };
     }
-
-    return { ended:false, winner:null, reason:"" };
+    if(wolves >= good){
+      return {
+        ended:true,
+        winner:"wolf",
+        message:"🏁 遊戲結束：邪惡陣營獲勝！\n（狼人數量已達到或超過其餘存活玩家）"
+      };
+    }
+    return { ended:false };
   }
 
-  window.WW_DATA.rulesCore = {
+  /* =========================
+     Export public-safe state helper
+  ========================= */
+  function exportPublic(state){
+    const s = JSON.parse(JSON.stringify(state||{}));
+    // remove roleId/team
+    if(Array.isArray(s.players)){
+      s.players = s.players.map(p=>({
+        seat:p.seat,
+        alive:p.alive,
+        isChief:!!p.isChief
+      }));
+    }
+    // remove hidden actions
+    if(Array.isArray(s.logs)){
+      s.logs = s.logs.map(l=>({
+        ts:l.ts, nightNo:l.nightNo, dayNo:l.dayNo,
+        publicText:l.publicText
+      }));
+    }
+    // remove night internals
+    delete s.night;
+    return s;
+  }
+
+  /* =========================
+     Expose
+  ========================= */
+  W.rulesCore = {
     resolveNight,
     buildAnnouncement,
-    makeLogItem,
+    decideTieOutcome,
     canTriggerDeathSkill,
-    checkWin
+    checkWin,
+    exportPublic
   };
+
 })();
