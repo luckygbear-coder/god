@@ -1,180 +1,163 @@
 /* =========================================================
-   狼人殺｜基本板規則
+   狼人殺｜基本板規則引擎
    檔案：data/rules/rules.basic.js
 
-   板子：預言家 / 女巫 / 獵人 / 守衛 / 狼人 / 村民
+   角色支援：
+   - 狼人、村民、預言家、女巫、獵人、守衛
+   - 黑狼王（死亡技能）
+   
+   預設規則（可由設定覆寫）：
+   - 守衛不能連守
+   - 狼人可以空刀
+   - 女巫不能自救
+   - 獵人被毒不能開槍
+   - 黑狼王被毒不能用技能
 ========================================================= */
 
 (function () {
-  const CORE = window.WW_RULES_CORE;
-  const ROLES = window.WW_ROLES;
 
-  if (!CORE) {
-    console.error("❌ rules.core.js 未載入");
-    return;
+  function isAlive(players, seat) {
+    const p = players.find(x => x.seat === seat);
+    return p && p.alive;
   }
 
-  /* =========================
-     夜晚結算（基本板）
-  ========================= */
-  function resolveNight({ players, night, rules }) {
-    const resolved = CORE.resolveNightCommon({
-      players,
-      night,
-      rules
-    });
-
-    // 標記實際死亡
-    resolved.deaths.forEach(seat => {
-      const p = CORE.bySeat(players, seat);
-      if (p) p.alive = false;
-    });
-
-    return resolved;
+  function kill(players, seat, reason) {
+    const p = players.find(x => x.seat === seat);
+    if (!p || !p.alive) return false;
+    p.alive = false;
+    p.deathReason = reason;
+    return true;
   }
 
-  /* =========================
-     公告文字（玩家）
-  ========================= */
-  function buildPublicAnnouncement({ nightNo, resolved }) {
-    const deaths = resolved.deaths;
+  function resolveNight({ players, night, settings }) {
+    const deaths = [];
+    const meta = {};
 
-    if (!deaths.length) {
-      return `🌤️ 天亮了，昨晚是平安夜。`;
-    }
+    const {
+      wolfTarget,
+      guardTarget,
+      prevGuardTarget,
+      witchSave,
+      witchPoisonTarget
+    } = night;
 
-    if (deaths.length === 1) {
-      return `🌅 天亮了，昨晚死亡的是：${deaths[0]} 號。`;
-    }
+    /* =========================
+       1. 狼刀判定
+    ========================= */
 
-    return `🌅 天亮了，昨晚死亡的是：${deaths.join("、")} 號。`;
-  }
+    let wolfKilled = null;
 
-  /* =========================
-     公告文字（上帝）
-  ========================= */
-  function buildHiddenAnnouncement({ resolved }) {
-    const m = resolved.meta;
-    const lines = [];
+    if (wolfTarget && isAlive(players, wolfTarget)) {
 
-    if (m.killedByWolf) {
-      lines.push(`🐺 狼刀：${m.killedByWolf} 號`);
-    }
-
-    if (m.blockedByGuard) {
-      lines.push(`🛡️ 守衛成功守到目標`);
-    }
-
-    if (m.savedByWitch) {
-      lines.push(`🧪 女巫使用解藥`);
-    }
-
-    if (m.milkPierce) {
-      lines.push(`⚠️ 奶穿：守 + 救 同時作用，仍然死亡`);
-    }
-
-    if (m.poisonDeaths?.length) {
-      lines.push(`☠️ 女巫毒：${m.poisonDeaths.join("、")} 號`);
-    }
-
-    if (!lines.length) {
-      lines.push("（本夜無隱藏事件）");
-    }
-
-    return lines.join("\n");
-  }
-
-  /* =========================
-     技能觸發（死亡後）
-     - 獵人
-     - 黑狼王（雖然基本板未啟用，但先保留）
-  ========================= */
-  function collectDeathSkills({ players, resolved, rules }) {
-    const skills = [];
-
-    resolved.deaths.forEach(seat => {
-      const p = CORE.bySeat(players, seat);
-      if (!p) return;
-
-      // 獵人
-      if (p.roleId === "hunter") {
-        const poisoned = CORE.isPoisonDeath(resolved, seat);
-        if (poisoned && rules?.hunterPoisonNoShoot) {
-          skills.push({
-            roleId: "hunter",
-            seat,
-            disabled: true,
-            reason: "被毒，不能開槍"
-          });
-        } else {
-          skills.push({
-            roleId: "hunter",
-            seat,
-            disabled: false
-          });
-        }
+      // 守衛守中
+      if (guardTarget && guardTarget === wolfTarget) {
+        meta.guardSuccess = true;
       }
-
-      // 黑狼王（若有）
-      if (p.roleId === "blackWolfKing") {
-        const poisoned = CORE.isPoisonDeath(resolved, seat);
-        if (poisoned && rules?.blackWolfKingPoisonNoSkill) {
-          skills.push({
-            roleId: "blackWolfKing",
-            seat,
-            disabled: true,
-            reason: "被毒，不能使用技能"
-          });
-        } else {
-          skills.push({
-            roleId: "blackWolfKing",
-            seat,
-            disabled: false
-          });
-        }
+      // 女巫救
+      else if (witchSave) {
+        meta.witchSave = true;
       }
+      // 真死亡
+      else {
+        wolfKilled = wolfTarget;
+      }
+    }
+
+    if (wolfKilled) {
+      deaths.push(wolfKilled);
+    }
+
+    /* =========================
+       2. 女巫毒
+    ========================= */
+
+    if (
+      witchPoisonTarget &&
+      isAlive(players, witchPoisonTarget) &&
+      !deaths.includes(witchPoisonTarget)
+    ) {
+      deaths.push(witchPoisonTarget);
+      meta.poisoned = witchPoisonTarget;
+    }
+
+    /* =========================
+       3. 統整死亡
+    ========================= */
+
+    deaths.forEach(seat => {
+      kill(players, seat, "night");
     });
 
-    return skills;
+    /* =========================
+       4. 記錄守衛（不能連守）
+    ========================= */
+
+    meta.guardTargetRaw = guardTarget;
+
+    return {
+      deaths,
+      meta
+    };
   }
 
-  /* =========================
-     勝負判定（基本板）
-  ========================= */
+  function canTriggerDeathSkill({ roleId, seat, resolved, settings }) {
+    // 被毒禁用
+    if (resolved.meta?.poisoned === seat) {
+      if (roleId === "hunter" && settings.hunterPoisonNoShoot) return false;
+      if (roleId === "blackWolfKing" && settings.blackWolfKingPoisonNoSkill) return false;
+    }
+    return true;
+  }
+
+  function buildAnnouncement({ nightNo, dayNo, players, resolved }) {
+    let text = `🌅 天亮了（第 ${dayNo} 天）\n`;
+
+    if (!resolved.deaths.length) {
+      text += "昨晚是平安夜。";
+    } else {
+      text += `昨晚死亡的是：${resolved.deaths.join("、")} 號。`;
+    }
+
+    return {
+      publicText: text,
+      hiddenText: `（上帝）夜晚死亡：${JSON.stringify(resolved.deaths)}`
+    };
+  }
+
+  function makeLogItem({ ts, nightNo, dayNo, publicText, hiddenText, actions }) {
+    return {
+      ts,
+      nightNo,
+      dayNo,
+      publicText,
+      hiddenText,
+      actions
+    };
+  }
+
   function checkWin(players) {
-    const alive = CORE.alive(players);
-
-    const wolves = alive.filter(p => p.roleId === "werewolf");
-    const good = alive.filter(p => {
-      const r = ROLES[p.roleId];
-      return r?.camp === "villager";
-    });
+    const alive = players.filter(p => p.alive);
+    const wolves = alive.filter(p => p.camp === "wolf");
+    const villagers = alive.filter(p => p.camp === "villager");
 
     if (!wolves.length) {
-      return {
-        winner: "villager",
-        reason: "所有狼人已被放逐"
-      };
+      return { ended: true, winner: "villager" };
     }
 
-    if (wolves.length >= good.length) {
-      return {
-        winner: "wolf",
-        reason: "狼人數量已達或超過好人"
-      };
+    if (wolves.length >= villagers.length) {
+      return { ended: true, winner: "wolf" };
     }
 
-    return null;
+    return { ended: false };
   }
 
-  /* =========================
-     對外掛載
-  ========================= */
-  window.WW_RULES_BASIC = {
+  window.WW_DATA = window.WW_DATA || {};
+  window.WW_DATA.rulesBasic = {
     resolveNight,
-    buildPublicAnnouncement,
-    buildHiddenAnnouncement,
-    collectDeathSkills,
+    canTriggerDeathSkill,
+    buildAnnouncement,
+    makeLogItem,
     checkWin
   };
+
 })();
