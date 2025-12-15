@@ -1,262 +1,262 @@
 /* =========================================================
-   狼人殺｜白天流程引擎（資料驅動）
-   檔案：data/flow/day.flow.js
+   狼人殺｜白天流程工具（資料/流程，不含 UI）
+   data/flow/day.flow.js
 
    功能：
-   ✅ 上警名單（多選）
-   ✅ 發言順序（順/逆/隨機 + 起始位）
-   ✅ 投票（逐位投票）
-   ✅ 平票處理：第二次仍平票 => 無人放逐，直接進夜晚（你指定）
-   ✅ 可輸出：票型誰投誰（供公告中心復盤）
-
-   注意：
-   - 不處理 UI
-   - 不處理死亡技能（獵人/黑狼王等）— 由 app 層在「死亡發生時」去觸發
+   - 上警：多選名單 candidates[]
+   - 發言：順/逆/隨機 + 起始位 + 逐位 next
+   - 投票：逐位投票 + 統計 + 結果
+   - 平票規則：第二次平票 → 無人放逐 → 進夜晚
 ========================================================= */
 
 (function () {
 
-  const shuffle = (arr) => {
-    const a = arr.slice();
-    for (let i = a.length - 1; i > 0; i--) {
-      const j = Math.floor(Math.random() * (i + 1));
-      [a[i], a[j]] = [a[j], a[i]];
-    }
-    return a;
-  };
-
-  const aliveSeats = (players) => players.filter(p => p.alive).map(p => p.seat);
+  function aliveSeats(players){
+    return players.filter(p=>p.alive).map(p=>p.seat);
+  }
 
   /* =========================================================
-     1) 上警 Session
+     上警 Session
   ========================================================= */
-  function createPoliceSession(players) {
+  function createPoliceSession(players){
     return {
       alive: aliveSeats(players),
-      candidates: [],   // 上警座位
-      // 可擴充：退水、警徽流
-      createdAt: Date.now()
-    };
-  }
-
-  function togglePoliceCandidate(session, seat) {
-    if (!session.alive.includes(seat)) return;
-    const idx = session.candidates.indexOf(seat);
-    if (idx >= 0) session.candidates.splice(idx, 1);
-    else session.candidates.push(seat);
-  }
-
-  /* =========================================================
-     2) 發言 Session
-  ========================================================= */
-  function createSpeechSession(players, policeSession) {
-    const alive = aliveSeats(players);
-    const pool = (policeSession?.candidates?.length)
-      ? policeSession.candidates.filter(s => alive.includes(s))
-      : alive;
-
-    return {
-      alive,
-      pool,
-      direction: "cw",   // cw | ccw | rand
-      startSeat: pool[0] || null,
+      candidates: [],
+      direction: "cw",     // cw | ccw | rand
+      startSeat: null,
       order: [],
-      index: 0,
+      cursor: 0,
       done: false
     };
   }
 
-  function setSpeechDirection(session, dir) {
-    if (!["cw", "ccw", "rand"].includes(dir)) return;
+  function toggleCandidate(session, seat){
+    if(!session.alive.includes(seat)) return;
+    const idx = session.candidates.indexOf(seat);
+    if(idx >= 0) session.candidates.splice(idx,1);
+    else session.candidates.push(seat);
+    session.candidates.sort((a,b)=>a-b);
+  }
+
+  function setDirection(session, dir){
+    if(!["cw","ccw","rand"].includes(dir)) return;
     session.direction = dir;
   }
 
-  function buildSpeechOrder(session) {
-    const pool = session.pool.slice();
-    if (!pool.length) {
+  function buildOrder(session, startSeat){
+    const pool = (session.candidates && session.candidates.length)
+      ? session.candidates.slice()
+      : session.alive.slice();
+
+    if(!pool.length){
       session.order = [];
-      session.index = 0;
+      session.cursor = 0;
       session.done = true;
-      return;
+      return session.order;
     }
 
-    // 若隨機：直接洗牌
-    if (session.direction === "rand") {
-      session.order = shuffle(pool);
-      session.index = 0;
-      session.done = false;
-      return;
+    let order = [];
+
+    if(session.direction === "rand"){
+      order = pool.slice();
+      for(let i=order.length-1;i>0;i--){
+        const j = Math.floor(Math.random()*(i+1));
+        [order[i],order[j]]=[order[j],order[i]];
+      }
+    } else {
+      // 圓桌順序依數字座位
+      const sorted = pool.slice().sort((a,b)=>a-b);
+      const idx = sorted.indexOf(startSeat);
+      const startIdx = idx>=0 ? idx : 0;
+
+      if(session.direction === "cw"){
+        order = sorted.slice(startIdx).concat(sorted.slice(0,startIdx));
+      } else {
+        // 逆時針：從 start 往前
+        const left = sorted.slice(0,startIdx).reverse();
+        const right = sorted.slice(startIdx).reverse();
+        order = right.concat(left);
+      }
     }
 
-    // 順/逆：依座位號排序，並以 startSeat 開頭
-    const sorted = pool.slice().sort((a, b) => a - b);
-    const start = session.startSeat ?? sorted[0];
-
-    const startIdx = sorted.indexOf(start);
-    const rotated =
-      startIdx >= 0
-        ? sorted.slice(startIdx).concat(sorted.slice(0, startIdx))
-        : sorted;
-
-    session.order = (session.direction === "cw") ? rotated : rotated.slice().reverse();
-    session.index = 0;
-    session.done = false;
+    session.startSeat = startSeat;
+    session.order = order;
+    session.cursor = 0;
+    session.done = order.length === 0;
+    return order;
   }
 
-  function currentSpeaker(session) {
-    if (session.done) return null;
-    return session.order[session.index] ?? null;
+  function currentSpeaker(session){
+    if(!session.order || !session.order.length) return null;
+    if(session.cursor >= session.order.length){
+      session.done = true;
+      return null;
+    }
+    return session.order[session.cursor];
   }
 
-  function nextSpeaker(session) {
-    if (session.done) return;
-    session.index++;
-    if (session.index >= session.order.length) {
+  function nextSpeaker(session){
+    if(session.done) return null;
+    session.cursor++;
+    if(session.cursor >= (session.order?.length||0)){
       session.done = true;
+      return null;
     }
+    return session.order[session.cursor];
+  }
+
+  function exportPoliceSession(session){
+    return {
+      alive: session.alive.slice(),
+      candidates: session.candidates.slice(),
+      direction: session.direction,
+      startSeat: session.startSeat,
+      order: session.order.slice(),
+      cursor: session.cursor,
+      done: session.done
+    };
   }
 
   /* =========================================================
-     3) 投票 Session（逐位投票）
+     投票 Session（逐位投票）
+     - round: 1=第一次投票；2=第二次（平票後重投/PK）
+     - restrictTargets: null=所有存活；array=限制目標（PK）
   ========================================================= */
-  function createVoteSession(players, opts = {}) {
+  function createVoteSession(players, opt={}){
     const alive = aliveSeats(players);
-    const restrict = Array.isArray(opts.restrictTargets)
-      ? opts.restrictTargets.filter(s => alive.includes(s))
-      : null;
-
     return {
       alive,
-      // 每位投票者依 seat 由小到大輪
-      voters: alive.slice().sort((a, b) => a - b),
-      voterIndex: 0,
-      // 可投目標：alive 或 restrictTargets
-      targets: restrict || alive.slice(),
-      // votes: [{fromSeat, toSeat|null}]
-      votes: [],
+      voters: alive.slice(),               // 逐位投票順序（預設按座位）
+      cursor: 0,
       done: false,
-      // 平票重投次數（0=第一次，1=第二次）
-      round: opts.round ?? 0,
-      label: opts.label ?? "投票"
+      votes: [],                           // {fromSeat,toSeat|null}
+      stats: {},                           // computed
+      round: opt.round || 1,               // 1 or 2
+      restrictTargets: opt.restrictTargets || null
     };
   }
 
-  function currentVoter(session) {
-    if (session.done) return null;
-    return session.voters[session.voterIndex] ?? null;
+  function currentVoter(session){
+    if(session.cursor >= session.voters.length){
+      session.done = true;
+      return null;
+    }
+    return session.voters[session.cursor];
   }
 
-  function castVote(session, fromSeat, toSeatOrNull) {
-    if (session.done) return false;
+  function castVote(session, fromSeat, toSeatOrNull){
     const cur = currentVoter(session);
-    if (cur !== fromSeat) return false;
+    if(cur == null || cur !== fromSeat) return false;
 
-    // 自己不能投自己（常見規則）
-    if (toSeatOrNull && toSeatOrNull === fromSeat) return false;
-
-    // 目標限制（PK 只能投平票名單）
-    if (toSeatOrNull && !session.targets.includes(toSeatOrNull)) return false;
-
-    session.votes.push({ fromSeat, toSeat: toSeatOrNull || null });
-
-    session.voterIndex++;
-    if (session.voterIndex >= session.voters.length) {
-      session.done = true;
+    // 棄票允許
+    if(toSeatOrNull == null){
+      session.votes.push({fromSeat, toSeat:null});
+      session.cursor++;
+      if(session.cursor >= session.voters.length) session.done = true;
+      return true;
     }
+
+    // 不能投自己
+    if(toSeatOrNull === fromSeat) return false;
+
+    // 目標必須存活
+    if(!session.alive.includes(toSeatOrNull)) return false;
+
+    // PK 限制目標
+    if(Array.isArray(session.restrictTargets) && session.restrictTargets.length){
+      if(!session.restrictTargets.includes(toSeatOrNull)) return false;
+    }
+
+    session.votes.push({fromSeat, toSeat:toSeatOrNull});
+    session.cursor++;
+    if(session.cursor >= session.voters.length) session.done = true;
     return true;
   }
 
-  function getVoteStats(session) {
+  function computeStats(session){
     const stats = {};
-    session.votes.forEach(v => {
-      const k = v.toSeat ? String(v.toSeat) : "abstain";
-      stats[k] = (stats[k] || 0) + 1;
+    session.votes.forEach(v=>{
+      const k = v.toSeat == null ? "abstain" : String(v.toSeat);
+      stats[k] = (stats[k]||0)+1;
     });
+    session.stats = stats;
     return stats;
   }
 
-  function getVoteResult(session) {
-    const stats = getVoteStats(session);
+  function getTop(session){
+    const stats = computeStats(session);
+    const entries = Object.entries(stats);
 
-    // 找最高票
-    let maxVotes = 0;
-    Object.values(stats).forEach(v => { if (v > maxVotes) maxVotes = v; });
+    let max = 0;
+    entries.forEach(([k,c])=>{
+      if(k==="abstain") return;
+      if(c>max) max=c;
+    });
 
-    // 找最高票候選（不含棄票）
-    const top = Object.keys(stats)
-      .filter(k => k !== "abstain" && stats[k] === maxVotes)
-      .map(k => Number(k));
+    const tops = entries
+      .filter(([k,c])=>k!=="abstain" && c===max)
+      .map(([k])=>Number(k));
 
-    const tie = top.length >= 2;
-
-    return {
-      label: session.label,
-      round: session.round,
-      maxVotes,
-      tie,
-      topSeats: top,        // 平票名單 or 唯一出局名單
-      stats
-    };
+    return { maxVotes:max, tops, tie: tops.length>=2 };
   }
 
-  function exportVotes(session) {
+  function getResult(session){
+    const { maxVotes, tops, tie } = getTop(session);
+
+    // 沒有人得到票（全棄票）
+    if(maxVotes === 0){
+      return { maxVotes:0, tie:false, executed:null, tops:[] };
+    }
+
+    if(tie){
+      return { maxVotes, tie:true, executed:null, tops };
+    }
+    return { maxVotes, tie:false, executed: tops[0], tops };
+  }
+
+  function exportVotes(session){
     return session.votes.slice();
   }
 
   /* =========================================================
-     4) 平票處理規則（你指定）
-     - 第一次平票：可以 PK（只投平票名單）或 全體重投
-     - 第二次仍平票：無人放逐（直接進夜晚）
-     本檔提供「判斷」與「建立下一輪投票 session」工具
+     平票規則（你指定）
+     - 第一次平票：進入第二輪（由 UI 決定是 PK/重投）
+     - 第二次平票：無人放逐 → 進夜晚
   ========================================================= */
-  function shouldAutoNoExecuteOnTie(voteResult) {
-    // 第二輪仍平票 => 自動無人放逐
-    return voteResult.tie && voteResult.round >= 1;
-  }
-
-  function createPkVote(players, tieList) {
-    return createVoteSession(players, {
-      restrictTargets: tieList,
-      round: 1,
-      label: "PK投票"
-    });
-  }
-
-  function createRevote(players) {
-    return createVoteSession(players, {
-      restrictTargets: null,
-      round: 1,
-      label: "重新投票"
-    });
+  function tieRuleDecision({ voteRound, tieTops }){
+    if(voteRound >= 2){
+      return {
+        action: "no_exile",      // ✅ 第二次平票：無人放逐
+        message: "第二次平票：無人放逐，直接進入夜晚。"
+      };
+    }
+    return {
+      action: "need_choice",     // 交給 UI：PK / 重投
+      message: `平票（${tieTops.join("、")}）：請選擇 PK 或 重投。`
+    };
   }
 
   /* =========================================================
-     對外輸出
+     Export
   ========================================================= */
-  window.WW_DAY_FLOW = {
+  window.WW_DAY = {
     // police
     createPoliceSession,
-    togglePoliceCandidate,
-
-    // speech
-    createSpeechSession,
-    setSpeechDirection,
-    buildSpeechOrder,
+    toggleCandidate,
+    setDirection,
+    buildOrder,
     currentSpeaker,
     nextSpeaker,
+    exportPoliceSession,
 
     // vote
     createVoteSession,
     currentVoter,
     castVote,
-    getVoteStats,
-    getVoteResult,
+    computeStats,
+    getResult,
     exportVotes,
-
-    // tie
-    shouldAutoNoExecuteOnTie,
-    createPkVote,
-    createRevote
+    tieRuleDecision
   };
 
 })();
