@@ -1,120 +1,153 @@
 /* =========================================================
-   狼人殺｜夜晚流程（資料驅動）
    data/flow/night.steps.js
-
-   目標：
-   - 依照 roles 自動生成夜晚 wizard steps
-   - 每一步有：
-     - key
-     - type: info | pick | seer | witch | resolve
-     - speaker: 主持台詞（公開/上帝）
-     - pick: 需要點選座位的目標欄位（寫到 night 狀態）
-     - required: 是否必選（狼人刀，若允許空刀可不必）
-   - 不做任何死亡結算（rules.core.js 會做）
+   夜晚步驟表（Basic + B1）依角色配置動態生成
+   step types:
+    - info
+    - pick (pickTarget)
+    - pick_or_none (pickTarget, allowNone)
+    - panel (roleId="witch") 交給 witchFlow
+    - resolve
 ========================================================= */
 
-(function () {
+(function(){
+  window.WW_DATA = window.WW_DATA || {};
 
   function hasRole(players, roleId){
-    return players.some(p => p.alive && p.roleId === roleId);
+    return players.some(p=>p.roleId===roleId && p.alive);
   }
 
-  function aliveSeats(players){
-    return players.filter(p=>p.alive).map(p=>p.seat);
+  function roleSeat(players, roleId){
+    return players.find(p=>p.roleId===roleId && p.alive)?.seat ?? null;
   }
 
-  // 給 app.js 用：回傳 step 陣列
-  function buildNightSteps({ players, boardId, rules, nightState }) {
+  function buildSeerAfterScript(night){
+    const t = night.seerCheckTarget;
+    const r = night.seerResult;
+    if(!t || !r) return "";
+    return `（上帝）系統結果：${t}號 是 ${r==="wolf" ? "狼人" : "好人"}。\n請你告訴預言家：他的身分是——${r==="wolf" ? "狼人" : "好人"}。`;
+  }
 
+  function stepsBasic({players, night, rules}){
     const steps = [];
-    const alive = aliveSeats(players);
 
-    // 0. 天黑
     steps.push({
       key:"close",
       type:"info",
-      publicText:"天黑請閉眼。",
-      godText:"（上帝）天黑請閉眼。準備進入夜晚流程。"
+      publicScript:"🌙 天黑請閉眼。",
+      godScript:"🌙 天黑請閉眼。"
     });
 
-    // 1. 守衛（如果存在）
-    if(hasRole(players,"guard")){
+    // Guard
+    if(hasRole(players, "guard")){
       steps.push({
         key:"guard",
         type:"pick",
-        actor:"guard",
-        pickKey:"guardTarget",
-        required:true,
-        publicText:"守衛請睜眼。你要守誰？（點選座位）",
-        godText:"（上帝）守衛睜眼：請問要守誰？（點選座位）",
-        help: "規則：不能連守由 rules 處理（會提示/阻擋）。"
+        roleId:"guard",
+        pickTarget:"guardTarget",
+        required:false,
+        publicScript:"🛡 守衛請睜眼。",
+        godScript:`🛡 守衛請睜眼。\n守誰？（點選座位）\n（提示）規則預設：不能連守同一人。`
       });
     }
 
-    // 2. 狼人（狼人/狼王合併行動：刀人 或 空刀）
-    // 有任何 wolf team 的「夜晚行動狼」都視為狼人回合
-    // MVP：只記 wolfTarget（後續可擴充多狼一致確認）
-    const hasWolf = players.some(p=>p.alive && (p.team==="wolf"));
-    if(hasWolf){
-      const canSkip = !!rules?.wolfCanSkip;
-      steps.push({
-        key:"wolf",
-        type:"pick",
-        actor:"wolf",
-        pickKey:"wolfTarget",
-        required: !canSkip, // 允許空刀→非必選
-        allowNone: canSkip,
-        publicText: canSkip
-          ? "狼人請睜眼。你們要刀誰？（可選擇空刀）"
-          : "狼人請睜眼。你們要刀誰？（點選座位）",
-        godText: canSkip
-          ? "（上帝）狼人回合：刀誰？（可選擇空刀）"
-          : "（上帝）狼人回合：刀誰？（必選）",
-        help: "若空刀：wolfTarget = null。"
-      });
-    }
+    // Wolves (allow skip)
+    steps.push({
+      key:"wolf",
+      type:"pick_or_none",
+      roleId:"werewolf",
+      pickTarget:"wolfTarget",
+      allowNone: !!rules.wolfCanSkipKill,
+      required:false,
+      publicScript:"🐺 狼人請睜眼。",
+      godScript:`🐺 狼人請睜眼。\n刀誰？（點座位）${rules.wolfCanSkipKill ? "\n也可選擇『空刀』。" : ""}`
+    });
 
-    // 3. 預言家
-    if(hasRole(players,"seer")){
+    // Seer
+    if(hasRole(players, "seer")){
       steps.push({
         key:"seer",
-        type:"seer",
-        actor:"seer",
-        pickKey:"seerCheckTarget",
-        required:true,
-        publicText:"預言家請睜眼。你要查驗誰？（點選座位）",
-        godText:"（上帝）預言家回合：請選擇查驗目標（點選座位），系統會顯示結果（好人/狼人）。",
-        help:"查驗結果只在上帝視角可見。"
+        type:"pick",
+        roleId:"seer",
+        pickTarget:"seerCheckTarget",
+        required:false,
+        publicScript:"🔮 預言家請睜眼。",
+        godScript:"🔮 預言家請睜眼。\n你要查驗誰？（點選座位）",
+        afterScript: () => buildSeerAfterScript(night)
       });
     }
 
-    // 4. 女巫（彈窗操作）
-    if(hasRole(players,"witch")){
+    // Witch (panel)
+    if(hasRole(players, "witch")){
       steps.push({
         key:"witch",
-        type:"witch",
-        actor:"witch",
-        required:false,
-        publicText:"女巫請睜眼。（請上帝操作女巫彈窗）",
-        godText:"（上帝）女巫回合：請開啟女巫彈窗（先告知刀口→再選救/不救→再選毒/不毒）。",
-        help:"如果解藥已用過：不顯示刀口，只能選毒/不毒。"
+        type:"panel",
+        roleId:"witch",
+        publicScript:"🧪 女巫請睜眼。",
+        godScript:"🧪 女巫請睜眼。\n（上帝）下一步會開啟女巫操作面板。"
       });
     }
 
-    // 5. 天亮前（結算）
     steps.push({
       key:"resolve",
       type:"resolve",
-      publicText:"天亮請睜眼。",
-      godText:"（上帝）天亮結算：按下一步會進行結算並自動生成公告。"
+      publicScript:"☀️ 天亮請睜眼。",
+      godScript:"☀️ 天亮請睜眼。\n（上帝）下一步：自動結算並生成公告。"
     });
 
     return steps;
   }
 
-  // export
-  window.WW_NIGHT = {
+  // B1: 在 basic 上加骨架（騎士/黑狼王/白狼王）
+  // 這些角色很多是白天技能或死亡技能；夜晚先做「提醒步驟」避免忘記
+  function stepsB1({players, night, rules}){
+    const steps = stepsBasic({players, night, rules});
+
+    // 在 resolve 前插入提醒（不改結算）
+    const idxResolve = steps.findIndex(s=>s.type==="resolve");
+    const insertAt = idxResolve>=0 ? idxResolve : steps.length;
+
+    // Knight（通常白天技能，但很多桌會夜晚提醒）
+    if(hasRole(players, "knight")){
+      steps.splice(insertAt, 0, {
+        key:"knight_hint",
+        type:"info",
+        roleId:"knight",
+        publicScript:"⚔️ （提示）騎士在白天可發動技能（依你們桌規）。",
+        godScript:"⚔️ （上帝提示）騎士白天技能：請記得在白天流程提供騎士操作入口（我們後續會做）。"
+      });
+    }
+
+    // WhiteWolfKing / BlackWolfKing mostly death skills
+    if(hasRole(players, "whiteWolfKing")){
+      steps.splice(insertAt, 0, {
+        key:"wwk_hint",
+        type:"info",
+        roleId:"whiteWolfKing",
+        publicScript:"🐺⚪ （提示）白狼王存在。",
+        godScript:"🐺⚪（上帝提示）白狼王技能多為白天/特定時機發動，後續會接入。"
+      });
+    }
+
+    if(hasRole(players, "blackWolfKing")){
+      steps.splice(insertAt, 0, {
+        key:"bwk_hint",
+        type:"info",
+        roleId:"blackWolfKing",
+        publicScript:"🐺👑 （提示）黑狼王存在。",
+        godScript:"🐺👑（上帝提示）黑狼王死亡技能：後續會由 death-skill queue 處理；且『被毒不能用技能』已在 rulesCore.canTriggerDeathSkill。"
+      });
+    }
+
+    return steps;
+  }
+
+  function buildNightSteps(players, night, rules, boardId){
+    const ctx = {players, night, rules: rules||{}};
+    if(boardId === "b1") return stepsB1(ctx);
+    return stepsBasic(ctx);
+  }
+
+  window.WW_DATA.nightSteps = {
     buildNightSteps
   };
-
 })();
