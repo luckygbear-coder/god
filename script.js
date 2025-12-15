@@ -1,22 +1,28 @@
-// script.js：只放「啟動級」東西（SW + iOS 防雙點）
-// app.js 只處理遊戲邏輯與 UI
+// script.js
+(() => {
+  // ✅ iOS 防長按選字/選單/放大（配合 CSS touch-action）
+  try {
+    document.documentElement.style.webkitUserSelect = "none";
+    document.documentElement.style.userSelect = "none";
+    document.documentElement.style.webkitTouchCallout = "none";
+  } catch(e){}
 
-// PWA service worker（有 sw.js 就會註冊）
-if ("serviceWorker" in navigator) {
-  window.addEventListener("load", () => {
-    navigator.serviceWorker.register("./sw.js").catch(()=>{});
-  });
-}
+  document.addEventListener("contextmenu", (e)=>e.preventDefault(), {passive:false});
+  document.addEventListener("selectstart", (e)=>e.preventDefault(), {passive:false});
+  document.addEventListener("gesturestart", (e)=>e.preventDefault(), {passive:false});
 
-// iOS Safari：再補一層「雙擊不放大」
-let lastTouchEnd = 0;
-document.addEventListener("touchend", (e) => {
-  const now = Date.now();
-  if (now - lastTouchEnd <= 300) e.preventDefault();
-  lastTouchEnd = now;
-}, { passive: false });
+  // ✅ 防雙擊放大（Safari 常見）
+  let lastTouchEnd = 0;
+  document.addEventListener("touchend", (e) => {
+    const now = Date.now();
+    if (now - lastTouchEnd <= 300) e.preventDefault();
+    lastTouchEnd = now;
+  }, { passive:false });
 
-// desktop 雙擊也不做縮放（避免意外）
-document.addEventListener("dblclick", (e) => {
-  e.preventDefault();
-}, { passive: false });
+  // ✅ PWA Service Worker
+  if ("serviceWorker" in navigator) {
+    window.addEventListener("load", () => {
+      navigator.serviceWorker.register("./sw.js").catch(()=>{});
+    });
+  }
+})();
