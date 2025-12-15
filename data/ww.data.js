@@ -1,240 +1,113 @@
 /* =========================================================
-   狼人殺｜資料總匯（唯一入口 v2）
-   data/ww.data.js
+   狼人殺｜統一資料入口（Data Hub）
+   檔案：data/ww.data.js
 
-   原則：
-   - 所有資料只從 WW_DATA 讀
-   - UI / flow / app 不可硬編角色或規則
-   - 先齊「資料正確性」，再優化流程
+   依賴載入順序（建議在 index.html 依序 script 引入）：
+   1) data/roles/roles.base.js
+   2) data/roles/roles.b1.js
+   3) data/boards/boards.config.js
+   4) data/rules/rules.basic.js
+   5) data/rules/rules.b1.js
+   6) data/night/night.steps.basic.js
+   7) data/night/night.steps.b1.js
+   8) engine/*.js (night/day/win)
+   9) data/ww.data.js   ← 最後載入（本檔）
 ========================================================= */
 
 (function () {
 
-  /* =========================================================
-     1️⃣ 角色資料（先齊全，不管流程）
-     team: villager | wolf | third
-     night: 是否有夜晚行動（true / false）
-  ========================================================= */
+  function mergeRoles(...maps) {
+    const out = {};
+    maps.forEach(m => {
+      if (!m) return;
+      Object.keys(m).forEach(k => out[k] = m[k]);
+    });
+    return out;
+  }
 
-  const roles = {
+  // Roles
+  const rolesBase = window.WW_ROLES_BASE || null;
+  const rolesB1 = window.WW_ROLES_B1 || null;
+  const rolesAll = mergeRoles(rolesBase, rolesB1);
 
-    /* ---------- 基本角色 ---------- */
-    villager: {
-      id: "villager",
-      name: "村民",
-      team: "villager",
-      icon: "🧑‍🌾",
-      night: false
-    },
+  // Boards
+  const boards = window.WW_BOARDS || null;
 
-    werewolf: {
-      id: "werewolf",
-      name: "狼人",
-      team: "wolf",
-      icon: "🐺",
-      night: true
-    },
+  // Rules
+  const rulesBasic = window.WW_DATA?.rulesBasic || null;
+  const rulesB1 = window.WW_DATA?.rulesB1 || null;
 
-    seer: {
-      id: "seer",
-      name: "預言家",
-      team: "villager",
-      icon: "🔮",
-      night: true
-    },
+  // Night steps
+  const nightStepsBasic = window.WW_NIGHT_STEPS_BASIC || null;
+  const nightStepsB1 = window.WW_NIGHT_STEPS_B1 || null;
 
-    witch: {
-      id: "witch",
-      name: "女巫",
-      team: "villager",
-      icon: "🧪",
-      night: true,
-      hasSave: true,
-      hasPoison: true
-    },
+  // Engines
+  const nightEngine = window.WW_NIGHT_ENGINE || null;
+  const dayEngine = window.WW_DAY_ENGINE || null;
+  const winEngine = window.WW_WIN_ENGINE || null;
 
-    hunter: {
-      id: "hunter",
-      name: "獵人",
-      team: "villager",
-      icon: "🔫",
-      night: false,
-      deathSkill: true
-    },
+  // --- 健檢 ---
+  const missing = [];
+  if (!rolesBase) missing.push("WW_ROLES_BASE (data/roles/roles.base.js)");
+  if (!rolesB1) missing.push("WW_ROLES_B1 (data/roles/roles.b1.js)");
+  if (!boards) missing.push("WW_BOARDS (data/boards/boards.config.js)");
+  if (!rulesBasic) missing.push("WW_DATA.rulesBasic (data/rules/rules.basic.js)");
+  if (!rulesB1) missing.push("WW_DATA.rulesB1 (data/rules/rules.b1.js)");
+  if (!nightStepsBasic) missing.push("WW_NIGHT_STEPS_BASIC (data/night/night.steps.basic.js)");
+  if (!nightStepsB1) missing.push("WW_NIGHT_STEPS_B1 (data/night/night.steps.b1.js)");
+  if (!nightEngine) missing.push("WW_NIGHT_ENGINE (engine/night.engine.js)");
+  if (!dayEngine) missing.push("WW_DAY_ENGINE (engine/day.engine.js)");
+  if (!winEngine) missing.push("WW_WIN_ENGINE (engine/win.engine.js)");
 
-    guard: {
-      id: "guard",
-      name: "守衛",
-      team: "villager",
-      icon: "🛡",
-      night: true
-    },
+  if (missing.length) {
+    console.warn("⚠️ WW_DATA 依賴缺少：\n" + missing.map(x => " - " + x).join("\n"));
+  }
 
-    knight: {
-      id: "knight",
-      name: "騎士",
-      team: "villager",
-      icon: "⚔️",
-      night: false
-    },
+  // 統一掛上 WW_DATA
+  window.WW_DATA = window.WW_DATA || {};
 
-    /* ---------- 狼人陣營 ---------- */
-    blackWolfKing: {
-      id: "blackWolfKing",
-      name: "黑狼王",
-      team: "wolf",
-      icon: "🐺👑",
-      night: false,
-      deathSkill: true
-    },
+  window.WW_DATA.rolesBase = rolesBase || {};
+  window.WW_DATA.rolesB1 = rolesB1 || {};
+  window.WW_DATA.roles = rolesAll || {};
 
-    whiteWolfKing: {
-      id: "whiteWolfKing",
-      name: "白狼王",
-      team: "wolf",
-      icon: "🐺⚡",
-      night: false,
-      deathSkill: true
-    },
+  window.WW_DATA.boards = boards || {};
 
-    /* ---------- 第三方（先佔位） ---------- */
-    cupid: {
-      id: "cupid",
-      name: "邱比特",
-      team: "third",
-      icon: "💘",
-      night: true
-    },
-
-    idiot: {
-      id: "idiot",
-      name: "白痴",
-      team: "villager",
-      icon: "🤪",
-      night: false
-    },
-
-    dreamer: {
-      id: "dreamer",
-      name: "攝夢人",
-      team: "villager",
-      icon: "🌙",
-      night: true
-    },
-
-    magician: {
-      id: "magician",
-      name: "魔術師",
-      team: "villager",
-      icon: "🎩",
-      night: true
-    },
-
-    lucky: {
-      id: "lucky",
-      name: "幸運兒",
-      team: "villager",
-      icon: "🍀",
-      night: false
-    },
-
-    demonHunter: {
-      id: "demonHunter",
-      name: "獵魔人",
-      team: "villager",
-      icon: "🗡",
-      night: true
-    },
-
-    ghostKnight: {
-      id: "ghostKnight",
-      name: "惡靈騎士",
-      team: "third",
-      icon: "💀⚔️",
-      night: true
-    },
-
-    gargoyle: {
-      id: "gargoyle",
-      name: "石像鬼",
-      team: "wolf",
-      icon: "🗿",
-      night: true
-    },
-
-    secretLover: {
-      id: "secretLover",
-      name: "暗戀者",
-      team: "third",
-      icon: "💔",
-      night: false
-    }
+  window.WW_DATA.rules = {
+    basic: rulesBasic,
+    b1: rulesB1
   };
 
-  /* =========================================================
-     2️⃣ 板子（先做「正確配置」）
-     - basic：預女獵白
-     - special_b1：進階狼王板
-     人數：6–12（你指定）
-  ========================================================= */
-
-  const boards = {
-
-    basic: {
-      id: "basic",
-      name: "基本板子（預女獵白）",
-      min: 6,
-      max: 12,
-      presets: {
-        6:  { werewolf:2, villager:2, seer:1, witch:1 },
-        7:  { werewolf:2, villager:3, seer:1, witch:1 },
-        8:  { werewolf:2, villager:3, seer:1, witch:1, hunter:1 },
-        9:  { werewolf:3, villager:3, seer:1, witch:1, hunter:1 },
-        10: { werewolf:3, villager:4, seer:1, witch:1, hunter:1 },
-        11: { werewolf:3, villager:4, seer:1, witch:1, hunter:1, guard:1 },
-        12: { werewolf:4, villager:4, seer:1, witch:1, hunter:1, guard:1 }
-      }
-    },
-
-    special_b1: {
-      id: "special_b1",
-      name: "特殊板子 B1（狼王）",
-      min: 6,
-      max: 12,
-      presets: {
-        6:  { werewolf:1, blackWolfKing:1, seer:1, witch:1, villager:2 },
-        7:  { werewolf:1, blackWolfKing:1, seer:1, witch:1, villager:3 },
-        8:  { werewolf:2, blackWolfKing:1, seer:1, witch:1, villager:3 },
-        9:  { werewolf:2, blackWolfKing:1, seer:1, witch:1, hunter:1, villager:3 },
-        10: { werewolf:2, blackWolfKing:1, whiteWolfKing:1, seer:1, witch:1, hunter:1, villager:3 },
-        11: { werewolf:2, blackWolfKing:1, whiteWolfKing:1, seer:1, witch:1, hunter:1, guard:1, villager:3 },
-        12: { werewolf:3, blackWolfKing:1, whiteWolfKing:1, seer:1, witch:1, hunter:1, guard:1, villager:3 }
-      }
-    }
+  window.WW_DATA.nightSteps = {
+    basic: nightStepsBasic,
+    b1: nightStepsB1
   };
 
-  /* =========================================================
-     3️⃣ 預設規則（你指定的全部）
-  ========================================================= */
-
-  const defaultRules = {
-    noConsecutiveGuard: true,          // 不能連守
-    wolfCanSkip: true,                // 狼人可以空刀
-    witchCannotSelfSave: true,         // 女巫不能自救
-    hunterPoisonNoShoot: true,         // 獵人被毒不能開槍
-    blackWolfKingPoisonNoSkill: true,  // 黑狼王被毒不能用技能
-    saveHitsGuardMakesDeath: true      // 救同守則奶穿
+  window.WW_DATA.engines = {
+    night: nightEngine,
+    day: dayEngine,
+    win: winEngine
   };
 
-  /* =========================================================
-     4️⃣ 匯出
-  ========================================================= */
+  // 方便 UI 快速取用：依 boardType 取得 rules/steps
+  window.WW_DATA.getBoardBundle = function (boardType) {
+    const b = window.WW_DATA.boards?.[boardType];
+    if (!b) return null;
 
-  window.WW_DATA = {
-    version: "2.0.0",
-    roles,
-    boards,
-    defaultRules
+    const rulesKey = b.rulesKey; // rulesBasic / rulesB1
+    const stepsKey = b.nightStepsKey; // WW_NIGHT_STEPS_BASIC / B1
+
+    const rules = window.WW_DATA[rulesKey] || window.WW_DATA.rules?.[boardType] || null;
+    const steps = (stepsKey === "WW_NIGHT_STEPS_BASIC")
+      ? window.WW_DATA.nightSteps?.basic
+      : window.WW_DATA.nightSteps?.b1;
+
+    return { board: b, rules, steps };
   };
+
+  console.log("✅ WW_DATA ready:", {
+    roles: Object.keys(window.WW_DATA.roles || {}).length,
+    boards: Object.keys(window.WW_DATA.boards || {}).length,
+    engines: Object.keys(window.WW_DATA.engines || {}).length
+  });
 
 })();
