@@ -1,59 +1,110 @@
 /* =========================================================
-   狼人殺｜板子配置（基本板子）
-   檔案：/data/boards/board.basic.js
+   狼人殺｜上帝輔助 PWA
+   檔案：/data/boards/boards.basic.js
 
-   - 只放「人數 → 建議配置」
-   - 不放流程與結算邏輯
-   - 之後想換你的常用板子，只改這裡
-   - 全域掛載：window.WW_DATA.boardsBasic
+   基本板子（6~12 人）
+   你確認的規則：
+   - 1A 狼人數：6~8=2狼；9~10=3狼；11~12=4狼
+
+   目標：
+   - 預女獵白（seer/witch/hunter/idiot）作為核心
+   - 10+ 可加入守衛 guard
+   - 11+ 可加入騎士 knight
+   - 黑狼王 / 白狼王先放進 pool（可手動加進配置）
 ========================================================= */
 
-(() => {
-  const root = (window.WW_DATA = window.WW_DATA || {});
+(function () {
 
-  // helper：快速產生配置
-  const cfg = ({ wolf, villager, seer=1, witch=1, hunter=1, guard=0 }) => ({
-    werewolf: wolf,
-    villager,
-    seer,
-    witch,
-    hunter,
-    guard
-  });
+  // 允許出現在「基本板子」的角色池（給 UI 調整角色用）
+  const rolePool = [
+    "werewolf",
+    "villager",
+    "seer",
+    "witch",
+    "hunter",
+    "idiot",
+    "guard",
+    "knight",
+    "blackWolfKing",
+    "whiteWolfKing"
+  ];
 
-  // 你可依自己習慣調整每個人數配置
-  root.boardsBasic = {
-    id: "basic",
-    name: "基本板子",
-    playerMin: 6,
-    playerMax: 16,
+  // 依你選的 1A：回傳狼人數
+  function wolvesByCount(n){
+    if(n >= 11) return 4;
+    if(n >= 9) return 3;
+    return 2; // 6~8
+  }
 
-    // 人數 -> 配置
-    presets: {
-      6:  cfg({ wolf:1, villager:2, seer:1, witch:1, hunter:1, guard:0 }),
-      7:  cfg({ wolf:2, villager:2, seer:1, witch:1, hunter:1, guard:0 }),
-      8:  cfg({ wolf:2, villager:3, seer:1, witch:1, hunter:1, guard:0 }),
-      9:  cfg({ wolf:2, villager:4, seer:1, witch:1, hunter:1, guard:0 }),
-      10: cfg({ wolf:3, villager:4, seer:1, witch:1, hunter:1, guard:0 }),
-      11: cfg({ wolf:3, villager:4, seer:1, witch:1, hunter:1, guard:1 }),
-      12: cfg({ wolf:3, villager:5, seer:1, witch:1, hunter:1, guard:1 }),
-      13: cfg({ wolf:4, villager:5, seer:1, witch:1, hunter:1, guard:1 }),
-      14: cfg({ wolf:4, villager:6, seer:1, witch:1, hunter:1, guard:1 }),
-      15: cfg({ wolf:4, villager:7, seer:1, witch:1, hunter:1, guard:1 }),
-      16: cfg({ wolf:5, villager:7, seer:1, witch:1, hunter:1, guard:1 })
-    },
+  // 產生建議配置（你之後要改策略也很方便）
+  // 原則：核心固定 seer/witch/hunter/idiot；狼依 1A；高人數補 guard/knight；其餘村民
+  function suggestPreset(n){
+    const werewolf = wolvesByCount(n);
 
-    // 若玩家數不在 presets，給一個 fallback（避免報錯）
-    fallback(playerCount){
-      // 通用推估：>=9 用 2 狼、>=10 用 3 狼
-      const wolf = playerCount >= 13 ? 4 : (playerCount >= 10 ? 3 : 2);
-      const guard = playerCount >= 11 ? 1 : 0;
-      const fixed = 1 + 1 + 1 + guard; // 預/女/獵/守
-      const villager = Math.max(0, playerCount - wolf - fixed);
-      return cfg({ wolf, villager, seer:1, witch:1, hunter:1, guard });
-    }
+    // 核心
+    const seer = 1;
+    const witch = 1;
+    const hunter = 1;
+    const idiot = 1;
+
+    // 10 人以上補守衛，11+ 補騎士
+    const guard = (n >= 10) ? 1 : 0;
+    const knight = (n >= 11) ? 1 : 0;
+
+    const fixed = werewolf + seer + witch + hunter + idiot + guard + knight;
+    const villager = Math.max(0, n - fixed);
+
+    return {
+      werewolf,
+      seer,
+      witch,
+      hunter,
+      idiot,
+      guard,
+      knight,
+      villager,
+
+      // 這兩個先預設 0（避免你說的「配置錯誤」）
+      // 需要時你可在 UI 調整角色把其中一隻狼人升級成狼王類
+      blackWolfKing: 0,
+      whiteWolfKing: 0
+    };
+  }
+
+  // 明確列出 6~12（避免動態生成造成你覺得「不可靠」）
+  const presets = {
+    6:  suggestPreset(6),
+    7:  suggestPreset(7),
+    8:  suggestPreset(8),
+    9:  suggestPreset(9),
+    10: suggestPreset(10),
+    11: suggestPreset(11),
+    12: suggestPreset(12)
   };
 
-  // 方便 app.js 直接用
-  root.boards = Object.assign({}, root.boards || {}, { basic: root.boardsBasic });
+  // ✅ 基本板子定義
+  const BOARD_BASIC = {
+    id: "basic",
+    name: "基本板子",
+    minPlayers: 6,
+    maxPlayers: 12,
+
+    rolePool,
+
+    // 預設配置（依人數）
+    presets,
+
+    // 額外：給 UI 顯示提示（可選）
+    notes: [
+      "核心：預言家、女巫、獵人、白痴。",
+      "狼人數（1A）：6~8=2狼；9~10=3狼；11~12=4狼。",
+      "10+ 可加入守衛；11+ 可加入騎士。",
+      "黑狼王/白狼王先提供在角色池，預設不自動加入（避免配置錯誤）。"
+    ]
+  };
+
+  window.WW_DATA = window.WW_DATA || {};
+  window.WW_DATA.boards = window.WW_DATA.boards || {};
+  window.WW_DATA.boards.basic = BOARD_BASIC;
+
 })();
