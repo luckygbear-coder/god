@@ -1,101 +1,154 @@
 /* =========================================================
-   WW_DATA Boards — Special B1 (6–12 players)
-   目標：先讓「特殊板子」有正確預設配置 + 角色可選清單齊全
+   data/boards/boards.b1.js
+   特殊板子 B1（進階狼陣營）
+   6–12 人｜騎士 / 守衛 / 黑狼王 / 白狼王 + 基本神民
+
+   目標：
+   - 先把「角色資料/配置」做齊全且正確
+   - 先可玩：夜晚仍以狼/預/女/守為主
+   - 黑狼王/白狼王 的特殊技能，流程後續再接（不在此檔）
+
+   導出：
+     WW_DATA.boardsB1
+     WW_DATA.getB1Preset(playerCount)
 ========================================================= */
 
 (function(){
-  window.WW_DATA = window.WW_DATA || {};
-  const W = window.WW_DATA;
+  const W = window.WW_DATA || (window.WW_DATA = {});
 
-  W.boards = W.boards || {};
+  function clone(obj){ return JSON.parse(JSON.stringify(obj)); }
 
-  W.boards.b1 = {
-    id: "b1",
-    name: "特殊板子 B1",
-    playerRange: { min: 6, max: 12 },
+  function normalizeCount(n){
+    const v = Number(n) || 9;
+    if(v < 6) return 6;
+    if(v > 12) return 12;
+    return v;
+  }
 
-    // B1 也沿用你的預設規則開關
-    defaultRules: {
-      noConsecutiveGuard: true,
-      wolfCanSkipKill: true,
-      witchCannotSelfSave: true,
-      hunterPoisonNoShoot: true,
-      blackWolfKingPoisonNoSkill: true,
-      guardAndSavePierce: true
+  /* ---------------------------------------------------------
+     設計原則（B1）
+     - 仍保留：seer/witch/hunter（各 1）
+     - 加入：knight（騎士，白天技能，先當「可存在角色」）
+     - 守衛：8 人起加入（或玩家可手動調整）
+     - 狼陣營：
+        * 小局（6–8）：總狼 2，其中 1 個可替換為 blackWolfKing / whiteWolfKing（預設只放 1 個特殊狼）
+        * 9–12：總狼 3，其中 1–2 個可為特殊狼（預設 2 個特殊狼）
+     - 注意：配置只是身分數量；技能流程稍後接
+  --------------------------------------------------------- */
+  const PRESETS = {
+    // 6人：2狼(含1特狼)、预女猎、1民
+    6: {
+      blackWolfKing: 1,
+      werewolf: 1,
+
+      seer: 1,
+      witch: 1,
+      hunter: 1,
+
+      villager: 1
     },
 
-    /* ✅ B1 預設配置策略
-       - 先讓局可跑：預女獵白固定存在（你要求先齊全再優化流程）
-       - 狼人數量：依人數調整
-       - 8人以上開始加入擴充角色：guard / knight / 黑狼王 / 白狼王（擇一或多）
-       - 第三方角色先不預設強塞（因勝負與流程要特別處理，等 rules 完成再加）
-    */
-    presets: {
-      // 6人：1狼 + 預女獵 + 2民
-      6:  { werewolf:1, seer:1, witch:1, hunter:1, villager:2 },
+    // 7人：2狼(含1特狼)、预女猎、骑士、1民
+    7: {
+      blackWolfKing: 1,
+      werewolf: 1,
 
-      // 7人：2狼 + 預女獵 + 2民
-      7:  { werewolf:2, seer:1, witch:1, hunter:1, villager:2 },
+      seer: 1,
+      witch: 1,
+      hunter: 1,
+      knight: 1,
 
-      // 8人：2狼 + 預女獵 + 守衛 + 2民
-      8:  { werewolf:2, seer:1, witch:1, hunter:1, guard:1, villager:2 },
-
-      // 9人：2狼 + 預女獵 + 騎士 + 3民
-      9:  { werewolf:2, seer:1, witch:1, hunter:1, knight:1, villager:3 },
-
-      // 10人：3狼 + 預女獵 + 守衛 + 騎士 + 2民
-      10: { werewolf:3, seer:1, witch:1, hunter:1, guard:1, knight:1, villager:2 },
-
-      // 11人：3狼 + 預女獵 + 守衛 + 騎士 + 3民
-      11: { werewolf:3, seer:1, witch:1, hunter:1, guard:1, knight:1, villager:3 },
-
-      // 12人：3狼 + 預女獵 + 守衛 + 騎士 + 黑狼王 + 2民
-      // 注意：黑狼王本質是狼陣營角色，你可以把 werewolf 其中一隻改成黑狼王（後續 UI 會做替換）
-      12: { werewolf:2, blackWolfKing:1, seer:1, witch:1, hunter:1, guard:1, knight:1, villager:3 }
+      villager: 1
     },
 
-    // ✅ B1 可選角色（你點名的全部都列入）
-    optionalRoles: [
-      // 你要先做的擴充
-      "guard",
-      "knight",
-      "blackWolfKing",
-      "whiteWolfKing",
+    // 8人：2狼(含1特狼)、预女猎、骑士、守卫、1民
+    8: {
+      blackWolfKing: 1,
+      werewolf: 1,
 
-      // 你指定要補齊的 B1 角色
-      "idiot",              // 白痴
-      "dreamEater",         // 攝夢人
-      "magician",           // 魔術師
-      "blackMarketDealer",  // 黑市商人
-      "luckyOne",           // 幸運兒
-      "demonHunter",        // 獵魔人
-      "hellKnight",         // 惡靈騎士
-      "gargoyle",           // 石像鬼
-      "cupid",              // 邱比特
-      "secretCrush"         // 暗戀者
-    ],
+      seer: 1,
+      witch: 1,
+      hunter: 1,
+      knight: 1,
+      guard: 1,
 
-    // 工具：取預設配置（若沒有就 fallback）
-    getPreset(playerCount){
-      const p = this.presets[playerCount];
-      if(p) return JSON.parse(JSON.stringify(p));
-      // fallback：先用基本板策略，再補一個 guard 作為 B1 氣氛（若人數夠）
-      const wolves = playerCount >= 9 ? 2 : 1;
-      const fixed = 3; // seer+witch+hunter
-      let villager = Math.max(0, playerCount - wolves - fixed);
-      const cfg = { werewolf:wolves, seer:1, witch:1, hunter:1, villager };
-      if(playerCount >= 8){
-        cfg.guard = 1;
-        cfg.villager = Math.max(0, cfg.villager - 1);
-      }
-      return cfg;
+      villager: 1
     },
 
-    // 工具：檢查配置是否總數=人數
-    validateConfig(playerCount, config){
-      const total = Object.values(config||{}).reduce((a,b)=>a+(b||0),0);
-      return total === playerCount;
+    // 9人：3狼(含2特狼)、预女猎、骑士、守卫、1民
+    9: {
+      blackWolfKing: 1,
+      whiteWolfKing: 1,
+      werewolf: 1,
+
+      seer: 1,
+      witch: 1,
+      hunter: 1,
+      knight: 1,
+      guard: 1,
+
+      villager: 1
+    },
+
+    // 10人：3狼(含2特狼)、预女猎、骑士、守卫、2民
+    10: {
+      blackWolfKing: 1,
+      whiteWolfKing: 1,
+      werewolf: 1,
+
+      seer: 1,
+      witch: 1,
+      hunter: 1,
+      knight: 1,
+      guard: 1,
+
+      villager: 2
+    },
+
+    // 11人：3狼(含2特狼)、预女猎、骑士、守卫、3民
+    11: {
+      blackWolfKing: 1,
+      whiteWolfKing: 1,
+      werewolf: 1,
+
+      seer: 1,
+      witch: 1,
+      hunter: 1,
+      knight: 1,
+      guard: 1,
+
+      villager: 3
+    },
+
+    // 12人：3狼(含2特狼)、预女猎、骑士、守卫、4民
+    12: {
+      blackWolfKing: 1,
+      whiteWolfKing: 1,
+      werewolf: 1,
+
+      seer: 1,
+      witch: 1,
+      hunter: 1,
+      knight: 1,
+      guard: 1,
+
+      villager: 4
     }
   };
+
+  function getB1Preset(playerCount){
+    const n = normalizeCount(playerCount);
+    return clone(PRESETS[n] || PRESETS[9]);
+  }
+
+  W.boardsB1 = {
+    id: "b1",
+    name: "特殊板子 B1（騎士／黑狼王／白狼王）",
+    minPlayers: 6,
+    maxPlayers: 12,
+    presets: PRESETS
+  };
+
+  W.getB1Preset = getB1Preset;
 
 })();
