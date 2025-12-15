@@ -1,179 +1,259 @@
 /* =========================================================
-   狼人殺｜特殊板 B1 規則
+   狼人殺｜特殊板 B1 規則引擎
    檔案：data/rules/rules.b1.js
 
-   目標：
-   ✅ 夜晚結算（沿用 core：狼刀/守衛/女巫救毒/奶穿）
-   ✅ 強狼技能限制（被毒禁用）
-   ✅ 第三方勝負判定骨架（邱比特/暗戀者）
-   ✅ 產生公告（玩家/上帝）
+   支援：
+   - 黑狼王（死亡技能）
+   - 白狼王（白天自爆規格：由 day/app 處理觸發，這裡只留標記）
+   - 騎士（白天決鬥：由 day/app 觸發）
+   - 白痴（投票免死：由 day/app 觸發）
+   - 邱比特（首夜連線→戀人）
+   - 暗戀者（先資料，勝利條件後續補）
+   - 石像鬼（夜晚查驗：只給上帝）
+   - 其他角色先資料齊全，流程後續再加
+
+   規則開關（settings.rules）：
+   - noConsecutiveGuard: true
+   - wolfCanSkip: true
+   - witchCannotSelfSave: true
+   - hunterPoisonNoShoot: true
+   - blackWolfKingPoisonNoSkill: true
+   - guardAndSaveNoPeaceNight: false  // 你說的「奶穿」規則（可開）
 ========================================================= */
 
 (function () {
-  const CORE = window.WW_RULES_CORE;
-  const ROLES = window.WW_ROLES;
 
-  if (!CORE) {
-    console.error("❌ rules.core.js 未載入");
-    return;
+  function isAlive(players, seat) {
+    const p = players.find(x => x.seat === seat);
+    return p && p.alive;
+  }
+
+  function kill(players, seat, reason, meta) {
+    const p = players.find(x => x.seat === seat);
+    if (!p || !p.alive) return false;
+    p.alive = false;
+    p.deathReason = reason;
+    meta.killed = meta.killed || [];
+    meta.killed.push({ seat, reason });
+    return true;
+  }
+
+  function findByRole(players, roleId) {
+    return players.find(p => p.roleId === roleId && p.alive);
+  }
+
+  /* =========================
+     戀人連坐
+     meta.lovers = [a,b]
+  ========================= */
+  function applyLoversChain(players, deaths, meta) {
+    const lovers = meta.lovers;
+    if (!lovers || lovers.length !== 2) return deaths;
+
+    let changed = true;
+    const set = new Set(deaths);
+
+    while (changed) {
+      changed = false;
+      for (const d of Array.from(set)) {
+        if (d === lovers[0] && isAlive(players, lovers[1]) && !set.has(lovers[1])) {
+          set.add(lovers[1]); changed = true;
+        }
+        if (d === lovers[1] && isAlive(players, lovers[0]) && !set.has(lovers[0])) {
+          set.add(lovers[0]); changed = true;
+        }
+      }
+    }
+
+    return Array.from(set);
   }
 
   /* =========================
      夜晚結算（B1）
-     - 目前仍採用 core 的 common 結算（MVP）
-     - 後續 B1 角色特殊技能（如石像鬼查驗、白狼王炸）會在 engine/skills 加
   ========================= */
-  function resolveNight({ players, night, rules }) {
-    const resolved = CORE.resolveNightCommon({ players, night, rules });
+  function resolveNight({ players, night, settings, stateMeta }) {
+    const deaths = [];
+    const meta = {
+      ...((stateMeta || {}).nightMeta || {}),
+      killed: []
+    };
 
-    // 套用死亡
-    resolved.deaths.forEach(seat => {
-      const p = CORE.bySeat(players, seat);
-      if (p) p.alive = false;
-    });
+    const rules = settings || {};
 
-    return resolved;
-  }
+    const wolfTarget = night.wolfTarget || null;
+    const guardTarget = night.guardTarget || null;
 
-  /* =========================
-     公告（玩家）
-  ========================= */
-  function buildPublicAnnouncement({ nightNo, resolved }) {
-    const deaths = resolved.deaths;
-    if (!deaths.length) return `🌤️ 天亮了，昨晚是平安夜。`;
-    if (deaths.length === 1) return `🌅 天亮了，昨晚死亡的是：${deaths[0]} 號。`;
-    return `🌅 天亮了，昨晚死亡的是：${deaths.join("、")} 號。`;
-  }
+    const witchSave = !!night.witchSave;
+    const witchPoisonTarget = night.witchPoisonTarget || null;
 
-  /* =========================
-     公告（上帝）
-     - 額外列出：狼刀/守/救/毒/奶穿
-     - 若有查驗結果（由 engine 寫入 resolved.meta.checkResult）也可顯示
-  ========================= */
-  function buildHiddenAnnouncement({ resolved }) {
-    const m = resolved.meta || {};
-    const lines = [];
+    // 給 engine 記錄「守衛守誰」
+    meta.guardTargetRaw = guardTarget;
 
-    if (m.killedByWolf) lines.push(`🐺 狼刀：${m.killedByWolf} 號`);
-    if (m.blockedByGuard) lines.push(`🛡️ 守衛成功守到目標`);
-    if (m.savedByWitch) lines.push(`🧪 女巫使用解藥`);
-    if (m.milkPierce) lines.push(`⚠️ 奶穿：守 + 救 同時作用，仍然死亡`);
-    if (m.poisonDeaths?.length) lines.push(`☠️ 女巫毒：${m.poisonDeaths.join("、")} 號`);
-
-    // 查驗結果（可選）
-    if (m.checkTarget && m.checkResult) {
-      lines.push(`🔍 查驗：${m.checkTarget} 號 → ${m.checkResult}`);
+    /* ========= 石像鬼查驗（只記錄，不公開） ========= */
+    if (night.gargoyleTarget && isAlive(players, night.gargoyleTarget)) {
+      const t = players.find(p => p.seat === night.gargoyleTarget);
+      meta.gargoyleCheck = {
+        target: night.gargoyleTarget,
+        result: (t?.camp === "wolf") ? "wolf" : "not_wolf"
+      };
     }
 
-    if (!lines.length) lines.push("（本夜無隱藏事件）");
-    return lines.join("\n");
-  }
+    /* =========================
+       1) 狼刀判定
+    ========================= */
+    let wolfKilled = null;
 
-  /* =========================
-     收集死亡技能（B1）
-     - 獵人：被毒不能開槍（你指定）
-     - 黑狼王：被毒不能用技能（你指定）
-     - 白狼王：此處保留 deathSkill 入口（規則可後補）
-  ========================= */
-  function collectDeathSkills({ players, resolved, rules }) {
-    const skills = [];
+    if (wolfTarget && isAlive(players, wolfTarget)) {
+      const guardHit = guardTarget && guardTarget === wolfTarget;
+      const saveHit = witchSave;
 
-    resolved.deaths.forEach(seat => {
-      const p = CORE.bySeat(players, seat);
-      if (!p) return;
+      if (guardHit) meta.guardSuccess = true;
+      if (saveHit) meta.witchSave = true;
 
-      // 獵人
-      if (p.roleId === "hunter") {
-        const poisoned = CORE.isPoisonDeath(resolved, seat);
-        if (poisoned && rules?.hunterPoisonNoShoot) {
-          skills.push({ roleId: "hunter", seat, disabled: true, reason: "被毒，不能開槍" });
-        } else {
-          skills.push({ roleId: "hunter", seat, disabled: false });
-        }
+      // 你說的「救同守則奶穿沒有平安夜」
+      // 解釋：若同一晚又守又救，視為「奶穿」=> 仍會死（沒有平安夜）
+      if (rules.guardAndSaveNoPeaceNight && guardHit && saveHit) {
+        wolfKilled = wolfTarget;
+        meta.milkPierce = true;
+      } else if (guardHit) {
+        wolfKilled = null;
+      } else if (saveHit) {
+        wolfKilled = null;
+      } else {
+        wolfKilled = wolfTarget;
       }
-
-      // 黑狼王（死亡帶人）
-      if (p.roleId === "blackWolfKing") {
-        const poisoned = CORE.isPoisonDeath(resolved, seat);
-        if (poisoned && rules?.blackWolfKingPoisonNoSkill) {
-          skills.push({ roleId: "blackWolfKing", seat, disabled: true, reason: "被毒，不能使用技能" });
-        } else {
-          skills.push({ roleId: "blackWolfKing", seat, disabled: false });
-        }
-      }
-
-      // 白狼王（先預留：有些板子是主動技能，不一定是 deathSkill）
-      if (p.roleId === "whiteWolfKing") {
-        // TODO：若你的規則是「白狼王白天自爆帶人」，會在 day 技能處理
-        // 這裡先不自動觸發
-      }
-    });
-
-    return skills;
-  }
-
-  /* =========================
-     第三方：邱比特/暗戀者（先做勝負判定骨架）
-     - engine 後續會建立 loversLink: [seatA, seatB]
-     - 若未建立連結，第三方視為不存在（不影響勝負）
-  ========================= */
-  function checkThirdPartyWin(players, stateMeta) {
-    const link = stateMeta?.loversLink; // 期望格式：[a,b]
-    if (!Array.isArray(link) || link.length !== 2) return null;
-
-    const [a, b] = link;
-    const pa = CORE.bySeat(players, a);
-    const pb = CORE.bySeat(players, b);
-    if (!pa || !pb) return null;
-
-    const aliveA = pa.alive;
-    const aliveB = pb.alive;
-
-    // 情侶同生同死：若一方死，另一方也應被 engine 處理同步死亡
-    // 這裡只做勝負：兩人都活到最後 -> 第三方勝
-    const aliveCount = CORE.alive(players).length;
-    if (aliveA && aliveB && aliveCount === 2) {
-      return { winner: "third", reason: "暗戀者（情侶）存活到最後" };
     }
 
-    return null;
+    if (wolfKilled) deaths.push(wolfKilled);
+
+    /* =========================
+       2) 女巫毒
+    ========================= */
+    if (witchPoisonTarget && isAlive(players, witchPoisonTarget)) {
+      if (!deaths.includes(witchPoisonTarget)) {
+        deaths.push(witchPoisonTarget);
+      }
+      meta.poisoned = witchPoisonTarget;
+    }
+
+    /* =========================
+       3) 戀人連坐（若 meta.lovers 已存在）
+    ========================= */
+    const afterLovers = applyLoversChain(players, deaths, meta);
+    afterLovers.forEach(seat => {
+      kill(players, seat, "night", meta);
+    });
+
+    return {
+      deaths: afterLovers,
+      meta
+    };
   }
 
   /* =========================
-     勝負判定（B1）
-     - 先判第三方（若情侶勝利條件成立）
-     - 再判狼/好人
+     技能禁用：被毒
+  ========================= */
+  function canTriggerDeathSkill({ roleId, seat, resolved, settings }) {
+    const rules = settings || {};
+    if (resolved?.meta?.poisoned === seat) {
+      if (roleId === "hunter" && rules.hunterPoisonNoShoot) return false;
+      if (roleId === "blackWolfKing" && rules.blackWolfKingPoisonNoSkill) return false;
+    }
+    return true;
+  }
+
+  /* =========================
+     公告（public + hidden）
+  ========================= */
+  function buildAnnouncement({ nightNo, dayNo, players, night, resolved, settings }) {
+    let publicText = `🌅 天亮了（第 ${dayNo} 天）\n`;
+
+    if (!resolved.deaths.length) {
+      publicText += "昨晚是平安夜。";
+    } else {
+      publicText += `昨晚死亡的是：${resolved.deaths.join("、")} 號。`;
+    }
+
+    // hidden：上帝可見
+    const hiddenParts = [];
+    if (resolved?.meta?.gargoyleCheck) {
+      const g = resolved.meta.gargoyleCheck;
+      hiddenParts.push(`（上帝）石像鬼查驗：${g.target} 號 → ${g.result}`);
+    }
+    if (resolved?.meta?.milkPierce) {
+      hiddenParts.push("（上帝）奶穿：同守同救仍死亡（guardAndSaveNoPeaceNight）");
+    }
+    if (resolved?.meta?.poisoned) {
+      hiddenParts.push(`（上帝）被毒：${resolved.meta.poisoned} 號`);
+    }
+
+    return {
+      publicText,
+      hiddenText: hiddenParts.length ? hiddenParts.join("\n") : "（上帝）—"
+    };
+  }
+
+  function makeLogItem({ ts, nightNo, dayNo, publicText, hiddenText, actions, resolvedMeta }) {
+    return {
+      ts,
+      nightNo,
+      dayNo,
+      publicText,
+      hiddenText,
+      actions: actions || null,
+      resolvedMeta: resolvedMeta || null
+    };
+  }
+
+  /* =========================
+     勝負判定（含第三方）
+     stateMeta 需要帶：
+     - lovers: [a,b]   // 邱比特連線結果
   ========================= */
   function checkWin(players, stateMeta) {
-    // 1) 第三方先判（若成立直接結束）
-    const third = checkThirdPartyWin(players, stateMeta);
-    if (third) return third;
+    const alive = players.filter(p => p.alive);
 
-    const alivePlayers = CORE.alive(players);
+    const wolves = alive.filter(p => p.camp === "wolf");
+    const villagers = alive.filter(p => p.camp === "villager");
+    const third = alive.filter(p => p.camp === "third");
 
-    const wolves = alivePlayers.filter(p => (ROLES[p.roleId]?.camp === "wolf"));
-    const good = alivePlayers.filter(p => (ROLES[p.roleId]?.camp === "villager"));
+    // 1) 第三方：戀人優先勝利（常見桌規）
+    const lovers = stateMeta?.lovers;
+    if (lovers && lovers.length === 2) {
+      const aAlive = alive.some(p => p.seat === lovers[0]);
+      const bAlive = alive.some(p => p.seat === lovers[1]);
 
+      // 只剩兩名戀人存活 → 戀人勝
+      if (aAlive && bAlive && alive.length === 2) {
+        return {
+          ended: true,
+          winner: "third",
+          reason: `戀人 ${lovers[0]} 號與 ${lovers[1]} 號存活至最後`
+        };
+      }
+    }
+
+    // 2) 狼全滅 → 好人勝
     if (!wolves.length) {
-      return { winner: "villager", reason: "所有邪惡陣營已被放逐" };
+      return { ended: true, winner: "villager", reason: "所有邪惡陣營已出局" };
     }
 
-    // 你要：直到最後正義放逐所有邪惡，否則邪惡可能獲勝
-    if (wolves.length >= good.length) {
-      return { winner: "wolf", reason: "邪惡陣營人數已達或超過正義" };
+    // 3) 狼達到控制人數 → 狼勝（狼 >= 好人+第三方）
+    const nonWolves = alive.length - wolves.length;
+    if (wolves.length >= nonWolves) {
+      return { ended: true, winner: "wolf", reason: "邪惡陣營人數達到控制場面" };
     }
 
-    return null;
+    return { ended: false };
   }
 
-  /* =========================
-     對外掛載
-  ========================= */
-  window.WW_RULES_B1 = {
+  window.WW_DATA = window.WW_DATA || {};
+  window.WW_DATA.rulesB1 = {
     resolveNight,
-    buildPublicAnnouncement,
-    buildHiddenAnnouncement,
-    collectDeathSkills,
+    canTriggerDeathSkill,
+    buildAnnouncement,
+    makeLogItem,
     checkWin
   };
+
 })();
