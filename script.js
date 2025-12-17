@@ -8,7 +8,6 @@ window.WW_DB = (() => {
     hunter:{ id:"hunter", name:"獵人", icon:"🏹", team:"good" },
     guard:{ id:"guard", name:"守衛", icon:"🛡️", team:"good" },
     idiot:{ id:"idiot", name:"白痴（算神）", icon:"🤡", team:"good" },
-
     blackWolfKing:{ id:"blackWolfKing", name:"黑狼王", icon:"🐺🔫", team:"wolf" },
     whiteWolfKing:{ id:"whiteWolfKing", name:"白狼王", icon:"🐺💥", team:"wolf" },
     wolfKing:{ id:"wolfKing", name:"狼王", icon:"🐺👑", team:"wolf" }
@@ -23,7 +22,7 @@ window.WW_DB = (() => {
       pickPolicy:{ aliveOnly:true, allowNull:false, toggleToNull:false },
       scripts:{
         public:"守衛請睜眼，請選擇一名玩家守護，守護後請閉眼。",
-        god:"🛡️ 守衛守誰？（點座位）"
+        god:"🛡️ 守衛守誰？（點座位）\n- 若開啟『不能連守』，不可守同一人兩晚連續。"
       } },
 
     { id:"N2_WOLF", order:20, roleKey:"werewolf", alwaysAnnounce:true, type:"PICK", pickKey:"wolfTarget",
@@ -43,7 +42,7 @@ window.WW_DB = (() => {
     { id:"N4_WITCH", order:40, roleKey:"witch", alwaysAnnounce:true, type:"WITCH",
       scripts:{
         public:"女巫請睜眼。",
-        god:"🧪 女巫操作（不跳視窗）：\n- 點『刀口』=救（若解藥未用；不可自救會提示）\n- 點『其他人』=毒（若毒藥未用）\n- 直接下一步=不用"
+        god:"🧪 女巫操作（不跳視窗）：\n- 點『刀口』=救（若解藥未用；且不可自救會提示）\n- 點『其他人』=毒（若毒藥未用）\n- 直接下一步=不用"
       } },
 
     { id:"N9_RESOLVE", order:90, roleKey:"narrator", alwaysAnnounce:true, type:"RESOLVE",
