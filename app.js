@@ -1,84 +1,67 @@
 /* =========================================================
-   狼人殺｜上帝輔助 PWA（整合穩定版）
-   app.js（修正版：iOS 按鈕可點）
-   - 修正：不要對按鈕 touchstart preventDefault（會導致 iOS 點擊失效）
-   - 仍保留：禁雙擊放大、禁長按選單/選字
+   狼人殺｜上帝輔助 PWA（單機穩定可跑版）
+   - 修掉 iOS 點擊失效：不再用 touchstart preventDefault
+   - 抽身分：按住 0.3 秒顯示
+   - 抽完：可按進夜晚（有接 btnDealEnterNight）
+   - 夜晚：守衛死後不能守；女巫不跳窗；預言家查驗顯示在提示
+   - 白天：標記 / 投票；投票結算 → 公告；若放逐獵人 → 詢問是否開槍
+   - 勝負：屠邊（預設）/ 可切屠城（這版先固定屠邊，之後你要我再把開關加回）
+   - 遊戲結束：跳 end 畫面
 ========================================================= */
 (() => {
   const $ = (id) => document.getElementById(id);
   const warn = (...a) => console.warn("⚠️ app:", ...a);
 
-  /* ---------------------------
-     iOS：禁止選字/長按選單/雙擊放大（但不破壞 click）
-  --------------------------- */
-  try {
-    document.documentElement.style.webkitUserSelect = "none";
-    document.documentElement.style.userSelect = "none";
-    document.documentElement.style.webkitTouchCallout = "none";
-    // 讓按鈕更像 app：減少誤觸縮放
-    document.documentElement.style.touchAction = "manipulation";
-    if (document.body) {
-      document.body.style.webkitUserSelect = "none";
-      document.body.style.userSelect = "none";
-      document.body.style.touchAction = "manipulation";
-    }
-  } catch (e) {}
+  // iOS：阻止 pinch 手勢（不阻止點擊）
+  document.addEventListener("gesturestart", (e)=> e.preventDefault(), { passive:false });
 
-  // 禁右鍵/長按選單（不影響 click）
-  document.addEventListener("contextmenu", (e) => e.preventDefault(), { passive: false });
+  const STORAGE_KEY = "ww_save_official12_v1";
 
-  // 禁選字（不影響 click）
-  document.addEventListener("selectstart", (e) => e.preventDefault(), { passive: false });
-
-  // 禁 iOS 手勢縮放
-  document.addEventListener("gesturestart", (e) => e.preventDefault(), { passive: false });
-
-  // 阻止 double-tap zoom（只在極短間隔才 preventDefault）
-  let _lastTouchEnd = 0;
-  document.addEventListener(
-    "touchend",
-    (e) => {
-      const now = Date.now();
-      if (now - _lastTouchEnd <= 300) e.preventDefault();
-      _lastTouchEnd = now;
-    },
-    { passive: false }
-  );
-
-  /* ---------------------------
-     Storage
-  --------------------------- */
-  const STORAGE_KEY = "ww_save_v3_integrated";
   const State = {
-    phase: "setup",         // setup | deal | night | day
-    boardId: "basic",       // basic | b1
+    phase: "setup",          // setup | deal | night | day | end
     playerCount: 12,
-    rolesCount: null,
-    players: [],
+    optIdiot: false,         // false=守衛 true=白痴（二擇一）
+    players: [],             // {seat, roleId, name, icon, team, alive}
     dealIndex: 0,
+
+    godView: false,
 
     nightNo: 1,
     dayNo: 1,
-    godView: false,
 
-    nightState: {},
-    nightSteps: [],
+    // 夜晚選擇
     nightStepIndex: 0,
+    nightState: {
+      guardTarget: null,
+      wolfTarget: null,
+      seerCheck: null,
+    },
 
+    // 女巫永久與當夜
+    witch: {
+      saveUsed: false,
+      poisonUsed: false,
+      saveThisNight: false,
+      poisonTarget: null,
+    },
+
+    // 白天
+    dayMode: "mark",         // mark | vote
+    dayVoteTarget: null,
+
+    // 投票記錄（簡化：每次只結算一次）
+    voteHistory: [],
+
+    // 公告
     logs: [],
-    witch: { saveUsed:false, poisonUsed:false, save:false, poisonTarget:null },
 
-    dayMode: "mark",        // mark | vote
-    dayVote: { target:null },
+    // 獵人處理
+    hunterPending: null,     // {seat, reason:"exile"|"night"} 需要決定是否開槍
+    hunterShotTarget: null,
 
-    settings: {
-      noConsecutiveGuard: true,
-      wolfCanNoKill: true,
-      witchCannotSelfSave: true,
-      hunterPoisonNoShoot: true,
-      blackWolfKingPoisonNoSkill: true,
-      winMode: "side" // side(屠邊) | city(屠城)
-    }
+    // 遊戲結束
+    ended: false,
+    endText: "",
   };
 
   function save(){ try{ localStorage.setItem(STORAGE_KEY, JSON.stringify(State)); }catch(e){} }
@@ -92,9 +75,6 @@
   }
   function clearSave(){ try{ localStorage.removeItem(STORAGE_KEY); }catch(e){} }
 
-  /* ---------------------------
-     Screen
-  --------------------------- */
   function showScreen(name){
     document.querySelectorAll(".screen").forEach(s=>s.classList.remove("active"));
     $(`screen-${name}`)?.classList.add("active");
@@ -102,140 +82,18 @@
     save();
   }
 
-  /* =========================================================
-     Data Loader（同你原本）
-  ========================================================= */
-  const WW_FALLBACK = {
-    roles: {
-      villager:{ id:"villager", name:"村民", icon:"🙂", team:"villager" },
-      werewolf:{ id:"werewolf", name:"狼人", icon:"🐺", team:"wolf" },
-      seer:{ id:"seer", name:"預言家", icon:"🔮", team:"villager" },
-      witch:{ id:"witch", name:"女巫", icon:"🧪", team:"villager" },
-      hunter:{ id:"hunter", name:"獵人", icon:"🏹", team:"villager" },
-      guard:{ id:"guard", name:"守衛", icon:"🛡️", team:"villager" },
-      knight:{ id:"knight", name:"騎士", icon:"⚔️", team:"villager" },
-      blackWolfKing:{ id:"blackWolfKing", name:"黑狼王", icon:"🐺🔫", team:"wolf" },
-      whiteWolfKing:{ id:"whiteWolfKing", name:"白狼王", icon:"🐺🤍", team:"wolf" },
-      wolfKing:{ id:"wolfKing", name:"狼王", icon:"🐺👑", team:"wolf" },
-      idiot:{ id:"idiot", name:"白痴", icon:"🤪", team:"villager", isGod:true },
-    },
-    boards: {
-      basic:{ id:"basic", name:"官方｜基礎" },
-      b1:{ id:"b1", name:"官方｜特殊" },
-    }
+  // ===== Roles（官方 12：狼人4、預言家、女巫、獵人、守衛/白痴、平民4） =====
+  const ROLES = {
+    villager: { id:"villager", name:"村民", icon:"🙂", team:"good" },
+    werewolf: { id:"werewolf", name:"狼人", icon:"🐺", team:"wolf" },
+    seer:     { id:"seer",     name:"預言家", icon:"🔮", team:"good" },
+    witch:    { id:"witch",    name:"女巫", icon:"🧪", team:"good" },
+    hunter:   { id:"hunter",   name:"獵人", icon:"🏹", team:"good" },
+    guard:    { id:"guard",    name:"守衛", icon:"🛡️", team:"good" },
+    idiot:    { id:"idiot",    name:"白痴", icon:"🤪", team:"good" }, // 算神
   };
+  const getRole = (rid)=> ROLES[rid] || { id:rid, name:rid, icon:"❔", team:"good" };
 
-  function mergeMaps(...maps){
-    const out = {};
-    maps.forEach(m=>{
-      if(!m) return;
-      Object.keys(m).forEach(k=> out[k] = m[k]);
-    });
-    return out;
-  }
-
-  function ensureWWData(){
-    const W = window;
-
-    const rolesAll = mergeMaps(
-      W.WW_ROLES || null,
-      W.WW_ROLES_BASE || null,
-      W.WW_ROLES_B1 || null,
-      W.WW_DATA?.roles || null
-    );
-    const roles = Object.keys(rolesAll).length ? rolesAll : WW_FALLBACK.roles;
-
-    const boardsAll = mergeMaps(
-      W.WW_BOARDS || null,
-      W.WW_DATA?.boards || null,
-      W.BOARDS || null
-    );
-    const boards = Object.keys(boardsAll).length ? boardsAll : WW_FALLBACK.boards;
-
-    const rulesBasic =
-      W.WW_RULES_BASIC || W.WW_RULES?.basic || W.WW_DATA?.rules?.basic || W.RULES_BASIC || null;
-    const rulesB1 =
-      W.WW_RULES_B1 || W.WW_RULES?.b1 || W.WW_DATA?.rules?.b1 || W.RULES_B1 || null;
-
-    const nightBasic =
-      W.WW_NIGHT_STEPS_BASIC || W.WW_DATA?.nightSteps?.basic || W.NIGHT_STEPS_BASIC || null;
-    const nightB1 =
-      W.WW_NIGHT_STEPS_B1 || W.WW_DATA?.nightSteps?.b1 || W.NIGHT_STEPS_B1 || null;
-
-    const winEngine =
-      W.WW_WIN_ENGINE || W.WW_DATA?.engines?.win || W.WIN_ENGINE || null;
-
-    W.WW_DATA = W.WW_DATA || {};
-    W.WW_DATA.roles = roles;
-    W.WW_DATA.boards = boards;
-    W.WW_DATA.rules = { basic: rulesBasic, b1: rulesB1 };
-    W.WW_DATA.nightSteps = { basic: nightBasic, b1: nightB1 };
-    W.WW_DATA.engines = { win: winEngine };
-
-    W.WW_DATA.getRole = (rid)=> W.WW_DATA.roles?.[rid] || null;
-    W.WW_DATA.getBoardBundle = (bid)=>{
-      const board = W.WW_DATA.boards?.[bid] || { id: bid, name: bid };
-      const rules = bid === "b1" ? W.WW_DATA.rules.b1 : W.WW_DATA.rules.basic;
-      const nightSteps = bid === "b1" ? W.WW_DATA.nightSteps.b1 : W.WW_DATA.nightSteps.basic;
-      return { board, rules, nightSteps };
-    };
-
-    return W.WW_DATA;
-  }
-
-  async function loadScriptOnce(src){
-    return new Promise((resolve)=>{
-      const s = document.createElement("script");
-      s.src = src;
-      s.async = true;
-      s.onload = ()=> resolve(true);
-      s.onerror = ()=> resolve(false);
-      document.head.appendChild(s);
-    });
-  }
-
-  async function bootstrapData(){
-    const candidates = [
-      "./data/ww.data.js",
-      "./data/roles/roles.base.js",
-      "./data/roles/roles.b1.js",
-      "./data/roles/roles.all.js",
-      "./data/boards/boards.js",
-      "./data/rules/rules.basic.js",
-      "./data/rules/rules.b1.js",
-      "./data/flow/night.steps.basic.js",
-      "./data/flow/night.steps.b1.js",
-      "./engine/win.engine.js",
-    ];
-    for (const src of candidates) await loadScriptOnce(src);
-    ensureWWData();
-    if (!window.WW_DATA?.roles || !Object.keys(window.WW_DATA.roles).length) window.WW_DATA.roles = WW_FALLBACK.roles;
-    if (!window.WW_DATA?.boards || !Object.keys(window.WW_DATA.boards).length) window.WW_DATA.boards = WW_FALLBACK.boards;
-  }
-
-  function getWW(){ return window.WW_DATA || null; }
-  function getRole(roleId){
-    const r = getWW()?.roles?.[roleId];
-    return r || { id: roleId, name: roleId, icon:"❔", team:"villager" };
-  }
-
-  function getBoardBundle(boardId){
-    const WW = getWW();
-    if (WW?.getBoardBundle) {
-      try { return WW.getBoardBundle(boardId); } catch(e){}
-    }
-    const b = WW?.boards?.[boardId] || { id: boardId, name: boardId };
-    const rules = boardId === "b1" ? (WW?.rules?.b1) : (WW?.rules?.basic);
-    const nightSteps = boardId === "b1" ? (WW?.nightSteps?.b1) : (WW?.nightSteps?.basic);
-    return { board: b, rules, nightSteps };
-  }
-
-  /* ---------------------------
-     Utils
-  --------------------------- */
-  function rolesTotal(map){
-    return Object.values(map || {}).reduce((a,b)=> a + (Number(b)||0), 0);
-  }
   function shuffle(arr){
     for (let i = arr.length - 1; i > 0; i--) {
       const j = Math.floor(Math.random() * (i + 1));
@@ -244,209 +102,144 @@
     return arr;
   }
 
-  function showToast(msg){
-    const t = $("toast");
-    if(!t) return;
-    t.textContent = msg;
-    t.classList.add("show");
-    setTimeout(()=>t.classList.remove("show"), 1200);
-  }
+  function buildPlayers(){
+    const n = State.playerCount;
 
-  /* =========================================================
-     ✅ 這裡開始是你原本流程（我只修「按鈕點不到」相關）
-     下面我保留你既有 ID 綁定與渲染結構
-     （如果你 index.html id 跟我不同，你告訴我，我再對齊）
-  ========================================================= */
+    // 固定配置（先做官方 12）
+    // 狼 4
+    // 神：seer witch hunter + (guard or idiot)
+    // 民：剩下
+    const roles = [];
+    for(let i=0;i<4;i++) roles.push("werewolf");
+    roles.push("seer","witch","hunter", State.optIdiot ? "idiot" : "guard");
 
-  function syncSetupUI(){
-    if ($("playerCount")) $("playerCount").textContent = String(State.playerCount);
-    if ($("playerTotal")) $("playerTotal").textContent = String(State.playerCount);
+    while(roles.length < n) roles.push("villager");
+    shuffle(roles);
 
-    const total = rolesTotal(State.rolesCount);
-    if ($("roleTotal")) $("roleTotal").textContent = String(total);
-
-    const ok = total === State.playerCount;
-    $("warnRoleTotal")?.classList.toggle("hidden", ok);
-
-    const btnStart = $("btnStart");
-    if (btnStart) {
-      btnStart.disabled = !ok;
-      btnStart.textContent = ok ? "開始 → 抽身分" : "⚠️ 角色總數需等於玩家數";
-    }
-    save();
-  }
-
-  function suggestBasicConfigByCount(n){
-    // 12人標準：4狼 +（預言家/女巫/獵人/守衛或白痴擇一）+4民
-    // 你現在先跑「可測試流程」，先用守衛版本作預設
-    if (n === 12) return { werewolf:4, seer:1, witch:1, hunter:1, guard:1, villager:4 };
-    const wolves = n >= 10 ? 3 : 2;
-    const fixed = 3;
-    const villager = Math.max(0, n - wolves - fixed);
-    return { werewolf:wolves, villager, seer:1, witch:1, hunter:1 };
-  }
-
-  function getSuggestedRolesCount(boardId, n){
-    const bundle = getBoardBundle(boardId);
-    const preset = bundle?.board?.presets?.[n];
-    if (preset && typeof preset === "object") return JSON.parse(JSON.stringify(preset));
-    return suggestBasicConfigByCount(n);
-  }
-
-  function setBoard(boardId){
-    State.boardId = boardId;
-    $("boardBasic")?.classList.toggle("active", boardId === "basic");
-    $("boardSpecial")?.classList.toggle("active", boardId === "b1");
-    State.rolesCount = getSuggestedRolesCount(boardId, State.playerCount);
-    syncSetupUI();
-  }
-
-  function setPlayerCount(n){
-    const v = Math.max(6, Math.min(12, Number(n) || 12));
-    State.playerCount = v;
-    const range = $("rangeCount");
-    if (range) range.value = String(v);
-    State.rolesCount = getSuggestedRolesCount(State.boardId, v);
-    syncSetupUI();
-  }
-
-  function buildPlayersFromRolesCount(){
-    const rolesArr = [];
-    for (const [rid, cnt] of Object.entries(State.rolesCount || {})) {
-      for (let i = 0; i < (Number(cnt)||0); i++) rolesArr.push(rid);
-    }
-    shuffle(rolesArr);
-
-    State.players = rolesArr.map((rid, idx) => {
+    State.players = roles.map((rid, idx)=>{
       const r = getRole(rid);
-      return { seat: idx+1, roleId: rid, name: r.name||rid, icon: r.icon||"❔", team: r.team||"villager", alive: true };
+      return { seat: idx+1, roleId: rid, name: r.name, icon: r.icon, team: r.team, alive: true };
     });
 
     State.dealIndex = 0;
     State.nightNo = 1;
     State.dayNo = 1;
-    State.logs = [];
-    State.nightState = {};
-    State.nightSteps = [];
     State.nightStepIndex = 0;
-    State.witch = { saveUsed:false, poisonUsed:false, save:false, poisonTarget:null };
+    State.nightState = { guardTarget:null, wolfTarget:null, seerCheck:null };
+    State.witch = { saveUsed:false, poisonUsed:false, saveThisNight:false, poisonTarget:null };
     State.dayMode = "mark";
-    State.dayVote = { target:null };
+    State.dayVoteTarget = null;
+    State.voteHistory = [];
+    State.logs = [];
+    State.hunterPending = null;
+    State.hunterShotTarget = null;
+    State.ended = false;
+    State.endText = "";
     save();
   }
 
-  /* ---------------------------
-     Deal（略：你原本的可以保留）
-     這裡我只保留最必要：確認後進夜晚
-  --------------------------- */
-  let _dealHoldTimer = null;
+  // ===== Setup UI =====
+  function syncSetupUI(){
+    $("playerCount").textContent = String(State.playerCount);
+    $("rangeCount").value = String(State.playerCount);
+
+    $("optGuard")?.classList.toggle("active", !State.optIdiot);
+    $("optIdiot")?.classList.toggle("active", !!State.optIdiot);
+
+    // 這版固定配置，永遠 OK
+    $("warnRoleTotal")?.classList.add("hidden");
+    $("btnStart").disabled = false;
+  }
+
+  // ===== Deal =====
+  let holdTimer = null;
+  const HOLD_MS = 300; // ✅ 0.3 秒
+
+  function renderDealSeatGrid(){
+    const grid = $("dealSeatGrid");
+    if (!grid) return;
+    grid.innerHTML = "";
+    State.players.forEach((p, idx)=>{
+      const b = document.createElement("button");
+      b.type = "button";
+      b.className = "seat" + (idx===State.dealIndex ? " selected" : "");
+      b.textContent = String(p.seat);
+      b.addEventListener("click", ()=>{
+        State.dealIndex = idx;
+        save();
+        renderDeal();
+      });
+      grid.appendChild(b);
+    });
+  }
+
+  function showReveal(){
+    const p = State.players[State.dealIndex];
+    if (!p) return;
+    $("revealRole").textContent = `${p.icon} ${p.name}`;
+    $("modalReveal").classList.remove("hidden");
+  }
+  function hideReveal(){
+    $("modalReveal").classList.add("hidden");
+  }
 
   function renderDeal(){
     const p = State.players[State.dealIndex];
     if (!p) return;
 
-    if ($("dealText")) $("dealText").innerHTML = `請 <b>${p.seat} 號</b> 拿手機`;
+    $("dealText").innerHTML = `請 <b>${p.seat} 號</b> 拿手機`;
+    renderDealSeatGrid();
 
-    const grid = $("dealSeatGrid");
-    if (grid) {
-      grid.innerHTML = "";
-      State.players.forEach((pp, idx) => {
-        const b = document.createElement("button");
-        b.type = "button";
-        b.className = "seat" + (idx === State.dealIndex ? " selected" : "");
-        b.textContent = String(pp.seat);
-        b.addEventListener("click", () => {
-          State.dealIndex = idx;
-          save();
-          renderDeal();
-        });
-        grid.appendChild(b);
-      });
-    }
-
-    const btnHold = $("btnHoldReveal");
-    const showReveal = () => {
-      const cur = State.players[State.dealIndex];
-      if ($("revealRole")) $("revealRole").textContent = `${cur.icon} ${cur.name}`;
-      $("modalReveal")?.classList.remove("hidden");
-      navigator.vibrate?.(40);
+    const pad = $("btnHoldReveal");
+    // 用 pointer events：iOS 點擊不會壞
+    pad.onpointerdown = () => {
+      clearTimeout(holdTimer);
+      holdTimer = setTimeout(showReveal, HOLD_MS);
     };
-    const hideReveal = () => $("modalReveal")?.classList.add("hidden");
+    pad.onpointerup = () => { clearTimeout(holdTimer); hideReveal(); };
+    pad.onpointercancel = () => { clearTimeout(holdTimer); hideReveal(); };
+    pad.onpointerleave = () => { clearTimeout(holdTimer); hideReveal(); };
 
-    if (btnHold) {
-      btnHold.onpointerdown = (e) => {
-        e.preventDefault?.();
-        clearTimeout(_dealHoldTimer);
-        _dealHoldTimer = setTimeout(showReveal, 900);
-      };
-      const end = () => {
-        clearTimeout(_dealHoldTimer);
-        hideReveal();
-      };
-      btnHold.onpointerup = end;
-      btnHold.onpointercancel = end;
-      btnHold.onpointerleave = end;
-    }
-
-    $("btnDealNext") && ($("btnDealNext").onclick = () => {
-      State.dealIndex = Math.min(State.players.length - 1, State.dealIndex + 1);
-      save(); renderDeal();
-    });
-
-    $("btnDealAllDone") && ($("btnDealAllDone").onclick = () => $("modalDealConfirm")?.classList.remove("hidden"));
-    $("btnDealConfirmYes") && ($("btnDealConfirmYes").onclick = () => {
-      $("modalDealConfirm")?.classList.add("hidden");
-      startNight();
-    });
-    $("btnDealConfirmNo") && ($("btnDealConfirmNo").onclick = () => $("modalDealConfirm")?.classList.add("hidden"));
+    $("btnDealNext").onclick = ()=>{
+      State.dealIndex = Math.min(State.players.length-1, State.dealIndex+1);
+      save();
+      renderDeal();
+    };
   }
 
-  /* =========================================================
-     Night（最小可跑，且 ✅ 按鈕一定能按）
-  ========================================================= */
-  function hasRole(roleId){
-    return State.players.some(p => p.roleId === roleId);
+  // ===== Night Flow（固定流程：天黑 → 守衛 → 狼 → 預言家 → 女巫 → 天亮結算） =====
+  const NIGHT_STEPS = [
+    { key:"close", type:"info", script:"天黑請閉眼。" },
+    { key:"guard", type:"pick_guard", script:"守衛請睜眼，守一位玩家。" },
+    { key:"wolf",  type:"pick_wolf",  script:"狼人請睜眼，選擇刀口。" },
+    { key:"seer",  type:"pick_seer",  script:"預言家請睜眼，查驗一位玩家。" },
+    { key:"witch", type:"witch",      script:"女巫請睜眼（上帝操作）。" },
+    { key:"resolve", type:"resolve",  script:"天亮請睜眼（結算並公告）。" },
+  ];
+
+  function aliveSeatList(){
+    return State.players.filter(p=>p.alive).map(p=>p.seat);
   }
 
-  function buildNightSteps(){
-    return [
-      { key:"close", type:"info", publicScript:"天黑請閉眼。", godScript:"天黑請閉眼。" },
-      { key:"guard", type:"pick", pickKey:"guardTarget", required:true, publicScript:"守衛請睜眼，守一位玩家。", godScript:"守衛守誰？（點座位）", roleId:"guard" },
-      { key:"wolf", type:"pick", pickKey:"wolfTarget", required: !State.settings.wolfCanNoKill, allowNull: !!State.settings.wolfCanNoKill, publicScript:"狼人請睜眼，選擇目標。", godScript:"狼人刀誰？（可空刀）" },
-      { key:"seer", type:"seer", pickKey:"seerCheck", required:true, publicScript:"預言家請睜眼，查驗一位玩家。", godScript:"預言家查誰？（點座位）", roleId:"seer" },
-      { key:"witch", type:"witch", publicScript:"女巫請睜眼（上帝操作）。", godScript:"女巫：點刀口=救、點其他=毒、下一步=不使用", roleId:"witch" },
-      { key:"resolve", type:"resolve", publicScript:"天亮請睜眼。", godScript:"天亮：結算夜晚並公告。" },
-    ];
-  }
-
-  function resolveNightStepsForThisGame(){
-    State.nightSteps = buildNightSteps();
-    State.nightStepIndex = 0;
-    save();
-  }
-
-  function getCurrentNightStep(){
-    return State.nightSteps?.[State.nightStepIndex] || null;
-  }
-
-  function scriptForStep(step){
-    const s = State.godView ? (step.godScript || step.publicScript) : (step.publicScript || step.godScript);
-    return s || "（無台詞）";
-  }
-
-  function renderSeats(containerId, onPick, selectedSeat=null){
+  function renderSeatGrid(containerId, selectedSeat, onPick){
     const box = $(containerId);
-    if (!box) return;
+    if(!box) return;
     box.innerHTML = "";
-
-    State.players.forEach(p => {
+    State.players.forEach(p=>{
       const b = document.createElement("button");
       b.type = "button";
-      b.className = "seat" + (p.alive ? "" : " dead") + (selectedSeat === p.seat ? " selected" : "");
+      b.className = "seat" + (p.alive ? "" : " dead") + (selectedSeat===p.seat ? " selected" : "");
       b.textContent = String(p.seat);
+
+      // ✅ 上帝視角：顯示角色在號碼旁（你要的）
+      if (State.godView) {
+        const r = getRole(p.roleId);
+        b.textContent = `${p.seat}${r.icon}`;
+        b.title = `${p.seat}號 ${r.name}`;
+      }
+
       b.disabled = !p.alive;
-      // ✅ 這裡只用 click，不做 touchstart preventDefault
-      b.addEventListener("click", () => {
+      b.addEventListener("click", ()=>{
         if (!p.alive) return;
         onPick?.(p.seat);
       });
@@ -454,248 +247,651 @@
     });
   }
 
-  function renderNight(){
-    $("nightTag") && ($("nightTag").textContent = `第 ${State.nightNo} 夜`);
+  function isGuardAlive(){
+    return State.players.some(p=>p.alive && p.roleId==="guard");
+  }
+  function isSeerAlive(){
+    return State.players.some(p=>p.alive && p.roleId==="seer");
+  }
+  function isWitchAlive(){
+    return State.players.some(p=>p.alive && p.roleId==="witch");
+  }
 
-    if (!State.nightSteps || !State.nightSteps.length) resolveNightStepsForThisGame();
+  function currentNightStep(){
+    return NIGHT_STEPS[State.nightStepIndex] || null;
+  }
 
-    const step = getCurrentNightStep();
-    if (!step) return;
-
+  function nightTips(step){
     const tips = [];
-    if (step.type === "witch") {
-      const knifeSeat = State.nightState.wolfTarget || null;
 
-      // 女巫被刀：仍顯示刀口，但提示不可自救（若解藥已用就不顯示刀口）
-      const witchSeat = State.players.find(x=>x.roleId==="witch")?.seat || null;
-      const witchIsKnife = !!(knifeSeat && witchSeat && knifeSeat === witchSeat);
-
-      if (State.witch.saveUsed) {
-        tips.push("🧪 解藥：已用過（本局不再顯示刀口）");
-      } else {
-        if (knifeSeat) {
-          tips.push(`🧪 解藥：刀口 ${knifeSeat} 號（點他=救）${witchIsKnife ? "｜⚠️ 女巫被刀：不可自救" : ""}`);
-        } else {
-          tips.push("🧪 解藥：狼人尚未選刀");
-        }
-      }
-      tips.push(`☠️ 毒藥：${State.witch.poisonUsed ? "已用過（毒藥沒了）" : "可用（點其他人=毒）"}`);
-      if (State.witch.poisonTarget) tips.push(`已選毒：${State.witch.poisonTarget} 號`);
-      if (State.witch.save && knifeSeat) tips.push(`已選救：${knifeSeat} 號`);
+    // 守衛死亡：仍唸流程，但不可操作
+    if (step.type==="pick_guard" && !isGuardAlive()) {
+      tips.push("🛡️ 守衛已死亡，本回合不可操作（仍照唸流程）。");
     }
 
-    if (step.type === "seer" && State.nightState.seerCheck) {
+    // 預言家結果顯示（上帝方便口述）
+    if (step.type==="pick_seer" && State.nightState.seerCheck) {
       const seat = State.nightState.seerCheck;
       const p = State.players.find(x=>x.seat===seat);
       if (p) {
-        const role = getRole(p.roleId);
-        tips.push(`🔮 查驗 ${seat} 號 → ${role.icon} ${role.name}（${role.team==="wolf"?"狼人陣營":"好人陣營"}）`);
+        const r = getRole(p.roleId);
+        tips.push(`🔮 查驗 ${seat} 號 → ${r.icon} ${r.name}（${r.team==="wolf"?"狼人陣營":"好人陣營"}）`);
       }
     }
 
-    const base = scriptForStep(step);
-    $("nightScript") && ($("nightScript").textContent = tips.length ? (base + "\n" + tips.join("\n")) : base);
+    // 女巫提示（含你要求的「女巫被刀：顯示刀口但註明不可自救」）
+    if (step.type==="witch") {
+      const knife = State.nightState.wolfTarget || null;
+      const witchSeat = State.players.find(p=>p.roleId==="witch")?.seat ?? null;
+      const witchAlive = isWitchAlive();
 
-    const selected =
-      (step.type === "pick" || step.type === "seer") ? (State.nightState[step.pickKey] || null)
-      : (step.type === "witch" ? (State.witch.poisonTarget || (State.witch.save ? (State.nightState.wolfTarget||null) : null)) : null);
-
-    renderSeats("nightSeats", (seat) => {
-      const cur = getCurrentNightStep();
-      if (!cur) return;
-
-      if (cur.type === "pick" && cur.pickKey) {
-        if (cur.pickKey === "wolfTarget" && State.settings.wolfCanNoKill) {
-          State.nightState[cur.pickKey] = (State.nightState[cur.pickKey] === seat) ? null : seat;
-        } else {
-          State.nightState[cur.pickKey] = seat;
-        }
-        save(); renderNight();
-        return;
+      if (!witchAlive) {
+        tips.push("🧪 女巫已死亡（仍照唸流程）。");
       }
 
-      if (cur.type === "seer" && cur.pickKey) {
-        State.nightState[cur.pickKey] = seat;
-        save(); renderNight();
-        return;
-      }
-
-      if (cur.type === "witch") {
-        const knifeSeat = State.nightState.wolfTarget || null;
-        const witchSeat = State.players.find(x=>x.roleId==="witch")?.seat || null;
-        const witchIsKnife = !!(knifeSeat && witchSeat && knifeSeat === witchSeat);
-
-        // 點刀口=救（解藥未用，且女巫被刀不可自救）
-        if (!State.witch.saveUsed && knifeSeat && seat === knifeSeat) {
-          if (witchIsKnife) {
-            showToast("⚠️ 女巫不可自救");
-            navigator.vibrate?.(30);
-            return;
+      // 解藥顯示規則（照你最後確認）
+      if (State.witch.saveUsed) {
+        tips.push("🧪 解藥：已用過（本局不再顯示刀口）");
+      } else {
+        if (knife) {
+          if (witchSeat && knife===witchSeat) {
+            tips.push(`🧪 刀口：${knife} 號（女巫被刀）`);
+            tips.push("⚠️ 本局設定：女巫不可自救（不能點刀口救自己）");
+          } else {
+            tips.push(`🧪 刀口：${knife} 號（點刀口＝救）`);
           }
-          State.witch.save = true;
-          save(); renderNight();
-          return;
+        } else {
+          tips.push("🧪 刀口：狼人尚未選擇");
         }
-
-        // 點其他=毒（毒藥未用）
-        if (!State.witch.poisonUsed) {
-          State.witch.poisonTarget = seat;
-          save(); renderNight();
-          return;
-        }
-
-        navigator.vibrate?.(30);
       }
-    }, selected);
+
+      tips.push(`☠️ 毒藥：${State.witch.poisonUsed ? "已用過（毒藥沒了）" : "可用（點其他人＝毒）"}`);
+      if (State.witch.poisonTarget) tips.push(`已選毒：${State.witch.poisonTarget} 號`);
+      if (State.witch.saveThisNight && knife) tips.push(`已選救：${knife} 號`);
+      tips.push("➡️ 直接按「下一步」＝本晚不使用技能");
+    }
+
+    return tips;
   }
 
-  function canGoNextNightStep(step){
-    if (!step) return false;
-    if ((step.type === "pick" || step.type === "seer") && step.required && step.pickKey) {
-      if (step.allowNull) return true;
-      return !!State.nightState[step.pickKey];
+  function renderNight(){
+    $("nightTag").textContent = `第 ${State.nightNo} 夜`;
+
+    const step = currentNightStep();
+    if (!step) return;
+
+    const lines = [];
+    lines.push(`第 ${State.nightNo} 夜｜${step.script}`);
+    const tips = nightTips(step);
+    if (tips.length) {
+      lines.push("");
+      lines.push(...tips);
     }
+    $("nightScript").textContent = lines.join("\n");
+
+    // 座位選擇區：根據 step 決定是否可選、選哪個 key
+    let selected = null;
+
+    if (step.type==="pick_guard") selected = State.nightState.guardTarget;
+    if (step.type==="pick_wolf") selected = State.nightState.wolfTarget;
+    if (step.type==="pick_seer") selected = State.nightState.seerCheck;
+    if (step.type==="witch") {
+      selected = State.witch.poisonTarget || (State.witch.saveThisNight ? State.nightState.wolfTarget : null);
+    }
+
+    renderSeatGrid("nightSeats", selected, (seat)=>{
+      // 不可操作：守衛死了
+      if (step.type==="pick_guard") {
+        if (!isGuardAlive()) return;
+        State.nightState.guardTarget = (State.nightState.guardTarget===seat) ? null : seat;
+        save(); renderNight(); return;
+      }
+
+      if (step.type==="pick_wolf") {
+        State.nightState.wolfTarget = (State.nightState.wolfTarget===seat) ? null : seat;
+        save(); renderNight(); return;
+      }
+
+      if (step.type==="pick_seer") {
+        if (!isSeerAlive()) return; // 預言家死了仍唸流程，但不可操作
+        State.nightState.seerCheck = seat;
+        save(); renderNight(); return;
+      }
+
+      if (step.type==="witch") {
+        // 女巫死了仍唸流程，但不可操作（你要的是唸，不是操作）
+        if (!isWitchAlive()) return;
+
+        const knife = State.nightState.wolfTarget || null;
+        const witchSeat = State.players.find(p=>p.roleId==="witch")?.seat ?? null;
+
+        // 點刀口＝救（解藥未用、且不是女巫自救）
+        if (!State.witch.saveUsed && knife && seat===knife) {
+          if (witchSeat && knife===witchSeat) {
+            // 不可自救
+            return;
+          }
+          State.witch.saveThisNight = true;
+          save(); renderNight(); return;
+        }
+
+        // 點其他＝毒（毒藥未用）
+        if (!State.witch.poisonUsed) {
+          State.witch.poisonTarget = seat;
+          save(); renderNight(); return;
+        }
+      }
+    });
+  }
+
+  function nightCanNext(){
+    const step = currentNightStep();
+    if (!step) return false;
+
+    if (step.type==="pick_wolf") {
+      // 狼刀必選（先做你測試用的最穩規則）
+      return !!State.nightState.wolfTarget;
+    }
+    if (step.type==="pick_seer") {
+      // 預言家活著才需要必選；死了就可直接下一步（仍唸流程）
+      if (!isSeerAlive()) return true;
+      return !!State.nightState.seerCheck;
+    }
+    // 守衛可空（或死了不可選但可過）
     return true;
   }
 
   function nightPrev(){
-    State.nightStepIndex = Math.max(0, State.nightStepIndex - 1);
+    State.nightStepIndex = Math.max(0, State.nightStepIndex-1);
     save(); renderNight();
   }
-
   function nightNext(){
-    const step = getCurrentNightStep();
+    if (!nightCanNext()) return;
+
+    const step = currentNightStep();
     if (!step) return;
 
-    if (!canGoNextNightStep(step)) {
-      navigator.vibrate?.([60,40,60]);
+    if (step.type==="resolve") {
+      resolveNight();
       return;
     }
 
-    if (step.type === "resolve") {
-      // 先簡化：直接進白天（你後續的結算/公告/勝負我再接回你完整版本）
-      showScreen("day");
-      renderDay();
+    // 女巫：按下一步＝本晚不使用技能（不消耗藥）
+    if (step.type==="witch") {
+      State.nightStepIndex++;
+      save(); renderNight();
       return;
     }
 
-    State.nightStepIndex = Math.min(State.nightSteps.length - 1, State.nightStepIndex + 1);
+    State.nightStepIndex++;
     save(); renderNight();
   }
 
-  /* =========================================================
-     Day（最小可跑）
-  ========================================================= */
-  function renderDay(){
-    $("dayTag") && ($("dayTag").textContent = `第 ${State.dayNo} 天`);
-    const alive = State.players.filter(p=>p.alive).map(p=>p.seat);
-    $("dayAlive") && ($("dayAlive").textContent = alive.length ? `存活：${alive.join("、")} 號` : "（全滅？）");
+  // ===== Night Resolve =====
+  function resolveNight(){
+    const knife = State.nightState.wolfTarget || null;
+    const guard = State.nightState.guardTarget || null;
 
+    const dead = new Set();
+
+    if (knife) dead.add(knife);
+
+    // 守衛擋刀（守衛活著才算）
+    if (knife && guard && isGuardAlive() && knife===guard) dead.delete(knife);
+
+    // 女巫救（解藥未用 + 本晚選救 + 女巫活著）
+    if (State.witch.saveThisNight && !State.witch.saveUsed && isWitchAlive()) {
+      // 但若刀口是女巫自己，這裡永遠不會 saveThisNight=true（已在操作時阻止）
+      if (knife) dead.delete(knife);
+    }
+
+    // 女巫毒（毒藥未用 + 本晚選毒 + 女巫活著）
+    if (State.witch.poisonTarget && !State.witch.poisonUsed && isWitchAlive()) {
+      dead.add(State.witch.poisonTarget);
+    }
+
+    // 套用死亡
+    const deadSeats = [];
+    dead.forEach(seat=>{
+      const p = State.players.find(x=>x.seat===seat);
+      if (p && p.alive) { p.alive = false; deadSeats.push(seat); }
+    });
+
+    // 消耗藥（只在女巫活著且真的用到時）
+    if (isWitchAlive()) {
+      if (State.witch.saveThisNight && !State.witch.saveUsed) State.witch.saveUsed = true;
+      if (State.witch.poisonTarget && !State.witch.poisonUsed) State.witch.poisonUsed = true;
+    }
+
+    // 公告（你要「全部一起公布讓玩家自己判斷」）
+    let publicText = "";
+    if (!deadSeats.length) publicText = "天亮了，昨晚是平安夜。";
+    else publicText = `天亮了，昨晚死亡：${deadSeats.join("、")} 號。`;
+
+    State.logs.unshift({
+      nightNo: State.nightNo,
+      dayNo: State.dayNo,
+      publicText,
+      ts: new Date().toISOString()
+    });
+
+    // 重置本晚可變狀態（藥永久保留）
+    State.nightStepIndex = 0;
+    State.nightState = { guardTarget:null, wolfTarget:null, seerCheck:null };
+    State.witch.saveThisNight = false;
+    State.witch.poisonTarget = null;
+
+    // 勝負判定（屠邊預設）
+    const win = checkWin();
+    if (win.ended) {
+      State.ended = true;
+      State.endText = win.text;
+      save();
+      showEnd();
+      return;
+    }
+
+    save();
+    showScreen("day");
+    renderDay();
+    openAnn(true);
+  }
+
+  // ===== Win Check（屠邊：神全死 or 民全死 → 狼勝；狼全死 → 好勝） =====
+  function checkWin(){
+    const alive = State.players.filter(p=>p.alive);
+
+    const wolves = alive.filter(p=>p.team==="wolf").length;
+    if (wolves<=0) return { ended:true, text:"✅ 遊戲結束：好人獲勝（狼人全滅）" };
+
+    const aliveGod = alive.filter(p=>{
+      // 神：seer witch hunter guard idiot（白痴算神）
+      return ["seer","witch","hunter","guard","idiot"].includes(p.roleId);
+    }).length;
+
+    const aliveVillager = alive.filter(p=>p.roleId==="villager").length;
+
+    // 屠邊：神死光 或 民死光
+    if (aliveGod<=0) return { ended:true, text:"🐺 遊戲結束：狼人獲勝（屠邊：神職全滅）" };
+    if (aliveVillager<=0) return { ended:true, text:"🐺 遊戲結束：狼人獲勝（屠邊：平民全滅）" };
+
+    // 狼數 >= 好人（也可直接判狼勝，避免卡局）
+    const good = alive.length - wolves;
+    if (wolves >= good) return { ended:true, text:"🐺 遊戲結束：狼人獲勝（狼數≥好人）" };
+
+    return { ended:false };
+  }
+
+  // ===== Announcement =====
+  let annMode = "today";
+
+  function renderAnn(){
+    const box = $("annBox");
+    if (!box) return;
+
+    if (!State.logs.length) {
+      box.textContent = "（尚無公告）";
+      return;
+    }
+
+    if (annMode==="today") {
+      box.textContent = State.logs[0].publicText;
+      return;
+    }
+
+    const lines = [];
+    State.logs.forEach((l, idx)=>{
+      lines.push(`#${State.logs.length-idx}｜第${l.nightNo}夜 / 第${l.dayNo}天`);
+      lines.push(l.publicText);
+      lines.push("—");
+    });
+    box.textContent = lines.join("\n");
+  }
+
+  function openAnn(forceToday=false){
+    if (forceToday) annMode="today";
+    $("modalAnn").classList.remove("hidden");
+    $("annToday").classList.toggle("active", annMode==="today");
+    $("annHistory").classList.toggle("active", annMode==="history");
+    renderAnn();
+  }
+  function closeAnn(){
+    $("modalAnn").classList.add("hidden");
+  }
+
+  // ===== Day =====
+  function renderDay(){
+    $("dayTag").textContent = `第 ${State.dayNo} 天`;
+    $("dayAlive").textContent = `存活：${aliveSeatList().join("、")} 號`;
+
+    renderDaySeats();
+    $("btnDayMode").textContent = State.dayMode==="mark" ? "切換：投票模式" : "切換：標記模式";
+    $("dayModeHint").textContent = State.dayMode==="mark"
+      ? "☠️ 標記模式：點座位可切換存活"
+      : "🗳️ 投票模式：點座位選投票目標（會高亮）";
+  }
+
+  function renderDaySeats(){
     const box = $("daySeats");
     if (!box) return;
     box.innerHTML = "";
+
     State.players.forEach(p=>{
       const b = document.createElement("button");
-      b.type = "button";
-      b.className = "seat" + (p.alive ? "" : " dead");
-      b.textContent = String(p.seat);
-      b.addEventListener("click", () => {
-        p.alive = !p.alive;
-        save(); renderDay();
+      b.type="button";
+      b.className="seat" + (p.alive ? "" : " dead");
+
+      if (State.dayMode==="vote" && State.dayVoteTarget===p.seat) b.classList.add("selected");
+
+      // 上帝視角顯示角色
+      if (State.godView) {
+        const r = getRole(p.roleId);
+        b.textContent = `${p.seat}${r.icon}`;
+      } else {
+        b.textContent = String(p.seat);
+      }
+
+      b.addEventListener("click", ()=>{
+        if (State.dayMode==="mark") {
+          p.alive = !p.alive;
+          save();
+          renderDay();
+          return;
+        }
+        if (State.dayMode==="vote") {
+          State.dayVoteTarget = (State.dayVoteTarget===p.seat) ? null : p.seat;
+          save();
+          renderDaySeats();
+          return;
+        }
       });
+
       box.appendChild(b);
     });
   }
 
-  /* =========================================================
-     Start
-  ========================================================= */
-  function startGame(){
-    ensureWWData();
-    if (!State.rolesCount) State.rolesCount = getSuggestedRolesCount(State.boardId, State.playerCount);
-    if (rolesTotal(State.rolesCount) !== State.playerCount) {
-      alert("⚠️ 角色總數必須等於玩家人數");
-      return;
-    }
-    buildPlayersFromRolesCount();
-    showScreen("deal");
-    renderDeal();
+  function toggleDayMode(){
+    State.dayMode = State.dayMode==="mark" ? "vote" : "mark";
+    if (State.dayMode==="mark") State.dayVoteTarget = null;
+    save();
+    renderDay();
   }
 
-  function startNight(){
-    State.nightState = {};
+  // ===== Vote Settlement (簡化：你按「結算」→ 直接公告得票 & 放逐) =====
+  function settleVote(){
+    if (State.dayMode!=="vote") return;
+
+    const target = State.dayVoteTarget;
+    if (!target) return;
+
+    // 這版先用「上帝手動點選」作為結果（未做逐一點名計票）
+    // 但公告格式照你要的「得票/放逐」
+    const text =
+      `白天投票結算：\n` +
+      `放逐：${target} 號\n` +
+      `（此版為測試流程：由上帝選擇放逐目標，後續再加逐一點票統計）`;
+
+    // 放逐
+    const exiled = State.players.find(p=>p.seat===target);
+    if (exiled && exiled.alive) {
+      exiled.alive = false;
+    }
+
+    State.logs.unshift({
+      nightNo: State.nightNo,
+      dayNo: State.dayNo,
+      publicText: text,
+      ts: new Date().toISOString()
+    });
+
+    // ✅ 獵人被放逐：詢問是否開槍
+    if (exiled && exiled.roleId==="hunter") {
+      State.hunterPending = { seat: target, reason:"exile" };
+      State.hunterShotTarget = null;
+      save();
+      openHunterModal();
+      return;
+    }
+
+    // 勝負
+    const win = checkWin();
+    if (win.ended) {
+      State.ended = true;
+      State.endText = win.text;
+      save();
+      showEnd();
+      return;
+    }
+
+    save();
+    openAnn(true);
+    renderDay();
+  }
+
+  // ===== Hunter Modal =====
+  function openHunterModal(){
+    $("modalHunter").classList.remove("hidden");
+    renderSeatGrid("hunterSeats", State.hunterShotTarget, (seat)=>{
+      // 不可射自己（可改）
+      if (State.hunterPending?.seat===seat) return;
+      State.hunterShotTarget = (State.hunterShotTarget===seat) ? null : seat;
+      save();
+      openHunterModal();
+    });
+  }
+  function closeHunterModal(){
+    $("modalHunter").classList.add("hidden");
+  }
+  function hunterNoShot(){
+    // 不開槍，直接結束獵人流程
+    closeHunterModal();
+
+    // 勝負
+    const win = checkWin();
+    if (win.ended) {
+      State.ended = true;
+      State.endText = win.text;
+      save();
+      showEnd();
+      return;
+    }
+
+    save();
+    openAnn(true);
+    renderDay();
+  }
+  function hunterConfirmShot(){
+    const t = State.hunterShotTarget;
+    closeHunterModal();
+
+    if (t) {
+      const p = State.players.find(x=>x.seat===t);
+      if (p && p.alive) p.alive = false;
+
+      State.logs.unshift({
+        nightNo: State.nightNo,
+        dayNo: State.dayNo,
+        publicText: `🏹 獵人開槍：帶走 ${t} 號。`,
+        ts: new Date().toISOString()
+      });
+    } else {
+      State.logs.unshift({
+        nightNo: State.nightNo,
+        dayNo: State.dayNo,
+        publicText: `🏹 獵人選擇不開槍。`,
+        ts: new Date().toISOString()
+      });
+    }
+
+    State.hunterPending = null;
+    State.hunterShotTarget = null;
+
+    // 勝負
+    const win = checkWin();
+    if (win.ended) {
+      State.ended = true;
+      State.endText = win.text;
+      save();
+      showEnd();
+      return;
+    }
+
+    save();
+    openAnn(true);
+    renderDay();
+  }
+
+  // ===== Enter next night =====
+  function dayToNight(){
+    // 下一夜
+    State.nightNo += 1;
+
+    // reset night state（藥永久保留）
     State.nightStepIndex = 0;
-    State.witch.save = false;
+    State.nightState = { guardTarget:null, wolfTarget:null, seerCheck:null };
+    State.witch.saveThisNight = false;
     State.witch.poisonTarget = null;
-    resolveNightStepsForThisGame();
+
+    // reset day vote
+    State.dayNo += 1;
+    State.dayMode = "mark";
+    State.dayVoteTarget = null;
+
     save();
     showScreen("night");
     renderNight();
   }
 
-  function setGod(onFlag){
-    State.godView = !!onFlag;
-    document.body.classList.toggle("god-on", State.godView);
-    $("btnGodToggle") && ($("btnGodToggle").textContent = State.godView ? "🔓" : "🔒");
-    $("fabGod") && ($("fabGod").textContent = State.godView ? "🔓" : "🔒");
+  // ===== God Toggle =====
+  function setGod(flag){
+    State.godView = !!flag;
+    $("btnGodToggle").textContent = State.godView ? "🔓" : "🔒";
     save();
-    if (State.phase === "night") renderNight();
+
+    // 重新渲染當前畫面（讓號碼旁立即顯示角色 icon）
+    if (State.phase==="deal") renderDeal();
+    if (State.phase==="night") renderNight();
+    if (State.phase==="day") renderDay();
+    if (State.phase==="end") showEnd();
   }
   function toggleGod(){ setGod(!State.godView); }
 
-  function ensureRestartButton(){
-    const b = $("btnRestart") || $("topRestart");
-    if (!b) return;
-    b.addEventListener("click", () => {
-      if (!confirm("確定要重新開始？所有進度會清除並回到開局設定。")) return;
+  // ===== End =====
+  function showEnd(){
+    showScreen("end");
+    $("endText").textContent = State.endText || "（遊戲結束）";
+  }
+
+  // ===== Bind =====
+  function bind(){
+    // Setup
+    $("rangeCount").addEventListener("input", (e)=>{
+      State.playerCount = Math.max(6, Math.min(12, Number(e.target.value)||12));
+      syncSetupUI(); save();
+    });
+    $("optGuard").addEventListener("click", ()=>{
+      State.optIdiot = false; syncSetupUI(); save();
+    });
+    $("optIdiot").addEventListener("click", ()=>{
+      State.optIdiot = true; syncSetupUI(); save();
+    });
+
+    $("btnStart").addEventListener("click", ()=>{
+      buildPlayers();
+      showScreen("deal");
+      renderDeal();
+    });
+
+    // Deal
+    $("btnBackSetup").addEventListener("click", ()=>{
+      showScreen("setup");
+      syncSetupUI();
+    });
+
+    // ✅ 你卡住的點：抽完進夜晚按鈕，必須接事件
+    $("btnDealEnterNight").addEventListener("click", ()=>{
+      // 進入夜晚
+      State.nightStepIndex = 0;
+      save();
+      showScreen("night");
+      renderNight();
+    });
+
+    // Night
+    $("btnNightPrev").addEventListener("click", nightPrev);
+    $("btnNightNext").addEventListener("click", nightNext);
+
+    // Day
+    $("btnDayMode").addEventListener("click", toggleDayMode);
+    $("btnDayVoteConfirm").addEventListener("click", settleVote);
+    $("btnDayToNight").addEventListener("click", dayToNight);
+
+    // Announcement
+    $("btnAnn").addEventListener("click", ()=> openAnn(true));
+    $("btnAnn2").addEventListener("click", ()=> openAnn(true));
+    $("btnAnnClose").addEventListener("click", closeAnn);
+    $("annMask").addEventListener("click", closeAnn);
+    $("annToday").addEventListener("click", ()=>{ annMode="today"; openAnn(false); });
+    $("annHistory").addEventListener("click", ()=>{ annMode="history"; openAnn(false); });
+
+    $("btnCopyAnn").addEventListener("click", async ()=>{
+      try{
+        await navigator.clipboard.writeText($("annBox").textContent || "");
+      }catch(e){}
+    });
+
+    $("btnExportAnn").addEventListener("click", ()=>{
+      const payload = {
+        playerCount: State.playerCount,
+        optIdiot: State.optIdiot,
+        players: State.players,
+        logs: State.logs,
+        ts: new Date().toISOString()
+      };
+      const blob = new Blob([JSON.stringify(payload,null,2)], {type:"application/json"});
+      const a = document.createElement("a");
+      a.href = URL.createObjectURL(blob);
+      a.download = "werewolf_logs.json";
+      a.click();
+      setTimeout(()=> URL.revokeObjectURL(a.href), 800);
+    });
+
+    // God / Restart
+    $("btnGodToggle").addEventListener("click", toggleGod);
+    $("btnRestart").addEventListener("click", ()=>{
+      if (!confirm("確定要重新開始？所有進度會清除。")) return;
+      clearSave();
+      location.reload();
+    });
+
+    // Hunter modal
+    $("btnHunterNo").addEventListener("click", hunterNoShot);
+    $("btnHunterYes").addEventListener("click", hunterConfirmShot);
+    $("hunterMask").addEventListener("click", hunterNoShot);
+
+    // End
+    $("btnEndRestart").addEventListener("click", ()=>{
       clearSave();
       location.reload();
     });
   }
 
-  function bind(){
-    $("boardBasic") && $("boardBasic").addEventListener("click", () => setBoard("basic"));
-    $("boardSpecial") && $("boardSpecial").addEventListener("click", () => setBoard("b1"));
-
-    $("rangeCount") && ($("rangeCount").oninput = (e) => setPlayerCount(e.target.value));
-    $("btnStart") && $("btnStart").addEventListener("click", startGame);
-
-    $("btnBackSetup") && $("btnBackSetup").addEventListener("click", () => { showScreen("setup"); syncSetupUI(); });
-
-    $("btnNightPrev") && $("btnNightPrev").addEventListener("click", nightPrev);
-    $("btnNightNext") && $("btnNightNext").addEventListener("click", nightNext);
-
-    $("btnGodToggle") && $("btnGodToggle").addEventListener("click", toggleGod);
-    $("fabGod") && $("fabGod").addEventListener("click", toggleGod);
-
-    ensureRestartButton();
-  }
-
-  async function init(){
+  // ===== Init =====
+  function init(){
     load();
-    await bootstrapData();
-
-    if (!State.rolesCount) State.rolesCount = getSuggestedRolesCount(State.boardId, State.playerCount);
-
     bind();
+    syncSetupUI();
     setGod(State.godView);
 
+    // 回到上次畫面
     showScreen(State.phase || "setup");
 
-    if (State.phase === "setup") syncSetupUI();
-    if (State.phase === "deal") renderDeal();
-    if (State.phase === "night") { resolveNightStepsForThisGame(); renderNight(); }
-    if (State.phase === "day") renderDay();
-
-    // 預設補強：如果 setup 進來沒套 board 狀態
-    if (State.phase === "setup") setBoard(State.boardId || "basic");
+    if (State.phase==="setup") syncSetupUI();
+    if (State.phase==="deal") renderDeal();
+    if (State.phase==="night") renderNight();
+    if (State.phase==="day") renderDay();
+    if (State.phase==="end") showEnd();
   }
 
-  init().catch(err => {
-    warn("init failed:", err);
-    ensureWWData();
-    showScreen("setup");
-    syncSetupUI();
-  });
-
+  init();
 })();
