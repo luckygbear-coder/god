@@ -3,233 +3,180 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no,viewport-fit=cover" />
-  <meta name="apple-mobile-web-app-capable" content="yes" />
-  <meta name="apple-mobile-web-app-status-bar-style" content="default" />
   <meta name="theme-color" content="#f7e6c7" />
-  <link rel="manifest" href="./manifest.webmanifest" />
+  <title>狼人殺上帝輔助（官方12 MVP）</title>
   <link rel="stylesheet" href="./style.css" />
-  <title>狼人殺上帝輔助（PWA）</title>
 </head>
 
 <body>
   <div class="app-wrap">
-    <!-- Topbar -->
-    <header class="topbar">
-      <div class="brand">
-        <div class="logo">🐺</div>
-        <div class="titlebox">
-          <div class="title">狼人殺上帝輔助</div>
-          <div class="sub">單機版｜可測試流程</div>
-        </div>
-      </div>
 
-      <div class="top-actions">
-        <button id="btnAnn" class="iconbtn" type="button" aria-label="公告">📣</button>
-        <button id="btnGodToggle" class="iconbtn" type="button" aria-label="上帝鎖">🔒</button>
-        <button id="btnRestart" class="iconbtn" type="button" aria-label="重新開始">🔁</button>
+    <header class="topbar">
+      <div>
+        <div class="title">🐺 狼人殺上帝輔助</div>
+        <div class="sub">官方 12 人 MVP</div>
+      </div>
+      <div class="actions">
+        <button id="btnGod" class="iconbtn" type="button" title="上帝視角">🔒</button>
+        <button id="btnAnn" class="iconbtn" type="button" title="公告">📣</button>
+        <button id="btnRestart" class="iconbtn" type="button" title="重新開始">🔁</button>
       </div>
     </header>
 
-    <!-- ===== Screen: SETUP ===== -->
-    <section id="screen-setup" class="screen active">
-      <div class="card">
-        <h2>開局設定</h2>
+    <main class="main">
 
-        <div class="row">
-          <div class="pill active" id="boardOfficial12">官方｜12人標準場</div>
-        </div>
+      <!-- Setup -->
+      <section id="screen-setup" class="screen active">
+        <div class="card">
+          <h2>開局設定</h2>
 
-        <div class="divider"></div>
-
-        <div class="row between">
-          <div class="label">玩家人數</div>
-          <div class="value"><span id="playerCount">12</span> 人</div>
-        </div>
-
-        <div class="hint">此 MVP 固定 12 人（先把流程跑穩）。</div>
-
-        <div class="divider"></div>
-
-        <div class="row between">
-          <div class="label">角色配置</div>
-          <button id="btnRoles" class="btn ghost" type="button">調整角色</button>
-        </div>
-
-        <div class="hint">
-          目前預設：狼人×4、預言家、女巫、獵人、守衛、白痴（算神）、平民×4<br/>
-          你可在視窗內微調，<b>角色總數需=12</b> 才能開始。
-        </div>
-
-        <div class="row between">
-          <div class="label">角色總數</div>
-          <div class="value"><span id="roleTotal">12</span> / <span id="playerTotal">12</span></div>
-        </div>
-        <div id="warnRoleTotal" class="warn hidden">⚠️ 角色總數需等於玩家數</div>
-
-        <div class="divider"></div>
-
-        <div class="row between">
-          <div class="label">勝利條件</div>
-          <button id="btnWinMode" class="btn ghost" type="button">屠邊（預設）</button>
-        </div>
-        <div class="hint">可切換：屠邊 / 屠城（好人全滅）</div>
-
-        <div class="divider"></div>
-
-        <button id="btnStart" class="btn primary" type="button">開始 → 抽身分</button>
-      </div>
-    </section>
-
-    <!-- ===== Screen: DEAL ===== -->
-    <section id="screen-deal" class="screen">
-      <div class="card">
-        <h2>抽身分（輪流看）</h2>
-        <div id="dealText" class="hint">請 1 號 拿手機</div>
-
-        <div class="holdbox">
-          <button id="btnHoldReveal" class="holdbtn" type="button">
-            按住約 <b>0.3</b> 秒查看身分<br/>
-            <span class="small">放開立刻關閉（防偷看）</span>
-          </button>
-        </div>
-
-        <div class="seatpanel">
-          <div class="seatpanel-title">座位快速回看（點號碼回去再翻牌確認）</div>
-          <div id="dealSeatGrid" class="seatgrid"></div>
-        </div>
-
-        <div class="row between">
-          <button id="btnBackSetup" class="btn ghost" type="button">← 返回設定</button>
-          <button id="btnDealNext" class="btn ghost" type="button">我已看完 → 下一位</button>
-        </div>
-
-        <button id="btnDealAllDone" class="btn primary" type="button">全部抽完 → 確認進入夜晚</button>
-      </div>
-    </section>
-
-    <!-- ===== Screen: NIGHT ===== -->
-    <section id="screen-night" class="screen">
-      <div class="card">
-        <div class="row between">
-          <h2>夜晚流程</h2>
-          <div id="nightTag" class="tag">第 1 夜</div>
-        </div>
-
-        <div class="panel">
-          <div class="panel-title">口述流程 / 操作提示</div>
-          <pre id="nightScript" class="scriptbox"></pre>
-        </div>
-
-        <div class="panel">
-          <div class="panel-title">座位圈（點選目標）</div>
-          <div id="nightSeats" class="seatgrid"></div>
-          <div class="hint">點座位會變色；不可操作的回合會顯示原因。</div>
-        </div>
-
-        <div class="row between">
-          <button id="btnNightPrev" class="btn ghost" type="button">← 上一步</button>
-          <button id="btnNightNext" class="btn primary" type="button">下一步 →</button>
-        </div>
-      </div>
-    </section>
-
-    <!-- ===== Screen: DAY ===== -->
-    <section id="screen-day" class="screen">
-      <div class="card">
-        <div class="row between">
-          <h2>白天流程</h2>
-          <div id="dayTag" class="tag">第 1 天</div>
-        </div>
-
-        <div class="panel">
-          <div class="panel-title">存活狀態</div>
-          <div id="dayAlive" class="hint"></div>
-        </div>
-
-        <div class="panel">
-          <div class="panel-title">白天操作</div>
-          <div class="row between">
-            <button id="btnDayMode" class="btn ghost" type="button">切換：標記模式</button>
-            <button id="btnDayExile" class="btn primary" type="button">結算放逐</button>
+          <div class="row spread">
+            <div class="label">板子</div>
+            <div class="pill active">官方｜12人標準場</div>
           </div>
-          <div id="dayModeHint" class="hint">☠️ 標記模式：點座位可切換存活</div>
-        </div>
 
-        <div class="panel">
-          <div class="panel-title">白天座位圈</div>
-          <div id="daySeats" class="seatgrid"></div>
-        </div>
+          <div class="card inner">
+            <div class="row spread">
+              <div>
+                <div class="label">玩家人數</div>
+                <div class="hint"><b id="playerCount">12</b> 人（固定）</div>
+              </div>
+              <div>
+                <div class="label">角色總數</div>
+                <div class="hint"><b id="roleTotal">12</b> / <span id="playerTotal">12</span></div>
+              </div>
+            </div>
 
-        <div class="row between">
-          <button id="btnAnn2" class="btn ghost" type="button">📣 公告中心</button>
-          <button id="btnDayToNight" class="btn primary" type="button">進入天黑 →</button>
-        </div>
-      </div>
-    </section>
+            <div class="row" style="margin-top:10px; gap:10px;">
+              <div class="label">守衛 / 白痴（二選一）</div>
+              <button id="optGuard" class="btn ghost small active" type="button">🛡️ 守衛</button>
+              <button id="optIdiot" class="btn ghost small" type="button">🤡 白痴（算神）</button>
+            </div>
 
-    <!-- ===== Modal: Reveal ===== -->
-    <div id="modalReveal" class="modal hidden" role="dialog" aria-modal="true">
+            <div class="row" style="margin-top:10px; gap:10px;">
+              <div class="label">狼隊（四狼其中一張可升級）</div>
+              <button id="optW4" class="btn ghost small active" type="button">🐺 狼人×4</button>
+              <button id="optBK" class="btn ghost small" type="button">🐺🔫 黑狼王 + 狼人×3</button>
+              <button id="optWK" class="btn ghost small" type="button">🐺💥 白狼王 + 狼人×3</button>
+              <button id="optWKING" class="btn ghost small" type="button">🐺👑 狼王 + 狼人×3</button>
+            </div>
+
+            <div id="warnRoleTotal" class="warn hidden" style="margin-top:10px;">
+              ⚠️ 角色總數必須等於玩家人數
+            </div>
+
+            <div class="hint" style="margin-top:10px;">
+              長按看身分已改成 <b>0.3 秒</b>。<br/>
+              夜晚流程會照唸，即使角色已死亡也不跳過（上帝口述流程）。
+            </div>
+          </div>
+
+          <div class="bottombar">
+            <button id="btnStart" class="btn primary" type="button">開始 → 抽身分</button>
+          </div>
+        </div>
+      </section>
+
+      <!-- Deal -->
+      <section id="screen-deal" class="screen">
+        <div class="card">
+          <h2>抽身分（輪流看）</h2>
+          <div id="dealText" class="hint">請 1 號拿手機</div>
+
+          <button id="btnHoldReveal" class="hold-btn" type="button">
+            按住約 0.3 秒查看身分
+            <div class="hint small">放開立刻關閉（防偷看）</div>
+          </button>
+
+          <div class="card inner">
+            <div class="label">點座位回去再翻牌確認</div>
+            <div id="dealSeatGrid" class="seats"></div>
+          </div>
+
+          <div class="row spread">
+            <button id="btnBackSetup" class="btn ghost" type="button">← 返回設定</button>
+            <button id="btnNextPlayer" class="btn" type="button">我已看完 → 下一位</button>
+          </div>
+
+          <div class="bottombar">
+            <button id="btnFinishDeal" class="btn primary" type="button">全部抽完 → 進入夜晚</button>
+          </div>
+        </div>
+      </section>
+
+      <!-- Night -->
+      <section id="screen-night" class="screen">
+        <div class="card">
+          <div class="row spread">
+            <h2>夜晚流程</h2>
+            <div id="nightTag" class="tag">第 1 夜</div>
+          </div>
+
+          <div class="card inner">
+            <div class="label">操作提示</div>
+            <pre id="nightScript" class="scriptbox">（載入中）</pre>
+          </div>
+
+          <div class="card inner">
+            <div class="label">座位（點了會變色）</div>
+            <div id="nightSeats" class="seats"></div>
+          </div>
+
+          <div class="row spread">
+            <button id="btnNightPrev" class="btn ghost" type="button">← 上一步</button>
+            <button id="btnNightNext" class="btn primary" type="button">下一步 →</button>
+          </div>
+        </div>
+      </section>
+
+      <!-- Day -->
+      <section id="screen-day" class="screen">
+        <div class="card">
+          <div class="row spread">
+            <h2>白天</h2>
+            <div id="dayTag" class="tag">第 1 天</div>
+          </div>
+
+          <div class="card inner">
+            <div class="label">存活</div>
+            <div id="dayAlive" class="hint">—</div>
+          </div>
+
+          <div class="row spread" style="margin-top:10px;">
+            <button id="btnDayToNight" class="btn primary" type="button">下一步 → 進入下一夜</button>
+          </div>
+        </div>
+      </section>
+
+    </main>
+
+    <!-- Announcement Modal -->
+    <div id="modalAnn" class="modal hidden">
       <div class="modal-card">
-        <div class="modal-title">你的身分</div>
-        <div id="revealRole" class="revealRole">—</div>
-      </div>
-    </div>
-
-    <!-- ===== Modal: Deal Confirm ===== -->
-    <div id="modalDealConfirm" class="modal hidden" role="dialog" aria-modal="true">
-      <div class="modal-card">
-        <div class="modal-title">確認進入夜晚？</div>
-        <div class="hint">確定所有人都已看過身分。</div>
-        <div class="row between">
-          <button id="btnDealConfirmNo" class="btn ghost" type="button">取消</button>
-          <button id="btnDealConfirmYes" class="btn primary" type="button">確定</button>
-        </div>
-      </div>
-    </div>
-
-    <!-- ===== Modal: Role Config ===== -->
-    <div id="modalRole" class="modal hidden" role="dialog" aria-modal="true">
-      <div class="modal-card wide">
-        <div class="modal-head">
-          <div class="modal-title">調整角色配置</div>
-          <button id="btnRoleClose" class="iconbtn" type="button">✕</button>
-        </div>
-
-        <div id="roleConfigBody" class="modal-scroll"></div>
-
-        <div class="row between">
-          <div class="hint">角色總數：<b id="roleTotal2">12</b> / 12</div>
-          <button id="btnRoleDone" class="btn primary" type="button">完成</button>
-        </div>
-      </div>
-      <div id="modalRoleMask" class="modal-mask"></div>
-    </div>
-
-    <!-- ===== Modal: Announcement ===== -->
-    <div id="modalAnn" class="modal hidden" role="dialog" aria-modal="true">
-      <div class="modal-card wide">
         <div class="modal-head">
           <div class="modal-title">公告中心</div>
           <button id="btnAnnClose" class="iconbtn" type="button">✕</button>
         </div>
-
-        <div class="tabbar">
-          <button id="annToday" class="tab active" type="button">今日</button>
-          <button id="annHistory" class="tab" type="button">歷史</button>
+        <div class="modal-body scroll">
+          <pre id="annBox" class="annbox">（尚無公告）</pre>
         </div>
-
-        <pre id="annBox" class="annbox"></pre>
-
-        <div class="row between">
+        <div class="modal-actions">
           <button id="btnCopyAnn" class="btn ghost" type="button">複製</button>
-          <button id="btnExportAnn" class="btn primary" type="button">匯出 JSON</button>
         </div>
       </div>
-      <div id="modalAnnMask" class="modal-mask"></div>
     </div>
 
-    <!-- Toast -->
-    <div id="toast" class="toast hidden"></div>
+    <!-- Reveal Modal -->
+    <div id="modalReveal" class="modal hidden">
+      <div class="modal-card reveal">
+        <div class="modal-body center">
+          <div class="reveal-title">你的身分是</div>
+          <div id="revealRole" class="reveal-role">—</div>
+          <div class="hint">放開會自動關閉</div>
+        </div>
+      </div>
+    </div>
+
   </div>
 
   <script src="./script.js"></script>
