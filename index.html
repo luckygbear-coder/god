@@ -11,34 +11,34 @@
 <body>
 
   <div class="app">
-    <!-- 你的原本 Header / 狀態列 / 內容區 -->
-    <!-- ⚠️ 這裡保持你原本的版面結構即可 -->
 
-    <!-- 假設你原本有這些 id（跟我 app.js 一致） -->
     <div class="top">
-      <div id="uiStatus" class="uiStatus"></div>
-      <div id="uiBoard" class="uiBoard"></div>
+      <div class="topLeft">
+        <div id="uiStatus" class="uiStatus"></div>
+        <div id="uiBoard" class="uiBoard"></div>
+      </div>
       <button id="btnSettings" class="iconBtn" aria-label="設定">⚙️</button>
     </div>
 
     <div class="card">
       <div class="cardTitle" id="promptTitle">—</div>
-      <pre class="cardText" id="promptText">—</pre>
+      <!-- ✅ 改成 div（避免 pre + innerHTML 事件怪問題） -->
+      <div class="cardText" id="promptText">—</div>
       <div class="cardFoot" id="promptFoot"></div>
     </div>
 
     <div class="card">
-      <div class="row">
+      <div class="row between">
         <div class="cardTitle">上帝資訊</div>
         <label class="toggle">
           <input id="toggleGodView" type="checkbox" />
           <span>👁 展開</span>
         </label>
       </div>
-      <pre class="cardText" id="godText"></pre>
+      <div class="cardText mono" id="godText"></div>
     </div>
 
-    <!-- 板子選擇區（可留著） -->
+    <!-- 板子選擇 -->
     <div class="card" id="boardPickerCard">
       <div class="cardTitle">可選板子</div>
       <div class="hint" id="boardPickerHint"></div>
@@ -48,16 +48,19 @@
     <!-- 座位 -->
     <div id="seatsGrid" class="seatsGrid"></div>
 
-    <!-- 計時器（你現在這種放底部我覺得很讚） -->
+    <!-- 計時器：直接在下方（你說這樣最直覺） -->
     <div class="card timerCard">
-      <div class="row">
+      <div class="row between">
         <div class="cardTitle">⏱ 倒數計時</div>
+        <div class="hint">（會自動記住狀態）</div>
       </div>
+
       <div class="timerRow">
-        <div>
+        <div class="timerLeft">
           <div id="timerBig" class="timerBig">02:00</div>
           <div id="timerHint" class="hint">點選時間或按「開始」。</div>
         </div>
+
         <div id="timerPresets" class="timerPresets">
           <button class="btn ghost" data-sec="60">1分</button>
           <button class="btn ghost" data-sec="120">2分</button>
@@ -71,7 +74,7 @@
       </div>
     </div>
 
-    <!-- 底部 action bar -->
+    <!-- 底部 Action Bar -->
     <div class="actionBar">
       <button id="btnBack" class="btn ghost">上一步</button>
       <button id="btnPrimary" class="btn">下一步</button>
@@ -79,30 +82,38 @@
     </div>
   </div>
 
-  <!-- Drawer（若你本來就有可保留） -->
+  <!-- Drawer -->
   <div id="drawerBackdrop" class="backdrop hidden"></div>
   <div id="drawer" class="drawer hidden">
     <div class="drawerTop">
       <div class="drawerTitle">設定</div>
       <button id="btnCloseDrawer" class="iconBtn">✕</button>
     </div>
+
     <div class="drawerBody">
       <div class="seg">
         <button id="segEdge" class="segBtn">屠邊</button>
         <button id="segCity" class="segBtn">屠城</button>
       </div>
-      <label class="row">
+
+      <label class="row between">
         <span>上警</span>
         <input id="togglePolice" type="checkbox" />
       </label>
+
       <button id="btnReset" class="btn ghost" style="width:100%;">重置本局</button>
+
+      <div class="hint" style="margin-top:10px;">
+        提示：遊戲開始後不建議更動規則（避免資料錯亂）。
+      </div>
     </div>
   </div>
 
-  <!-- ✅ ROLE MODAL：長按一定會跳出身份卡 -->
+  <!-- ✅ ROLE MODAL：抽身分彈窗 -->
   <div id="roleModal" class="modal hidden" aria-hidden="true">
     <div class="modalCard">
       <div class="modalTitle" id="roleModalTitle">—</div>
+
       <div class="modalBody">
         <div class="roleLine" id="roleModalRole">—</div>
         <div class="roleLine small" id="roleModalCamp">—</div>
@@ -110,6 +121,7 @@
           看完請把手機交回上帝 🐺
         </div>
       </div>
+
       <div class="modalActions">
         <button id="btnRoleDone" class="btn">我看完了</button>
         <button id="btnRoleClose" class="btn ghost">關閉</button>
