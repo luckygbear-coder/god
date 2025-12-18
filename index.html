@@ -12,7 +12,11 @@
     <header class="topbar">
       <div class="top-left" id="uiStatus">SETUP / R1 / SETUP:A1</div>
       <div class="top-mid" id="uiBoard">—</div>
-      <button class="top-right" id="btnSettings" aria-label="設定">⚙️</button>
+
+      <div class="top-actions">
+        <button class="top-icon" id="btnTimer" aria-label="倒數計時">⏱️</button>
+        <button class="top-icon" id="btnSettings" aria-label="設定">⚙️</button>
+      </div>
     </header>
 
     <!-- Prompt (public) -->
@@ -75,6 +79,42 @@
 
     <div class="drawer-section">
       <button class="btn danger" id="btnReset" type="button">重置本局（清除存檔）</button>
+    </div>
+  </aside>
+
+  <!-- Timer Drawer -->
+  <div class="drawer-backdrop hidden" id="timerBackdrop"></div>
+  <aside class="drawer hidden" id="timerDrawer">
+    <div class="drawer-head">
+      <div class="drawer-title">倒數計時</div>
+      <button class="drawer-close" id="btnCloseTimer">✕</button>
+    </div>
+
+    <div class="drawer-section">
+      <div class="drawer-label">目前剩餘</div>
+      <div class="timer-big" id="timerBig">00:00</div>
+      <div class="drawer-help" id="timerHint">選一個常用時間開始，或暫停/重置。</div>
+    </div>
+
+    <div class="drawer-section">
+      <div class="drawer-label">常用時間</div>
+      <div class="grid-quick" id="timerPresets">
+        <button class="quick2" data-sec="60">1:00</button>
+        <button class="quick2" data-sec="90">1:30</button>
+        <button class="quick2" data-sec="120">2:00</button>
+        <button class="quick2" data-sec="180">3:00</button>
+        <button class="quick2" data-sec="240">4:00</button>
+        <button class="quick2" data-sec="300">5:00</button>
+      </div>
+    </div>
+
+    <div class="drawer-section">
+      <div class="grid-actions">
+        <button class="btn primary" id="btnTimerStart">開始</button>
+        <button class="btn ghost" id="btnTimerPause">暫停</button>
+        <button class="btn ghost" id="btnTimerReset">重置</button>
+      </div>
+      <div class="drawer-help">提示：計時會存檔，重整頁面也會繼續。</div>
     </div>
   </aside>
 
