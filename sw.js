@@ -1,4 +1,4 @@
-const CACHE = "werewolf-god-v3"; // ✅ 每次大更新請改這個字串
+const CACHE = "werewolf-god-v4"; // ✅ 每次大更新請改這個字串
 const ASSETS = [
   "./",
   "./index.html",
