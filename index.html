@@ -2,122 +2,163 @@
 <html lang="zh-Hant">
 <head>
   <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, user-scalable=no" />
-  <title>狼人殺上帝輔助 MVP</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+  <meta name="theme-color" content="#f4a63a" />
+
+  <title>狼人殺上帝輔助（單機 MVP）</title>
+
+  <!-- PWA -->
+  <link rel="manifest" href="./manifest.webmanifest" />
+  <link rel="apple-touch-icon" href="./icons/icon-192.png" />
+
+  <!-- iOS: 防誤觸（雙擊放大/長按選字） -->
+  <style>
+    html, body { height: 100%; }
+    body {
+      -webkit-touch-callout: none;
+      -webkit-user-select: none;
+      user-select: none;
+      touch-action: manipulation;
+    }
+    input, textarea { -webkit-user-select: text; user-select: text; }
+  </style>
+
   <link rel="stylesheet" href="./style.css" />
 </head>
+
 <body>
-  <div class="app">
-    <!-- Top Bar -->
-    <header class="topbar">
-      <div class="top-left" id="uiStatus">SETUP / R1 / SETUP:A1</div>
-      <div class="top-mid" id="uiBoard">—</div>
-
-      <div class="top-actions">
-        <button class="top-icon" id="btnTimer" aria-label="倒數計時">⏱️</button>
-        <button class="top-icon" id="btnSettings" aria-label="設定">⚙️</button>
+  <div class="app-wrap">
+    <!-- ===== Top Status Bar ===== -->
+    <div class="topbar card">
+      <div class="topbar-left">
+        <div id="uiStatus" class="small muted">SETUP / R1 / SETUP:A1</div>
+        <div id="uiBoard" class="title">未套用板子</div>
       </div>
-    </header>
 
-    <!-- Prompt (public) -->
-    <section class="panel prompt">
-      <div class="panel-title" id="promptTitle">選擇人數</div>
-      <div class="panel-body" id="promptText">請選擇人數：9人、10人或12人。</div>
-      <div class="panel-foot" id="promptFoot"></div>
-    </section>
+      <div class="topbar-right">
+        <!-- Timer -->
+        <button id="btnTimer" class="iconbtn" aria-label="倒數計時">⏱️</button>
+        <!-- Settings -->
+        <button id="btnSettings" class="iconbtn" aria-label="設定">⚙️</button>
+      </div>
+    </div>
 
-    <!-- God-only panel -->
-    <section class="panel god">
-      <div class="panel-head">
-        <div class="panel-title">上帝資訊</div>
-        <label class="toggle">
-          <input type="checkbox" id="toggleGodView" />
-          <span>👁️ 展開</span>
+    <!-- ===== Prompt Card ===== -->
+    <div class="card">
+      <div class="card-hd">
+        <div id="promptTitle" class="h2">選擇人數</div>
+      </div>
+      <div class="card-bd">
+        <div id="promptText" class="preline">
+          請選擇人數：9人、10人或12人。
+        </div>
+        <div id="promptFoot" class="muted small" style="margin-top:10px;"></div>
+      </div>
+    </div>
+
+    <!-- ===== God Panel ===== -->
+    <div class="card">
+      <div class="row-between">
+        <div class="h2">上帝資訊</div>
+        <label class="row" style="gap:8px; align-items:center;">
+          <input id="toggleGodView" type="checkbox" />
+          <span class="muted small">👁️ 展開</span>
         </label>
       </div>
-      <div class="panel-body god-body" id="godText">（收合中）</div>
-    </section>
+      <div id="godText" class="preline small muted" style="margin-top:10px;">
+        選完人數後會自動載入對應官方板子。
+      </div>
+    </div>
 
-    <!-- Seats -->
-    <main class="seats">
-      <div class="seats-grid" id="seatsGrid"></div>
-    </main>
+    <!-- ===== Seats Grid ===== -->
+    <div id="seatsGrid" class="seats-grid" data-cols="3"></div>
 
-    <!-- Bottom Action Bar -->
-    <footer class="actionbar">
-      <button class="btn ghost" id="btnBack" disabled>上一步</button>
-      <button class="btn primary" id="btnPrimary">下一步</button>
-      <button class="btn ghost" id="btnCancel">取消</button>
-    </footer>
+    <!-- spacer for bottom bar -->
+    <div style="height: 92px;"></div>
   </div>
 
-  <!-- Settings Drawer -->
-  <div class="drawer-backdrop hidden" id="drawerBackdrop"></div>
-  <aside class="drawer hidden" id="drawer">
-    <div class="drawer-head">
-      <div class="drawer-title">設定</div>
-      <button class="drawer-close" id="btnCloseDrawer">✕</button>
+  <!-- ===== Bottom Action Bar ===== -->
+  <div class="actionbar">
+    <button id="btnBack" class="btn ghost">上一步</button>
+    <button id="btnPrimary" class="btn primary">下一步</button>
+    <button id="btnCancel" class="btn ghost">取消</button>
+  </div>
+
+  <!-- ===== Settings Drawer ===== -->
+  <div id="drawerBackdrop" class="backdrop hidden"></div>
+  <div id="drawer" class="drawer hidden" role="dialog" aria-label="設定">
+    <div class="drawer-hd">
+      <div class="h2">設定</div>
+      <button id="btnCloseDrawer" class="iconbtn" aria-label="關閉">✕</button>
     </div>
 
-    <div class="drawer-section">
-      <div class="drawer-label">勝負模式（僅開局可改）</div>
-      <div class="seg" role="tablist" aria-label="勝負模式">
-        <button class="seg-btn" id="segEdge" type="button">屠邊</button>
-        <button class="seg-btn" id="segCity" type="button">屠城</button>
+    <div class="drawer-bd">
+      <div class="h3">勝負模式</div>
+      <div class="seg">
+        <button id="segEdge" class="segbtn">屠邊</button>
+        <button id="segCity" class="segbtn">屠城</button>
       </div>
-      <div class="drawer-help">屠邊：神全死或民全死→狼勝；屠城：狼數≥好人數→狼勝</div>
+      <div class="muted small" style="margin-top:6px;">
+        屠邊：神全死或民全死 → 狼勝；屠城：狼數 ≥ 好人數 → 狼勝。狼全滅 → 好人勝優先。
+      </div>
+
+      <hr class="hr" />
+
+      <div class="row-between">
+        <div>
+          <div class="h3">上警</div>
+          <div class="muted small">MVP：可在開局設定是否啟用</div>
+        </div>
+        <label class="switch">
+          <input id="togglePolice" type="checkbox" />
+          <span class="slider"></span>
+        </label>
+      </div>
+
+      <hr class="hr" />
+
+      <button id="btnReset" class="btn danger" style="width:100%;">重置本局（清除存檔）</button>
+    </div>
+  </div>
+
+  <!-- ===== Timer Drawer ===== -->
+  <div id="timerBackdrop" class="backdrop hidden"></div>
+  <div id="timerDrawer" class="drawer hidden" role="dialog" aria-label="倒數計時">
+    <div class="drawer-hd">
+      <div class="h2">倒數計時</div>
+      <button id="btnCloseTimer" class="iconbtn" aria-label="關閉">✕</button>
     </div>
 
-    <div class="drawer-section">
-      <div class="drawer-label">上警（僅開局可改）</div>
-      <label class="toggle">
-        <input type="checkbox" id="togglePolice" />
-        <span>啟用上警流程</span>
-      </label>
-      <div class="drawer-help">12人預設開啟。進夜晚後會鎖定。</div>
-    </div>
+    <div class="drawer-bd">
+      <div id="timerBig" class="timer-big">00:00</div>
+      <div id="timerHint" class="muted small" style="margin-top:6px;">選一個常用時間開始。</div>
 
-    <div class="drawer-section">
-      <button class="btn danger" id="btnReset" type="button">重置本局（清除存檔）</button>
-    </div>
-  </aside>
+      <div id="timerPresets" class="preset-row" style="margin-top:12px;">
+        <button class="btn ghost" data-sec="60">1 分</button>
+        <button class="btn ghost" data-sec="120">2 分</button>
+        <button class="btn ghost" data-sec="180">3 分</button>
+        <button class="btn ghost" data-sec="240">4 分</button>
+        <button class="btn ghost" data-sec="300">5 分</button>
+      </div>
 
-  <!-- Timer Drawer -->
-  <div class="drawer-backdrop hidden" id="timerBackdrop"></div>
-  <aside class="drawer hidden" id="timerDrawer">
-    <div class="drawer-head">
-      <div class="drawer-title">倒數計時</div>
-      <button class="drawer-close" id="btnCloseTimer">✕</button>
-    </div>
-
-    <div class="drawer-section">
-      <div class="drawer-label">目前剩餘</div>
-      <div class="timer-big" id="timerBig">00:00</div>
-      <div class="drawer-help" id="timerHint">選一個常用時間開始，或暫停/重置。</div>
-    </div>
-
-    <div class="drawer-section">
-      <div class="drawer-label">常用時間</div>
-      <div class="grid-quick" id="timerPresets">
-        <button class="quick2" data-sec="60">1:00</button>
-        <button class="quick2" data-sec="90">1:30</button>
-        <button class="quick2" data-sec="120">2:00</button>
-        <button class="quick2" data-sec="180">3:00</button>
-        <button class="quick2" data-sec="240">4:00</button>
-        <button class="quick2" data-sec="300">5:00</button>
+      <div class="row" style="gap:10px; margin-top:12px;">
+        <button id="btnTimerStart" class="btn primary" style="flex:1;">開始</button>
+        <button id="btnTimerPause" class="btn ghost" style="flex:1;">暫停</button>
+        <button id="btnTimerReset" class="btn ghost" style="flex:1;">重置</button>
       </div>
     </div>
+  </div>
 
-    <div class="drawer-section">
-      <div class="grid-actions">
-        <button class="btn primary" id="btnTimerStart">開始</button>
-        <button class="btn ghost" id="btnTimerPause">暫停</button>
-        <button class="btn ghost" id="btnTimerReset">重置</button>
-      </div>
-      <div class="drawer-help">提示：計時會存檔，重整頁面也會繼續。</div>
-    </div>
-  </aside>
+  <!-- ✅ 只保留這一行：主程式入口 -->
+  <script src="./app.js" defer></script>
 
-  <script src="./app.js"></script>
+  <!-- PWA SW（可留，若你要徹底排除快取問題，可先註解掉） -->
+  <script>
+    if ("serviceWorker" in navigator) {
+      window.addEventListener("load", () => {
+        navigator.serviceWorker.register("./sw.js").catch(()=>{});
+      });
+    }
+  </script>
 </body>
 </html>
