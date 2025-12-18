@@ -1,15 +1,18 @@
 /* =========================
    Werewolf MVP (Single Device, GitHub Pages)
-   Day0~Day5
+   v6 - Full Cover
    - SETUP: A1 choose count, A2 load board & settings, A3 reveal roles (long press 0.3s)
-   - NIGHT: N0 -> wolf -> seer -> witch -> resolve -> announce -> enter DAY
-   - DAY: D1 discuss -> MAIN vote (sequential) -> result -> PK -> result -> next NIGHT
+   - NIGHT: N0 -> wolf -> seer -> witch -> resolve -> announce -> enter DAY (or END)
+   - DAY: D1 discuss -> sequential voting -> PK -> second tie => no exile -> next NIGHT
    - Settings: winMode edge/city + police (locked after leaving SETUP)
    - Timer drawer: presets, persist, vibrate + toast when finished
-   - God view: when expanded, show each seat role + camp badge
+   - God view: expanded shows role + camp badge on EVERY seat (alive/dead)
+   - Win check: wolves==0 => good win (priority)
+              city: wolves >= goods => wolf win
+              edge: gods==0 OR villagers==0 => wolf win
    ========================= */
 
-const STORAGE_KEY = "werewolf_mvp_state_v5";
+const STORAGE_KEY = "werewolf_mvp_state_v6";
 
 /* ---------- Role specs ---------- */
 const ROLE_LABELS = {
@@ -28,7 +31,7 @@ const BOARD_FALLBACK = {
     title: "9 人官方標準局",
     playersCount: 9,
     hasPolice: false,
-    winCondition: { mode: "city" }, // city = 屠城
+    winCondition: { mode: "city" },
     witchCanSelfSave: false,
     roles: [
       { roleId: "wolf", count: 3 },
@@ -68,7 +71,7 @@ const BOARD_FALLBACK = {
     title: "12 人官方標準局",
     playersCount: 12,
     hasPolice: true,
-    winCondition: { mode: "edge" }, // edge = 屠邊
+    winCondition: { mode: "edge" },
     witchCanSelfSave: false,
     roles: [
       { roleId: "wolf", count: 4 },
@@ -135,6 +138,11 @@ let timerTick = null;
 btnPrimary.addEventListener("click", () => {
   const step = state.flow.stepId;
 
+  // END
+  if (state.flow.phase === "END") {
+    return;
+  }
+
   // SETUP
   if (state.flow.phase === "SETUP" && step === "SETUP:A1") {
     if (!state.config.playersCount) return toast("請先選人數");
@@ -177,10 +185,14 @@ btnPrimary.addEventListener("click", () => {
 
     if (n.kind === "RESOLVE") {
       resolveNight();
+      // ✅ night resolve may end game
+      if (state.flow.phase === "END") return;
       return nextNightStep();
     }
 
     if (n.kind === "ANNOUNCE") {
+      // Announcement step can also end (rarely needed, but safe)
+      if (checkWinAndEnd()) return;
       return enterDay();
     }
   }
@@ -201,6 +213,7 @@ btnPrimary.addEventListener("click", () => {
 // Cancel: in day vote acts as abstain commit; in night clears pending
 btnCancel.addEventListener("click", () => {
   const step = state.flow.stepId;
+  if (state.flow.phase === "END") return;
 
   if (step === "SETUP:A3") {
     state.ui.revealingSeat = null;
@@ -275,7 +288,7 @@ btnTimerReset?.addEventListener("click", () => resetTimer());
    ========================= */
 function makeInitialState() {
   return {
-    meta: { version: "mvp-1.5", createdAt: Date.now(), updatedAt: Date.now() },
+    meta: { version: "mvp-1.6", createdAt: Date.now(), updatedAt: Date.now() },
     config: { playersCount: null },
     board: null,
     players: [],
@@ -300,6 +313,8 @@ function makeInitialState() {
     ui: { godExpanded: false, revealingSeat: null },
 
     timer: { durationMs: 0, remainingMs: 0, running: false, lastTickAt: 0 },
+
+    end: null,
   };
 }
 
@@ -335,7 +350,6 @@ async function loadBoardByCount(count) {
     if (!res.ok) throw new Error("fetch failed");
     return await res.json();
   } catch {
-    // deep clone fallback
     return JSON.parse(JSON.stringify(BOARD_FALLBACK[count]));
   }
 }
@@ -352,6 +366,7 @@ function initPlayers(count) {
   state.setup.seenSeats = [];
   state.setup.rolesAssigned = false;
   state.ui.revealingSeat = null;
+  state.end = null;
 }
 
 function setPlayersCount(count) {
@@ -364,6 +379,8 @@ function setPlayersCount(count) {
       state.board.winCondition = state.board.winCondition || { mode: "city" };
       state.board.playersCount = count;
       state.board.witchCanSelfSave = !!state.board.witchCanSelfSave;
+      // set toggle UI
+      syncDrawerUI();
       saveAndRender();
     })
     .catch((err) => {
@@ -414,12 +431,60 @@ function allSeatsSeen() {
 }
 
 /* =========================
+   Win Condition
+   ========================= */
+function countAliveBy(predicate) {
+  return state.players.filter(p => p.alive && predicate(p)).length;
+}
+
+function evaluateWin() {
+  const mode = state.board?.winCondition?.mode || "city";
+  const wolves = countAliveBy(p => p.camp === "wolf");
+  const goods  = countAliveBy(p => p.camp !== "wolf");
+
+  // ✅ 好人勝優先：狼全滅
+  if (wolves === 0) return { winner: "good", reason: "狼人全滅" };
+
+  // ✅ 狼勝：屠城
+  if (mode === "city") {
+    if (wolves >= goods) return { winner: "wolf", reason: "屠城：狼人數 ≥ 好人數" };
+  }
+
+  // ✅ 狼勝：屠邊
+  if (mode === "edge") {
+    const aliveGods = countAliveBy(p => (ROLE_LABELS[p.roleId]?.isGod) && p.camp !== "wolf");
+    const aliveVillagers = countAliveBy(p => (p.roleId === "villager") && p.camp !== "wolf");
+    if (aliveGods === 0) return { winner: "wolf", reason: "屠邊：神全死" };
+    if (aliveVillagers === 0) return { winner: "wolf", reason: "屠邊：民全死" };
+  }
+
+  return null;
+}
+
+function checkWinAndEnd() {
+  const res = evaluateWin();
+  if (!res) return false;
+
+  state.flow.phase = "END";
+  state.flow.stepId = "END";
+  state.flow.stepIndex += 1;
+  state.end = { ...res, at: Date.now() };
+
+  toast(res.winner === "good" ? `🎉 好人勝（${res.reason}）` : `🐺 狼人勝（${res.reason}）`);
+  saveAndRender();
+  return true;
+}
+
+/* =========================
    Night flow
    ========================= */
 function enterNight() {
   state.flow.phase = "NIGHT";
   state.flow.stepId = "NIGHT:N0";
   state.flow.stepIndex += 1;
+
+  // lock settings after leaving setup
+  syncDrawerUI();
 
   const steps = (state.board?.nightSteps || [])
     .slice()
@@ -515,19 +580,25 @@ function resolveNight() {
 
   log.deaths = Array.from(deaths).sort((a, b) => a - b);
 
-  // apply deaths to players
+  // apply deaths
   for (const seat of log.deaths) {
     const pl = state.players.find((p) => p.seat === seat);
     if (pl) pl.alive = false;
   }
 
   saveState(state);
+
+  // ✅ check win after deaths
+  checkWinAndEnd();
 }
 
 /* =========================
    Day flow + voting
    ========================= */
 function enterDay() {
+  // if already ended, stop
+  if (state.flow.phase === "END") return;
+
   state.flow.phase = "DAY";
   state.flow.stepId = "DAY:D1";
   state.flow.stepIndex += 1;
@@ -560,7 +631,7 @@ function startMainVote() {
   const r = state.flow.round;
   const alive = aliveSeats();
 
-  state.day.voterOrder = alive.slice(); // in seat order
+  state.day.voterOrder = alive.slice();
   state.day.voterIndex = 0;
   state.day.pending = { target: null };
   state.day.candidates = null;
@@ -584,7 +655,6 @@ function commitCurrentVoteAndAdvance(kind) {
 
   const target = state.day.pending?.target ?? null;
 
-  // validate target
   if (target !== null) {
     const alive = new Set(aliveSeats());
     if (!alive.has(target)) return toast("不能投已死亡的人");
@@ -599,7 +669,6 @@ function commitCurrentVoteAndAdvance(kind) {
   state.day.voterIndex += 1;
   state.day.pending = { target: null };
 
-  // finished?
   if (state.day.voterIndex >= state.day.voterOrder.length) {
     state.day.stage = kind === "PK" ? "PK_RESULT" : "MAIN_RESULT";
     state.flow.stepId = kind === "PK" ? "DAY:PK:RESULT" : "DAY:VOTE:RESULT";
@@ -611,7 +680,7 @@ function commitCurrentVoteAndAdvance(kind) {
 }
 
 function tallyVotes(votesObj, candidateLimit = null) {
-  const counts = new Map(); // target -> count
+  const counts = new Map();
   const detailLines = [];
 
   const voters = Object.keys(votesObj).map(Number).sort((a, b) => a - b);
@@ -663,6 +732,7 @@ function processVoteResultAndAdvance(kind) {
 
     if (hasWinner) {
       exileSeat(result.topSeats[0]);
+      if (state.flow.phase === "END") return; // ended by exile
       state.flow.round += 1;
       return enterNight();
     }
@@ -683,6 +753,7 @@ function processVoteResultAndAdvance(kind) {
 
     if (hasWinner) {
       exileSeat(result.topSeats[0]);
+      if (state.flow.phase === "END") return; // ended by exile
       state.flow.round += 1;
       return enterNight();
     }
@@ -698,6 +769,8 @@ function exileSeat(seat) {
   if (!p || !p.alive) return;
   p.alive = false;
   toast(`放逐：${seat}號`);
+  saveState(state);
+  checkWinAndEnd(); // ✅ win check after exile
 }
 
 /* =========================
@@ -737,17 +810,16 @@ function renderSeats() {
     const tag = document.createElement("div");
     tag.className = "tag";
 
-    // A3 reveal behavior unchanged
+    // A3 reveal behavior
     if (step === "SETUP:A3" && state.ui.revealingSeat === p.seat) {
       const spec = ROLE_LABELS[p.roleId] || { name: "未知", camp: "good" };
       tag.textContent = `${spec.name} · ${spec.camp === "wolf" ? "狼人陣營" : "好人陣營"}`;
     } else {
       tag.textContent = p.alive ? "存活" : "死亡";
 
-      // ✅ God view expanded: show role + camp badge in each seat card
+      // ✅ God view expanded: alive/dead 都顯示角色＋陣營
       if (state.ui.godExpanded && p.roleId) {
         const spec = ROLE_LABELS[p.roleId] || { name: p.roleId, camp: p.camp || "good" };
-
         el.classList.toggle("camp-wolf", spec.camp === "wolf");
         el.classList.toggle("camp-good", spec.camp !== "wolf");
 
@@ -943,6 +1015,17 @@ function findRoleSeat(roleId) {
    Prompt + God panel
    ========================= */
 function renderPrompt() {
+  // END
+  if (state.flow.phase === "END") {
+    const e = state.end || { winner: "?", reason: "" };
+    promptTitle.textContent = "遊戲結束";
+    promptText.textContent =
+      (e.winner === "good" ? "🎉 好人獲勝！" : "🐺 狼人獲勝！") +
+      (e.reason ? `\n\n原因：${e.reason}` : "");
+    promptFoot.textContent = "可按 ⚙️ → 重置本局 開新局。";
+    return;
+  }
+
   const step = state.flow.stepId;
 
   // SETUP
@@ -1147,7 +1230,6 @@ function renderPrompt() {
     }
   }
 
-  // fallback
   promptTitle.textContent = "（未定義步驟）";
   promptText.textContent = "目前步驟尚未定義 prompt。";
   promptFoot.textContent = "";
@@ -1156,6 +1238,13 @@ function renderPrompt() {
 function renderGodPanel() {
   if (!state.ui.godExpanded) {
     godText.textContent = "（收合中）";
+    return;
+  }
+
+  // END
+  if (state.flow.phase === "END") {
+    const e = state.end || {};
+    godText.textContent = `結束：${e.winner === "good" ? "好人勝" : "狼人勝"}\n原因：${e.reason || "—"}`;
     return;
   }
 
@@ -1169,12 +1258,13 @@ function renderGodPanel() {
   if (step === "SETUP:A2") {
     if (!state.board) return (godText.textContent = "載入板子中…");
     const roleCounts = state.board.roles.map((r) => `${ROLE_LABELS[r.roleId]?.name ?? r.roleId}×${r.count}`).join("、");
+    const mode = state.board.winCondition?.mode || "city";
     godText.textContent =
       `板子：${state.board.title}\n` +
       `角色：${roleCounts}\n` +
       `夜晚：${state.board.nightSteps.map((s) => `${s.wakeOrder}.${s.name}`).join(" → ")}\n` +
-      `勝負：${state.board.winCondition?.mode}\n` +
-      `上警：${state.board.hasPolice}`;
+      `勝負：${mode === "edge" ? "屠邊" : "屠城"}\n` +
+      `上警：${state.board.hasPolice ? "啟用" : "關閉"}`;
     return;
   }
 
@@ -1246,6 +1336,16 @@ function renderActions() {
   const step = state.flow.stepId;
 
   btnBack.disabled = true; // MVP: avoid back for stability
+
+  // END
+  if (state.flow.phase === "END") {
+    btnPrimary.disabled = true;
+    btnCancel.disabled = true;
+    btnPrimary.textContent = "已結束";
+    btnCancel.textContent = "—";
+    return;
+  }
+
   btnCancel.disabled = false;
 
   if (state.flow.phase === "SETUP") {
