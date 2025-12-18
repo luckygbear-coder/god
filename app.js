@@ -1,19 +1,79 @@
 /* =========================
-   Werewolf MVP - Day0~Day2
-   - SETUP:A1 choose count
-   - SETUP:A2 load board + config winMode/hasPolice
-   - SETUP:A3 assign roles + long-press reveal (0.3s) + seen gate
+   Werewolf MVP - Day0~Day2 + Timer + Board Fallback
    ========================= */
 
-const STORAGE_KEY = "werewolf_mvp_state_v1";
+const STORAGE_KEY = "werewolf_mvp_state_v2";
 
+// ---- Role labels
 const ROLE_LABELS = {
   wolf:   { name: "狼人", camp: "wolf" },
-  seer:   { name: "預言家", camp: "good" },
-  witch:  { name: "女巫", camp: "good" },
-  hunter: { name: "獵人", camp: "good" },
+  seer:   { name: "預言家", camp: "good", isGod: true },
+  witch:  { name: "女巫", camp: "good", isGod: true },
+  hunter: { name: "獵人", camp: "good", isGod: true },
   idiot:  { name: "白癡", camp: "good", isGod: true },
-  villager:{ name: "平民", camp: "good" }
+  villager:{ name: "平民", camp: "good", isGod: false }
+};
+
+// ---- Board fallback (寫入在 app.js，避免 fetch 失敗就掛)
+const BOARD_FALLBACK = {
+  9: {
+    id: "official-9",
+    title: "9 人官方標準局",
+    playersCount: 9,
+    hasPolice: false,
+    winCondition: { mode: "city" },
+    roles: [
+      { roleId: "wolf", count: 3 },
+      { roleId: "seer", count: 1 },
+      { roleId: "witch", count: 1 },
+      { roleId: "hunter", count: 1 },
+      { roleId: "villager", count: 3 }
+    ],
+    nightSteps: [
+      { id: "wolf", name: "狼人", wakeOrder: 1, alwaysShow: true, actionType: "pick", seatPickRule: { mode: "single", allowSelf: false, allowDead: false, allowNone: true } },
+      { id: "seer", name: "預言家", wakeOrder: 2, alwaysShow: true, actionType: "pick", seatPickRule: { mode: "single", allowSelf: true, allowDead: false, allowNone: false } },
+      { id: "witch", name: "女巫", wakeOrder: 3, alwaysShow: true, actionType: "pick" }
+    ]
+  },
+  10: {
+    id: "official-10",
+    title: "10 人官方標準局",
+    playersCount: 10,
+    hasPolice: false,
+    winCondition: { mode: "city" },
+    roles: [
+      { roleId: "wolf", count: 3 },
+      { roleId: "seer", count: 1 },
+      { roleId: "witch", count: 1 },
+      { roleId: "hunter", count: 1 },
+      { roleId: "villager", count: 4 }
+    ],
+    nightSteps: [
+      { id: "wolf", name: "狼人", wakeOrder: 1, alwaysShow: true, actionType: "pick", seatPickRule: { mode: "single", allowSelf: false, allowDead: false, allowNone: true } },
+      { id: "seer", name: "預言家", wakeOrder: 2, alwaysShow: true, actionType: "pick", seatPickRule: { mode: "single", allowSelf: true, allowDead: false, allowNone: false } },
+      { id: "witch", name: "女巫", wakeOrder: 3, alwaysShow: true, actionType: "pick" }
+    ]
+  },
+  12: {
+    id: "official-12",
+    title: "12 人官方標準局",
+    playersCount: 12,
+    hasPolice: true,
+    winCondition: { mode: "edge" },
+    roles: [
+      { roleId: "wolf", count: 4 },
+      { roleId: "seer", count: 1 },
+      { roleId: "witch", count: 1 },
+      { roleId: "hunter", count: 1 },
+      { roleId: "idiot", count: 1 },
+      { roleId: "villager", count: 4 }
+    ],
+    nightSteps: [
+      { id: "wolf", name: "狼人", wakeOrder: 1, alwaysShow: true, actionType: "pick", seatPickRule: { mode: "single", allowSelf: false, allowDead: false, allowNone: true } },
+      { id: "seer", name: "預言家", wakeOrder: 2, alwaysShow: true, actionType: "pick", seatPickRule: { mode: "single", allowSelf: true, allowDead: false, allowNone: false } },
+      { id: "witch", name: "女巫", wakeOrder: 3, alwaysShow: true, actionType: "pick" }
+    ]
+  }
 };
 
 // ----- UI refs
@@ -24,7 +84,6 @@ const promptText = document.getElementById("promptText");
 const promptFoot = document.getElementById("promptFoot");
 const godText = document.getElementById("godText");
 const toggleGodView = document.getElementById("toggleGodView");
-
 const seatsGrid = document.getElementById("seatsGrid");
 
 const btnSettings = document.getElementById("btnSettings");
@@ -36,64 +95,69 @@ const segCity = document.getElementById("segCity");
 const togglePolice = document.getElementById("togglePolice");
 const btnReset = document.getElementById("btnReset");
 
+const btnTimer = document.getElementById("btnTimer");
+const timerDrawer = document.getElementById("timerDrawer");
+const timerBackdrop = document.getElementById("timerBackdrop");
+const btnCloseTimer = document.getElementById("btnCloseTimer");
+const timerBig = document.getElementById("timerBig");
+const timerHint = document.getElementById("timerHint");
+const btnTimerStart = document.getElementById("btnTimerStart");
+const btnTimerPause = document.getElementById("btnTimerPause");
+const btnTimerReset = document.getElementById("btnTimerReset");
+const timerPresets = document.getElementById("timerPresets");
+
 const btnBack = document.getElementById("btnBack");
 const btnPrimary = document.getElementById("btnPrimary");
 const btnCancel = document.getElementById("btnCancel");
 
 // ----- State
 let state = loadState() ?? makeInitialState();
-render();
+let timerTick = null;
 
 // =========================
-// iOS anti-zoom / anti-callout (extra hardening)
+// iOS anti-zoom / anti-callout
 // =========================
 document.addEventListener("gesturestart", (e) => e.preventDefault());
 document.addEventListener("dblclick", (e) => e.preventDefault(), { passive: false });
 document.addEventListener("contextmenu", (e) => e.preventDefault());
 
 // =========================
-// Events
+// Events - Main
 // =========================
 btnPrimary.addEventListener("click", () => {
   if (state.flow.phase === "SETUP" && state.flow.stepId === "SETUP:A1") {
-    // Must choose playersCount
-    if (!state.config.playersCount) {
-      toast("請先選人數");
-      return;
-    }
+    if (!state.config.playersCount) return toast("請先選人數");
     goStep("SETUP:A2");
     return;
   }
 
   if (state.flow.phase === "SETUP" && state.flow.stepId === "SETUP:A2") {
-    // Confirm board -> A3
     goStep("SETUP:A3");
-    // auto assign roles when enter A3
     if (!state.setup.rolesAssigned) assignRolesForSetup();
     return;
   }
 
   if (state.flow.phase === "SETUP" && state.flow.stepId === "SETUP:A3") {
-    if (!allSeatsSeen()) {
-      toast("還有人沒看身分喔～");
-      return;
-    }
-    // next to night (we'll stop here for Day2)
+    if (!allSeatsSeen()) return toast("還有人沒看身分喔～");
     toast("✅ Day2 完成：已可進夜晚（下一版接 NIGHT）");
-    // You can switch to NIGHT:N0 later
     return;
   }
 });
 
 btnCancel.addEventListener("click", () => {
-  // clear reveal/pending etc
   state.ui.revealingSeat = null;
   saveAndRender();
 });
 
-btnSettings.addEventListener("click", () => openDrawer());
-btnCloseDrawer.addEventListener("click", () => closeDrawer());
-drawerBackdrop.addEventListener("click", () => closeDrawer());
+// Settings drawer
+btnSettings.addEventListener("click", openDrawer);
+btnCloseDrawer.addEventListener("click", closeDrawer);
+drawerBackdrop.addEventListener("click", closeDrawer);
+
+// Timer drawer
+btnTimer.addEventListener("click", openTimer);
+btnCloseTimer.addEventListener("click", closeTimer);
+timerBackdrop.addEventListener("click", closeTimer);
 
 toggleGodView.addEventListener("change", () => {
   state.ui.godExpanded = !!toggleGodView.checked;
@@ -105,40 +169,49 @@ segCity.addEventListener("click", () => setWinMode("city"));
 
 togglePolice.addEventListener("change", () => {
   if (!isSetupPhase()) return;
+  if (!state.board) return;
   state.board.hasPolice = !!togglePolice.checked;
   saveAndRender();
 });
 
 btnReset.addEventListener("click", () => {
   if (!confirm("確定要重置本局？（會清除存檔）")) return;
+  stopTimer(true);
   localStorage.removeItem(STORAGE_KEY);
   state = makeInitialState();
   render();
 });
+
+// Timer controls
+timerPresets.addEventListener("click", (e) => {
+  const btn = e.target.closest("button[data-sec]");
+  if (!btn) return;
+  const sec = Number(btn.dataset.sec);
+  setTimer(sec * 1000);
+  startTimer();
+});
+
+btnTimerStart.addEventListener("click", () => startTimer());
+btnTimerPause.addEventListener("click", () => pauseTimer());
+btnTimerReset.addEventListener("click", () => resetTimer());
 
 // =========================
 // State helpers
 // =========================
 function makeInitialState() {
   return {
-    meta: { version: "mvp-1.0", createdAt: Date.now(), updatedAt: Date.now() },
+    meta: { version: "mvp-1.1", createdAt: Date.now(), updatedAt: Date.now() },
     config: { playersCount: null },
-    board: null, // loaded board config
+    board: null,
     players: [],
-    flow: {
-      phase: "SETUP",
-      round: 1,
-      stepId: "SETUP:A1",
-      stepIndex: 0,
-      pending: null
-    },
-    setup: {
-      rolesAssigned: false,
-      seenSeats: [] // seat numbers
-    },
-    ui: {
-      godExpanded: false,
-      revealingSeat: null
+    flow: { phase: "SETUP", round: 1, stepId: "SETUP:A1", stepIndex: 0, pending: null },
+    setup: { rolesAssigned: false, seenSeats: [] },
+    ui: { godExpanded: false, revealingSeat: null },
+    timer: {
+      durationMs: 0,
+      remainingMs: 0,
+      running: false,
+      lastTickAt: 0
     }
   };
 }
@@ -150,7 +223,6 @@ function isSetupPhase() {
 function goStep(stepId) {
   state.flow.stepId = stepId;
   state.flow.stepIndex += 1;
-  // keep phase as SETUP for Day2
   state.meta.updatedAt = Date.now();
   saveAndRender();
 }
@@ -179,16 +251,30 @@ function loadState() {
 // Board loading + players init
 // =========================
 async function loadBoardByCount(count) {
-  const map = {
+  const urlMap = {
     9: "./boards/official-9.json",
     10: "./boards/official-10.json",
     12: "./boards/official-12.json"
   };
-  const url = map[count];
-  if (!url) throw new Error("Unsupported playersCount");
-  const res = await fetch(url, { cache: "no-store" });
-  if (!res.ok) throw new Error("Board load failed");
-  return await res.json();
+
+  // 1) try fetch JSON
+  try {
+    const url = urlMap[count];
+    if (!url) throw new Error("unsupported count");
+    const res = await fetch(url, { cache: "no-store" });
+    if (!res.ok) throw new Error("fetch failed");
+    const json = await res.json();
+    return json;
+  } catch (e) {
+    // 2) fallback to embedded board
+    const fb = BOARD_FALLBACK[count];
+    if (!fb) throw e;
+    return structuredCloneSafe(fb);
+  }
+}
+
+function structuredCloneSafe(obj) {
+  return JSON.parse(JSON.stringify(obj));
 }
 
 function initPlayers(count) {
@@ -214,38 +300,33 @@ function initPlayers(count) {
 function setPlayersCount(count) {
   state.config.playersCount = count;
   initPlayers(count);
-  // Load board
+
   loadBoardByCount(count).then((board) => {
+    // 寫入 board（你說的「板子等需要的內容寫入」）
     state.board = board;
-    // board default options
-    // allow setup override
     state.board.winCondition = state.board.winCondition || { mode: "city" };
-    state.meta.updatedAt = Date.now();
+    // 鎖定：board.playersCount 與 config 一致
+    state.board.playersCount = count;
     saveAndRender();
   }).catch((err) => {
     console.error(err);
-    toast("讀取板子失敗（請檢查 boards 檔案）");
+    toast("讀取板子失敗（請檢查 boards/ 檔案）");
   });
 }
 
 // =========================
-// Role assignment for SETUP.A3
+// Role assignment for SETUP:A3
 // =========================
 function assignRolesForSetup() {
   const board = state.board;
   if (!board) return;
 
-  // Build role list by counts
   const roleList = [];
   for (const r of board.roles) {
     for (let i = 0; i < r.count; i++) roleList.push(r.roleId);
   }
-  if (roleList.length !== state.players.length) {
-    console.warn("Role count mismatch", roleList.length, state.players.length);
-  }
   shuffle(roleList);
 
-  // Assign
   state.players.forEach((p, idx) => {
     const roleId = roleList[idx] ?? "villager";
     const spec = ROLE_LABELS[roleId] ?? { name: roleId, camp: "good" };
@@ -254,7 +335,6 @@ function assignRolesForSetup() {
     p.revealed = false;
   });
 
-  // apply board hasPolice default to settings UI
   state.setup.rolesAssigned = true;
   state.setup.seenSeats = [];
   saveAndRender();
@@ -277,11 +357,9 @@ function allSeatsSeen() {
 // =========================
 function renderSeats() {
   const n = state.players.length || 9;
-  // columns suggestion
   let cols = 3;
   if (n === 12) cols = 4;
   else if (n === 10) cols = 5;
-  else cols = 3;
   seatsGrid.dataset.cols = String(cols);
 
   seatsGrid.innerHTML = "";
@@ -306,7 +384,6 @@ function renderSeats() {
     const tag = document.createElement("div");
     tag.className = "tag";
 
-    // Show role only when revealing (SETUP:A3)
     if (state.flow.stepId === "SETUP:A3" && state.ui.revealingSeat === p.seat) {
       const spec = ROLE_LABELS[p.roleId] || { name: "未知", camp: "good" };
       tag.textContent = `${spec.name} · ${spec.camp === "wolf" ? "狼人陣營" : "好人陣營"}`;
@@ -318,15 +395,12 @@ function renderSeats() {
     el.appendChild(num);
     el.appendChild(tag);
 
-    // interactions:
     wireSeatInteractions(el, p.seat);
-
     seatsGrid.appendChild(el);
   });
 }
 
 function wireSeatInteractions(el, seat) {
-  // Only meaningful in SETUP:A3 for now
   if (state.flow.stepId !== "SETUP:A3") {
     el.addEventListener("click", () => toast(`點了 ${seat}號（目前非抽身分步驟）`));
     return;
@@ -339,7 +413,6 @@ function wireSeatInteractions(el, seat) {
     e.preventDefault();
     clearTimeout(pressTimer);
     pressTimer = setTimeout(() => {
-      // reveal
       state.ui.revealingSeat = seat;
       if (!state.setup.seenSeats.includes(seat)) state.setup.seenSeats.push(seat);
       saveAndRender();
@@ -350,27 +423,22 @@ function wireSeatInteractions(el, seat) {
     e.preventDefault();
     clearTimeout(pressTimer);
     pressTimer = null;
-    // hide reveal when release
     if (state.ui.revealingSeat === seat) {
       state.ui.revealingSeat = null;
       saveAndRender(false);
     }
   };
 
-  // Touch
   el.addEventListener("touchstart", startPress, { passive: false });
   el.addEventListener("touchend", endPress, { passive: false });
   el.addEventListener("touchcancel", endPress, { passive: false });
 
-  // Mouse (desktop testing)
   el.addEventListener("mousedown", startPress);
   el.addEventListener("mouseup", endPress);
   el.addEventListener("mouseleave", endPress);
 
-  // Tap to re-view (your requirement)
   el.addEventListener("click", (e) => {
     e.preventDefault();
-    // quick tap toggles reveal (for re-view)
     state.ui.revealingSeat = (state.ui.revealingSeat === seat) ? null : seat;
     if (state.ui.revealingSeat === seat && !state.setup.seenSeats.includes(seat)) {
       state.setup.seenSeats.push(seat);
@@ -380,7 +448,7 @@ function wireSeatInteractions(el, seat) {
 }
 
 // =========================
-// Settings drawer helpers
+// Settings drawer
 // =========================
 function openDrawer() {
   drawer.classList.remove("hidden");
@@ -397,24 +465,18 @@ function setWinMode(mode) {
     syncDrawerUI();
     return;
   }
-  if (!state.board) {
-    toast("請先選人數並套用板子");
-    return;
-  }
+  if (!state.board) return toast("請先選人數並套用板子");
   state.board.winCondition = state.board.winCondition || {};
   state.board.winCondition.mode = mode;
   saveAndRender();
   syncDrawerUI();
 }
-
 function syncDrawerUI() {
   const mode = state.board?.winCondition?.mode || "city";
   segEdge.classList.toggle("active", mode === "edge");
   segCity.classList.toggle("active", mode === "city");
-
   togglePolice.checked = !!state.board?.hasPolice;
 
-  // lock when not in setup
   const lock = !isSetupPhase() || state.flow.stepId.startsWith("NIGHT");
   segEdge.disabled = lock;
   segCity.disabled = lock;
@@ -422,29 +484,147 @@ function syncDrawerUI() {
 }
 
 // =========================
+// Timer drawer + logic
+// =========================
+function openTimer() {
+  timerDrawer.classList.remove("hidden");
+  timerBackdrop.classList.remove("hidden");
+  renderTimerUI();
+}
+function closeTimer() {
+  timerDrawer.classList.add("hidden");
+  timerBackdrop.classList.add("hidden");
+}
+
+function setTimer(ms) {
+  state.timer.durationMs = ms;
+  state.timer.remainingMs = ms;
+  state.timer.running = false;
+  state.timer.lastTickAt = 0;
+  saveAndRender();
+  renderTimerUI();
+}
+
+function startTimer() {
+  if (!state.timer.durationMs) {
+    // default 2:00
+    setTimer(120000);
+  }
+  if (state.timer.remainingMs <= 0) {
+    state.timer.remainingMs = state.timer.durationMs;
+  }
+  state.timer.running = true;
+  state.timer.lastTickAt = Date.now();
+  ensureTimerTick();
+  saveAndRender();
+  renderTimerUI();
+}
+
+function pauseTimer() {
+  if (!state.timer.running) return;
+  tickOnce(); // 先把時間扣到最新
+  state.timer.running = false;
+  saveAndRender();
+  renderTimerUI();
+}
+
+function resetTimer() {
+  state.timer.running = false;
+  state.timer.remainingMs = state.timer.durationMs || 0;
+  state.timer.lastTickAt = 0;
+  saveAndRender();
+  renderTimerUI();
+}
+
+function stopTimer(clearAll = false) {
+  if (timerTick) clearInterval(timerTick);
+  timerTick = null;
+  if (clearAll) {
+    state.timer = { durationMs: 0, remainingMs: 0, running: false, lastTickAt: 0 };
+  } else {
+    state.timer.running = false;
+  }
+}
+
+function ensureTimerTick() {
+  if (timerTick) return;
+  timerTick = setInterval(() => {
+    if (!state.timer.running) return;
+    tickOnce();
+  }, 250);
+}
+
+function tickOnce() {
+  const now = Date.now();
+  const dt = Math.max(0, now - (state.timer.lastTickAt || now));
+  state.timer.lastTickAt = now;
+  state.timer.remainingMs = Math.max(0, state.timer.remainingMs - dt);
+
+  // finished
+  if (state.timer.remainingMs <= 0) {
+    state.timer.running = false;
+    state.timer.remainingMs = 0;
+    // 震動提示（iOS 支援度不一，但不會報錯）
+    if (navigator.vibrate) navigator.vibrate([120, 80, 120]);
+    toast("⏱️ 時間到！");
+  }
+  saveState(state);
+  renderTimerBadge();
+  renderTimerUI();
+}
+
+function renderTimerBadge() {
+  const running = state.timer.running;
+  btnTimer.classList.toggle("running", running);
+
+  const remain = state.timer.remainingMs || 0;
+  if (running || remain > 0) {
+    const t = formatMMSS(remain);
+    btnTimer.textContent = t;
+  } else {
+    btnTimer.textContent = "⏱️";
+  }
+}
+
+function renderTimerUI() {
+  if (!timerBig) return;
+  timerBig.textContent = formatMMSS(state.timer.remainingMs || 0);
+  if (state.timer.running) {
+    timerHint.textContent = "倒數中…（可暫停或重置）";
+  } else if ((state.timer.remainingMs || 0) > 0) {
+    timerHint.textContent = "已暫停／待開始（可按開始繼續）";
+  } else {
+    timerHint.textContent = "選一個常用時間開始，或按開始使用預設 2:00。";
+  }
+}
+
+function formatMMSS(ms) {
+  const sec = Math.ceil(ms / 1000);
+  const m = Math.floor(sec / 60);
+  const s = sec % 60;
+  return `${String(m).padStart(2,"0")}:${String(s).padStart(2,"0")}`;
+}
+
+// =========================
 // Render
 // =========================
 function render() {
-  // status
   uiStatus.textContent = `${state.flow.phase} / R${state.flow.round} / ${state.flow.stepId}`;
   uiBoard.textContent = state.board ? state.board.title : "未套用板子";
 
   toggleGodView.checked = !!state.ui.godExpanded;
 
-  // prompt by step
   renderPrompt();
-
-  // god panel
   renderGodPanel();
-
-  // seats
   renderSeats();
-
-  // action buttons state
   renderActions();
 
-  // persist minimal
+  // timer badge
+  renderTimerBadge();
+  if (state.timer.running) ensureTimerTick();
+
   saveState(state);
+  syncDrawerUI();
 }
 
 function renderPrompt() {
@@ -453,11 +633,26 @@ function renderPrompt() {
   if (step === "SETUP:A1") {
     promptTitle.textContent = "選擇人數";
     promptText.textContent = "請選擇人數：9人、10人或12人。";
-    promptFoot.textContent = state.config.playersCount ? `已選：${state.config.playersCount}人` : "尚未選擇";
+    promptFoot.innerHTML = `
+      <div class="quick-row">
+        <button class="quick" data-count="9">9人</button>
+        <button class="quick" data-count="10">10人</button>
+        <button class="quick" data-count="12">12人</button>
+      </div>
+      <div style="margin-top:6px;">${state.config.playersCount ? `已選：${state.config.playersCount}人` : "尚未選擇"}</div>
+    `;
+    promptFoot.querySelectorAll(".quick").forEach(btn => {
+      btn.addEventListener("click", () => {
+        const count = Number(btn.dataset.count);
+        setPlayersCount(count);
+        toast(`已選 ${count} 人`);
+      });
+    });
   } else if (step === "SETUP:A2") {
     promptTitle.textContent = "確認板子";
     if (!state.board) {
-      promptText.textContent = "載入板子中…（若一直卡住，請檢查 boards/ 檔案）";
+      promptText.textContent = "載入板子中…";
+      promptFoot.textContent = "";
     } else {
       const mode = state.board.winCondition?.mode === "edge" ? "屠邊" : "屠城";
       promptText.textContent =
@@ -487,7 +682,7 @@ function renderGodPanel() {
 
   const step = state.flow.stepId;
   if (step === "SETUP:A1") {
-    godText.textContent = "選完人數後會自動載入對應官方板子。";
+    godText.textContent = "選完人數後會自動載入對應官方板子。（若讀取失敗，會自動使用內建備援）";
   } else if (step === "SETUP:A2") {
     if (!state.board) {
       godText.textContent = "載入板子中…";
@@ -495,6 +690,7 @@ function renderGodPanel() {
       const roleCounts = state.board.roles.map(r => `${ROLE_LABELS[r.roleId]?.name ?? r.roleId}×${r.count}`).join("、");
       godText.textContent =
         `板子ID：${state.board.id}\n` +
+        `人數：${state.board.playersCount}\n` +
         `角色配置：${roleCounts}\n` +
         `夜晚流程：${state.board.nightSteps.map(s=>`${s.wakeOrder}.${s.name}`).join(" → ")}\n` +
         `勝負模式：${state.board.winCondition?.mode}\n` +
@@ -516,7 +712,7 @@ function renderActions() {
   const step = state.flow.stepId;
 
   btnBack.disabled = true; // Day0~2 先鎖
-  btnCancel.disabled = (state.flow.stepId !== "SETUP:A3");
+  btnCancel.disabled = (step !== "SETUP:A3");
 
   if (step === "SETUP:A1") {
     btnPrimary.textContent = "下一步";
@@ -525,34 +721,15 @@ function renderActions() {
     btnPrimary.textContent = "下一步";
     btnPrimary.disabled = !state.board;
   } else if (step === "SETUP:A3") {
-    btnPrimary.textContent = allSeatsSeen() ? "確認進夜晚" : "確認進夜晚";
+    btnPrimary.textContent = "確認進夜晚";
     btnPrimary.disabled = !allSeatsSeen();
   } else {
     btnPrimary.textContent = "下一步";
     btnPrimary.disabled = false;
   }
-
-  // render count selection buttons inside prompt foot on A1
-  if (step === "SETUP:A1") {
-    promptFoot.innerHTML = `
-      <div class="quick-row">
-        <button class="quick" data-count="9">9人</button>
-        <button class="quick" data-count="10">10人</button>
-        <button class="quick" data-count="12">12人</button>
-      </div>
-      <div style="margin-top:6px;">${state.config.playersCount ? `已選：${state.config.playersCount}人` : "尚未選擇"}</div>
-    `;
-    promptFoot.querySelectorAll(".quick").forEach(btn => {
-      btn.addEventListener("click", () => {
-        const count = Number(btn.dataset.count);
-        setPlayersCount(count);
-        toast(`已選 ${count} 人`);
-      });
-    });
-  }
 }
 
-// add minimal styles for inline buttons
+// add quick buttons style
 const styleTag = document.createElement("style");
 styleTag.textContent = `
 .quick-row{ display:flex; gap:8px; margin-top:6px; }
@@ -590,5 +767,8 @@ function toast(msg) {
   toastTimer = setTimeout(() => (el.style.display = "none"), 1400);
 }
 
-// initial sync for drawer
-syncDrawerUI();
+// =========================
+// Boot
+// =========================
+render();
+renderTimerUI();
