@@ -1,0 +1,19 @@
+{
+  "id": "official-9",
+  "title": "9 人官方標準局",
+  "playersCount": 9,
+  "hasPolice": false,
+  "winCondition": { "mode": "city" },
+  "roles": [
+    { "roleId": "wolf", "count": 3 },
+    { "roleId": "seer", "count": 1 },
+    { "roleId": "witch", "count": 1 },
+    { "roleId": "hunter", "count": 1 },
+    { "roleId": "villager", "count": 3 }
+  ],
+  "nightSteps": [
+    { "id": "wolf", "name": "狼人", "wakeOrder": 1, "alwaysShow": true, "actionType": "pick", "seatPickRule": { "mode": "single", "allowSelf": false, "allowDead": false, "allowNone": true } },
+    { "id": "seer", "name": "預言家", "wakeOrder": 2, "alwaysShow": true, "actionType": "pick", "seatPickRule": { "mode": "single", "allowSelf": true, "allowDead": false, "allowNone": false } },
+    { "id": "witch", "name": "女巫", "wakeOrder": 3, "alwaysShow": true, "actionType": "pick" }
+  ]
+}
