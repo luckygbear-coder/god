@@ -1,18 +1,16 @@
 /* =========================
    Werewolf MVP (Single Device, GitHub Pages)
-   v6 - Full Cover
-   - SETUP: A1 choose count, A2 load board & settings, A3 reveal roles (long press 0.3s)
-   - NIGHT: N0 -> wolf -> seer -> witch -> resolve -> announce -> enter DAY (or END)
-   - DAY: D1 discuss -> sequential voting -> PK -> second tie => no exile -> next NIGHT
-   - Settings: winMode edge/city + police (locked after leaving SETUP)
-   - Timer drawer: presets, persist, vibrate + toast when finished
-   - God view: expanded shows role + camp badge on EVERY seat (alive/dead)
+   v7 - Full Cover
+   - Idiot: exiled by vote => NOT die, lose voting right forever (revealed)
+   - Hunter: exiled by vote => prompt shoot? then pick target, resolve death
+   - Voting order excludes players without voting right (canVote=false)
+   - God view expanded shows role + camp badge on EVERY seat (alive/dead)
    - Win check: wolves==0 => good win (priority)
               city: wolves >= goods => wolf win
               edge: gods==0 OR villagers==0 => wolf win
    ========================= */
 
-const STORAGE_KEY = "werewolf_mvp_state_v6";
+const STORAGE_KEY = "werewolf_mvp_state_v7";
 
 /* ---------- Role specs ---------- */
 const ROLE_LABELS = {
@@ -24,7 +22,7 @@ const ROLE_LABELS = {
   villager: { name: "平民", camp: "good", isGod: false },
 };
 
-/* ---------- Board fallback (in case fetch fails) ---------- */
+/* ---------- Board fallback ---------- */
 const BOARD_FALLBACK = {
   9: {
     id: "official-9",
@@ -89,7 +87,7 @@ const BOARD_FALLBACK = {
   },
 };
 
-/* ---------- DOM refs (must match index.html) ---------- */
+/* ---------- DOM refs ---------- */
 const uiStatus = document.getElementById("uiStatus");
 const uiBoard = document.getElementById("uiBoard");
 const promptTitle = document.getElementById("promptTitle");
@@ -138,10 +136,7 @@ let timerTick = null;
 btnPrimary.addEventListener("click", () => {
   const step = state.flow.stepId;
 
-  // END
-  if (state.flow.phase === "END") {
-    return;
-  }
+  if (state.flow.phase === "END") return;
 
   // SETUP
   if (state.flow.phase === "SETUP" && step === "SETUP:A1") {
@@ -185,34 +180,45 @@ btnPrimary.addEventListener("click", () => {
 
     if (n.kind === "RESOLVE") {
       resolveNight();
-      // ✅ night resolve may end game
       if (state.flow.phase === "END") return;
       return nextNightStep();
     }
 
     if (n.kind === "ANNOUNCE") {
-      // Announcement step can also end (rarely needed, but safe)
       if (checkWinAndEnd()) return;
       return enterDay();
     }
   }
 
-  // DAY
+  // DAY (including after-exile hunter steps)
   if (state.flow.phase === "DAY") {
     if (step === "DAY:D1") {
       startMainVote();
       return;
     }
+
     if (step === "DAY:VOTE:CAST") return commitCurrentVoteAndAdvance("MAIN");
     if (step === "DAY:VOTE:RESULT") return processVoteResultAndAdvance("MAIN");
+
     if (step === "DAY:PK:CAST") return commitCurrentVoteAndAdvance("PK");
     if (step === "DAY:PK:RESULT") return processVoteResultAndAdvance("PK");
+
+    if (step === "DAY:AFTER_EXILE:HUNTER_PROMPT") {
+      // primary = 開槍
+      return goHunterPick();
+    }
+    if (step === "DAY:AFTER_EXILE:HUNTER_PICK") {
+      if (!state.day.afterExile?.target) return toast("請先選擇要射擊的座位");
+      confirmHunterShot();
+      return;
+    }
   }
 });
 
-// Cancel: in day vote acts as abstain commit; in night clears pending
+// Cancel behavior
 btnCancel.addEventListener("click", () => {
   const step = state.flow.stepId;
+
   if (state.flow.phase === "END") return;
 
   if (step === "SETUP:A3") {
@@ -226,15 +232,30 @@ btnCancel.addEventListener("click", () => {
     return saveAndRender();
   }
 
+  // Hunter prompt: cancel = 不開槍
+  if (state.flow.phase === "DAY" && step === "DAY:AFTER_EXILE:HUNTER_PROMPT") {
+    toast("獵人選擇不開槍");
+    finalizeAfterExileAndNext();
+    return;
+  }
+
+  // Hunter pick: cancel just clears target
+  if (state.flow.phase === "DAY" && step === "DAY:AFTER_EXILE:HUNTER_PICK") {
+    state.day.afterExile.target = null;
+    toast("已取消射擊目標");
+    saveAndRender(false);
+    return;
+  }
+
+  // Day voting cast: cancel = abstain
   if (state.flow.phase === "DAY" && (step === "DAY:VOTE:CAST" || step === "DAY:PK:CAST")) {
-    // abstain = target null
     state.day.pending = { target: null };
     toast("本票棄票（0票）");
     return commitCurrentVoteAndAdvance(step === "DAY:VOTE:CAST" ? "MAIN" : "PK");
   }
 });
 
-// Back button MVP: disabled (prevent breaking flow)
+// Back button MVP
 btnBack.addEventListener("click", () => {
   toast("MVP 暫不支援上一步（避免卡住）");
 });
@@ -288,7 +309,7 @@ btnTimerReset?.addEventListener("click", () => resetTimer());
    ========================= */
 function makeInitialState() {
   return {
-    meta: { version: "mvp-1.6", createdAt: Date.now(), updatedAt: Date.now() },
+    meta: { version: "mvp-1.7", createdAt: Date.now(), updatedAt: Date.now() },
     config: { playersCount: null },
     board: null,
     players: [],
@@ -308,6 +329,7 @@ function makeInitialState() {
       candidates: null,
       pending: null,
       voteLogByRound: {},
+      afterExile: null, // ✅ Day6: hunter prompt / pick
     },
 
     ui: { godExpanded: false, revealingSeat: null },
@@ -359,6 +381,7 @@ function initPlayers(count) {
     seat: i + 1,
     name: `${i + 1}號`,
     alive: true,
+    canVote: true, // ✅ 白癡被票後會變 false
     roleId: null,
     camp: null,
     markers: { idiotRevealed: false },
@@ -366,6 +389,7 @@ function initPlayers(count) {
   state.setup.seenSeats = [];
   state.setup.rolesAssigned = false;
   state.ui.revealingSeat = null;
+  state.day.afterExile = null;
   state.end = null;
 }
 
@@ -379,7 +403,6 @@ function setPlayersCount(count) {
       state.board.winCondition = state.board.winCondition || { mode: "city" };
       state.board.playersCount = count;
       state.board.witchCanSelfSave = !!state.board.witchCanSelfSave;
-      // set toggle UI
       syncDrawerUI();
       saveAndRender();
     })
@@ -442,15 +465,12 @@ function evaluateWin() {
   const wolves = countAliveBy(p => p.camp === "wolf");
   const goods  = countAliveBy(p => p.camp !== "wolf");
 
-  // ✅ 好人勝優先：狼全滅
   if (wolves === 0) return { winner: "good", reason: "狼人全滅" };
 
-  // ✅ 狼勝：屠城
   if (mode === "city") {
     if (wolves >= goods) return { winner: "wolf", reason: "屠城：狼人數 ≥ 好人數" };
   }
 
-  // ✅ 狼勝：屠邊
   if (mode === "edge") {
     const aliveGods = countAliveBy(p => (ROLE_LABELS[p.roleId]?.isGod) && p.camp !== "wolf");
     const aliveVillagers = countAliveBy(p => (p.roleId === "villager") && p.camp !== "wolf");
@@ -483,7 +503,6 @@ function enterNight() {
   state.flow.stepId = "NIGHT:N0";
   state.flow.stepIndex += 1;
 
-  // lock settings after leaving setup
   syncDrawerUI();
 
   const steps = (state.board?.nightSteps || [])
@@ -507,6 +526,7 @@ function enterNight() {
   }
 
   state.flow.pending = null;
+  state.day.afterExile = null;
   toast("🌙 進入夜晚");
   saveAndRender();
 }
@@ -580,15 +600,12 @@ function resolveNight() {
 
   log.deaths = Array.from(deaths).sort((a, b) => a - b);
 
-  // apply deaths
   for (const seat of log.deaths) {
     const pl = state.players.find((p) => p.seat === seat);
     if (pl) pl.alive = false;
   }
 
   saveState(state);
-
-  // ✅ check win after deaths
   checkWinAndEnd();
 }
 
@@ -596,7 +613,6 @@ function resolveNight() {
    Day flow + voting
    ========================= */
 function enterDay() {
-  // if already ended, stop
   if (state.flow.phase === "END") return;
 
   state.flow.phase = "DAY";
@@ -609,6 +625,7 @@ function enterDay() {
   state.day.voterOrder = [];
   state.day.voterIndex = 0;
   state.day.candidates = null;
+  state.day.afterExile = null;
 
   if (!state.day.voteLogByRound[state.flow.round]) {
     state.day.voteLogByRound[state.flow.round] = {
@@ -627,11 +644,16 @@ function aliveSeats() {
   return state.players.filter((p) => p.alive).map((p) => p.seat);
 }
 
+// ✅ 可投票的存活玩家（白癡被票出後 canVote=false 不再投票）
+function aliveVoterSeats() {
+  return state.players.filter((p) => p.alive && p.canVote !== false).map((p) => p.seat);
+}
+
 function startMainVote() {
   const r = state.flow.round;
-  const alive = aliveSeats();
+  const aliveVoters = aliveVoterSeats();
 
-  state.day.voterOrder = alive.slice();
+  state.day.voterOrder = aliveVoters.slice();
   state.day.voterIndex = 0;
   state.day.pending = { target: null };
   state.day.candidates = null;
@@ -719,7 +741,7 @@ function processVoteResultAndAdvance(kind) {
     if (tie) {
       roundLog.ties += 1;
       state.day.candidates = result.topSeats.slice();
-      state.day.voterOrder = aliveSeats();
+      state.day.voterOrder = aliveVoterSeats(); // ✅ PK 投票者也排除失票者
       state.day.voterIndex = 0;
       state.day.pending = { target: null };
       state.day.stage = "PK_CAST";
@@ -731,8 +753,15 @@ function processVoteResultAndAdvance(kind) {
     }
 
     if (hasWinner) {
-      exileSeat(result.topSeats[0]);
-      if (state.flow.phase === "END") return; // ended by exile
+      const seat = result.topSeats[0];
+      const outcome = exileSeat(seat); // ✅ Day6 outcomes
+      if (state.flow.phase === "END") return;
+
+      if (outcome === "HUNTER_PENDING") {
+        // stay in DAY until hunter done
+        return;
+      }
+
       state.flow.round += 1;
       return enterNight();
     }
@@ -752,8 +781,14 @@ function processVoteResultAndAdvance(kind) {
     }
 
     if (hasWinner) {
-      exileSeat(result.topSeats[0]);
-      if (state.flow.phase === "END") return; // ended by exile
+      const seat = result.topSeats[0];
+      const outcome = exileSeat(seat);
+      if (state.flow.phase === "END") return;
+
+      if (outcome === "HUNTER_PENDING") {
+        return;
+      }
+
       state.flow.round += 1;
       return enterNight();
     }
@@ -764,13 +799,90 @@ function processVoteResultAndAdvance(kind) {
   }
 }
 
+/* =========================
+   Day6: exile handling
+   ========================= */
+/**
+ * @returns "NORMAL_DEAD" | "IDIOT_SURVIVE" | "HUNTER_PENDING"
+ */
 function exileSeat(seat) {
   const p = state.players.find((x) => x.seat === seat);
-  if (!p || !p.alive) return;
+  if (!p || !p.alive) return "NORMAL_DEAD";
+
+  // ✅ 白癡：第一次被票 => 不死，但失去投票權
+  if (p.roleId === "idiot" && !p.markers?.idiotRevealed) {
+    p.markers = p.markers || {};
+    p.markers.idiotRevealed = true;
+    p.canVote = false;
+    toast(`白癡 ${seat}號 被票出但不死（失去投票權）`);
+    saveState(state);
+    saveAndRender();
+    return "IDIOT_SURVIVE";
+  }
+
+  // 其他角色：死亡
   p.alive = false;
   toast(`放逐：${seat}號`);
   saveState(state);
-  checkWinAndEnd(); // ✅ win check after exile
+
+  // ✅ 獵人：被放逐 => 先問是否開槍
+  if (p.roleId === "hunter") {
+    state.day.afterExile = {
+      type: "HUNTER",
+      shooterSeat: seat,
+      stage: "PROMPT",
+      target: null,
+    };
+    state.flow.stepId = "DAY:AFTER_EXILE:HUNTER_PROMPT";
+    state.flow.stepIndex += 1;
+    saveAndRender();
+    return "HUNTER_PENDING";
+  }
+
+  checkWinAndEnd();
+  saveAndRender();
+  return "NORMAL_DEAD";
+}
+
+function goHunterPick() {
+  if (!state.day.afterExile || state.day.afterExile.type !== "HUNTER") return;
+  state.day.afterExile.stage = "PICK";
+  state.day.afterExile.target = null;
+  state.flow.stepId = "DAY:AFTER_EXILE:HUNTER_PICK";
+  state.flow.stepIndex += 1;
+  toast("獵人請選擇射擊目標");
+  saveAndRender();
+}
+
+function confirmHunterShot() {
+  const after = state.day.afterExile;
+  if (!after || after.type !== "HUNTER") return;
+
+  const shooter = after.shooterSeat;
+  const targetSeat = after.target;
+
+  if (!targetSeat) return toast("請先選射擊目標");
+  if (targetSeat === shooter) return toast("不能射自己");
+
+  const target = state.players.find(p => p.seat === targetSeat);
+  if (!target || !target.alive) return toast("目標已死亡，請重選");
+
+  target.alive = false;
+  toast(`💥 獵人 ${shooter}號 開槍：帶走 ${targetSeat}號`);
+  saveState(state);
+
+  finalizeAfterExileAndNext();
+}
+
+function finalizeAfterExileAndNext() {
+  state.day.afterExile = null;
+
+  // 先判定勝負
+  if (checkWinAndEnd()) return;
+
+  // 結束白天 → 下一輪
+  state.flow.round += 1;
+  enterNight();
 }
 
 /* =========================
@@ -786,7 +898,10 @@ function renderSeats() {
   seatsGrid.innerHTML = "";
 
   const step = state.flow.stepId;
-  const dayPickClass = step === "DAY:VOTE:CAST" ? "pick-vote" : step === "DAY:PK:CAST" ? "pick-pk" : null;
+  const dayPickClass = step === "DAY:VOTE:CAST" ? "pick-vote"
+    : step === "DAY:PK:CAST" ? "pick-pk"
+    : step === "DAY:AFTER_EXILE:HUNTER_PICK" ? "pick-hunter"
+    : null;
 
   state.players.forEach((p) => {
     const el = document.createElement("div");
@@ -797,7 +912,13 @@ function renderSeats() {
     if (state.setup.seenSeats.includes(p.seat)) el.classList.add("seen");
 
     if (step === "SETUP:A3" && state.ui.revealingSeat === p.seat) el.classList.add("reveal");
-    if (dayPickClass && state.day.pending?.target === p.seat) el.classList.add(dayPickClass);
+    if (dayPickClass) {
+      const picked =
+        (step === "DAY:AFTER_EXILE:HUNTER_PICK" && state.day.afterExile?.target === p.seat) ||
+        ((step === "DAY:VOTE:CAST" || step === "DAY:PK:CAST") && state.day.pending?.target === p.seat);
+
+      if (picked) el.classList.add(dayPickClass);
+    }
 
     const corner = document.createElement("div");
     corner.className = "corner";
@@ -810,12 +931,13 @@ function renderSeats() {
     const tag = document.createElement("div");
     tag.className = "tag";
 
-    // A3 reveal behavior
     if (step === "SETUP:A3" && state.ui.revealingSeat === p.seat) {
       const spec = ROLE_LABELS[p.roleId] || { name: "未知", camp: "good" };
       tag.textContent = `${spec.name} · ${spec.camp === "wolf" ? "狼人陣營" : "好人陣營"}`;
     } else {
-      tag.textContent = p.alive ? "存活" : "死亡";
+      // ✅ 顯示失去投票權
+      const voteTxt = (p.alive && p.canVote === false) ? "（失去投票權）" : "";
+      tag.textContent = p.alive ? `存活${voteTxt}` : "死亡";
 
       // ✅ God view expanded: alive/dead 都顯示角色＋陣營
       if (state.ui.godExpanded && p.roleId) {
@@ -859,6 +981,13 @@ function getCornerText(seat) {
 
   if (state.flow.phase === "DAY") {
     const step = state.flow.stepId;
+
+    if (step === "DAY:AFTER_EXILE:HUNTER_PICK") {
+      const shooter = state.day.afterExile?.shooterSeat;
+      if (seat === shooter) return "獵人";
+      return "";
+    }
+
     if (step === "DAY:VOTE:CAST" || step === "DAY:PK:CAST") {
       const voter = currentVoterSeat();
       if (voter === seat) return "投票中";
@@ -926,6 +1055,15 @@ function wireSeatInteractions(el, seat) {
     return;
   }
 
+  // Hunter pick
+  if (state.flow.phase === "DAY" && step === "DAY:AFTER_EXILE:HUNTER_PICK") {
+    el.addEventListener("click", (e) => {
+      e.preventDefault();
+      handleHunterPick(seat);
+    });
+    return;
+  }
+
   // DAY voting seat picking
   if (state.flow.phase === "DAY" && (step === "DAY:VOTE:CAST" || step === "DAY:PK:CAST")) {
     el.addEventListener("click", (e) => {
@@ -963,7 +1101,6 @@ function handleNightSeatPick(seat) {
 
     const p = state.flow.pending || { witchSave: null, witchPoison: null };
 
-    // tap knife seat => save
     if (knife === seat) {
       if (!canSave) return toast("解藥已用過（或沒有刀口）");
 
@@ -977,7 +1114,6 @@ function handleNightSeatPick(seat) {
       return;
     }
 
-    // other seat => poison
     if (!canPoison) return toast("毒藥已用過");
 
     const nextPoison = p.witchPoison === seat ? null : seat;
@@ -1006,6 +1142,20 @@ function handleDaySeatPick(seat) {
   saveAndRender(false);
 }
 
+function handleHunterPick(seat) {
+  const after = state.day.afterExile;
+  if (!after || after.type !== "HUNTER") return;
+
+  const shooter = after.shooterSeat;
+  if (seat === shooter) return toast("不能射自己");
+
+  const target = state.players.find(p => p.seat === seat);
+  if (!target || !target.alive) return toast("不能射已死亡的人");
+
+  after.target = after.target === seat ? null : seat;
+  saveAndRender(false);
+}
+
 function findRoleSeat(roleId) {
   const p = state.players.find((x) => x.roleId === roleId);
   return p?.seat ?? null;
@@ -1015,7 +1165,6 @@ function findRoleSeat(roleId) {
    Prompt + God panel
    ========================= */
 function renderPrompt() {
-  // END
   if (state.flow.phase === "END") {
     const e = state.end || { winner: "?", reason: "" };
     promptTitle.textContent = "遊戲結束";
@@ -1190,7 +1339,7 @@ function renderPrompt() {
       if (result.topSeats.length >= 2) {
         promptFoot.textContent = `平票：${result.topSeats.join("、")}號 → 按「下一步」進 PK`;
       } else if (result.topSeats.length === 1) {
-        promptFoot.textContent = `最高票：${result.topSeats[0]}號 → 按「下一步」放逐並進入下一晚`;
+        promptFoot.textContent = `最高票：${result.topSeats[0]}號 → 按「下一步」處理放逐`;
       } else {
         promptFoot.textContent = "全棄票 → 按「下一步」無人放逐並進入下一晚";
       }
@@ -1222,10 +1371,33 @@ function renderPrompt() {
       if (result.topSeats.length >= 2) {
         promptFoot.textContent = `第二次平票 → 按「下一步」無人放逐並進入下一晚`;
       } else if (result.topSeats.length === 1) {
-        promptFoot.textContent = `最高票：${result.topSeats[0]}號 → 按「下一步」放逐並進入下一晚`;
+        promptFoot.textContent = `最高票：${result.topSeats[0]}號 → 按「下一步」處理放逐`;
       } else {
         promptFoot.textContent = "全棄票 → 按「下一步」無人放逐並進入下一晚";
       }
+      return;
+    }
+
+    // ✅ Hunter after exile
+    if (step === "DAY:AFTER_EXILE:HUNTER_PROMPT") {
+      const shooter = state.day.afterExile?.shooterSeat;
+      promptTitle.textContent = "獵人技能";
+      promptText.textContent =
+        `獵人 ${shooter}號 被放逐。\n\n` +
+        "是否要開槍？\n" +
+        "（先決定，再選目標）";
+      promptFoot.textContent = "按「開槍」進入選目標；按右下角「不開槍」直接進下一晚。";
+      return;
+    }
+
+    if (step === "DAY:AFTER_EXILE:HUNTER_PICK") {
+      const shooter = state.day.afterExile?.shooterSeat;
+      const t = state.day.afterExile?.target ?? null;
+      promptTitle.textContent = "獵人開槍";
+      promptText.textContent =
+        `獵人 ${shooter}號 請選擇要射擊的目標。\n\n` +
+        "點座位選擇（不能射自己、不能射已死亡）。";
+      promptFoot.textContent = t ? `目前選擇：射 ${t}號` : "尚未選擇目標";
       return;
     }
   }
@@ -1241,7 +1413,6 @@ function renderGodPanel() {
     return;
   }
 
-  // END
   if (state.flow.phase === "END") {
     const e = state.end || {};
     godText.textContent = `結束：${e.winner === "good" ? "好人勝" : "狼人勝"}\n原因：${e.reason || "—"}`;
@@ -1322,6 +1493,12 @@ function renderGodPanel() {
       godText.textContent = `PK最高票：${res.topSeats.length ? res.topSeats.join("、") + "號" : "（無）"}`;
       return;
     }
+    if (state.flow.stepId.startsWith("DAY:AFTER_EXILE:HUNTER")) {
+      const shooter = state.day.afterExile?.shooterSeat;
+      const t = state.day.afterExile?.target ?? null;
+      godText.textContent = `獵人放逐後：${shooter}號\n目標：${t ? t + "號" : "（未選）"}`;
+      return;
+    }
     godText.textContent = "白天流程中…";
     return;
   }
@@ -1335,9 +1512,8 @@ function renderGodPanel() {
 function renderActions() {
   const step = state.flow.stepId;
 
-  btnBack.disabled = true; // MVP: avoid back for stability
+  btnBack.disabled = true;
 
-  // END
   if (state.flow.phase === "END") {
     btnPrimary.disabled = true;
     btnCancel.disabled = true;
@@ -1383,6 +1559,20 @@ function renderActions() {
   }
 
   if (state.flow.phase === "DAY") {
+    // Hunter after exile steps
+    if (step === "DAY:AFTER_EXILE:HUNTER_PROMPT") {
+      btnCancel.textContent = "不開槍";
+      btnPrimary.textContent = "開槍";
+      btnPrimary.disabled = false;
+      return;
+    }
+    if (step === "DAY:AFTER_EXILE:HUNTER_PICK") {
+      btnCancel.textContent = "取消";
+      btnPrimary.textContent = "確認射擊";
+      btnPrimary.disabled = !state.day.afterExile?.target;
+      return;
+    }
+
     btnPrimary.disabled = false;
 
     if (step === "DAY:D1") {
@@ -1468,7 +1658,7 @@ function setTimer(ms) {
 }
 
 function startTimer() {
-  if (!state.timer.durationMs) setTimer(120000); // default 2:00
+  if (!state.timer.durationMs) setTimer(120000);
   if (state.timer.remainingMs <= 0) state.timer.remainingMs = state.timer.durationMs;
   state.timer.running = true;
   state.timer.lastTickAt = Date.now();
