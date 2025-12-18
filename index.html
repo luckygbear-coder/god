@@ -1,119 +1,118 @@
-<!DOCTYPE html>
+<!doctype html>
 <html lang="zh-Hant">
 <head>
-  <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover" />
   <meta name="theme-color" content="#f4a63a" />
-  <title>狼人殺上帝輔助</title>
-
   <link rel="manifest" href="./manifest.webmanifest" />
   <link rel="stylesheet" href="./style.css" />
-
-  <style>
-    body{ -webkit-touch-callout:none; -webkit-user-select:none; user-select:none; touch-action:manipulation; }
-  </style>
+  <title>狼人殺上帝輔助</title>
 </head>
-
 <body>
-  <div class="app-wrap">
 
-    <!-- ===== 頂部狀態 ===== -->
-    <div class="topbar card">
-      <div>
-        <div id="uiStatus" class="small muted">SETUP</div>
-        <div id="uiBoard" class="title">—</div>
-      </div>
-      <div class="row" style="gap:8px;">
-        <button id="btnSettings" class="iconbtn" title="設定">⚙️</button>
-      </div>
+  <div class="app">
+    <!-- 你的原本 Header / 狀態列 / 內容區 -->
+    <!-- ⚠️ 這裡保持你原本的版面結構即可 -->
+
+    <!-- 假設你原本有這些 id（跟我 app.js 一致） -->
+    <div class="top">
+      <div id="uiStatus" class="uiStatus"></div>
+      <div id="uiBoard" class="uiBoard"></div>
+      <button id="btnSettings" class="iconBtn" aria-label="設定">⚙️</button>
     </div>
 
-    <!-- ===== 提示區 ===== -->
     <div class="card">
-      <div class="h2" id="promptTitle">—</div>
-      <div class="preline" id="promptText"></div>
-      <div class="small muted" id="promptFoot"></div>
+      <div class="cardTitle" id="promptTitle">—</div>
+      <pre class="cardText" id="promptText">—</pre>
+      <div class="cardFoot" id="promptFoot"></div>
     </div>
 
-    <!-- ✅ 板子選擇（A2） -->
-    <div class="card" id="boardPickerCard">
-      <div class="h3">選擇板子</div>
-      <div class="small muted" id="boardPickerHint">請先選人數，才會顯示可用板子。</div>
-      <div id="boardPicker" class="board-picker"></div>
-    </div>
-
-    <!-- ===== 上帝資訊 ===== -->
     <div class="card">
-      <label class="row-between">
-        <div class="h3">上帝資訊</div>
-        <label class="row">
-          <input type="checkbox" id="toggleGodView" />
-          <span class="small">👁️ 展開</span>
+      <div class="row">
+        <div class="cardTitle">上帝資訊</div>
+        <label class="toggle">
+          <input id="toggleGodView" type="checkbox" />
+          <span>👁 展開</span>
         </label>
-      </label>
-      <div id="godText" class="small muted preline"></div>
+      </div>
+      <pre class="cardText" id="godText"></pre>
     </div>
 
-    <!-- ===== 座位區 ===== -->
-    <div id="seatsGrid" class="seats-grid"></div>
+    <!-- 板子選擇區（可留著） -->
+    <div class="card" id="boardPickerCard">
+      <div class="cardTitle">可選板子</div>
+      <div class="hint" id="boardPickerHint"></div>
+      <div id="boardPicker" class="boardPicker"></div>
+    </div>
 
-    <!-- ✅ 常駐倒數計時 -->
-    <section class="timer-panel">
-      <div class="timer-left">
-        <div class="timer-label">⏱️ 倒數計時</div>
-        <div class="timer-big" id="timerBig">00:00</div>
-        <div class="timer-hint" id="timerHint">點選時間或按「開始」。</div>
+    <!-- 座位 -->
+    <div id="seatsGrid" class="seatsGrid"></div>
+
+    <!-- 計時器（你現在這種放底部我覺得很讚） -->
+    <div class="card timerCard">
+      <div class="row">
+        <div class="cardTitle">⏱ 倒數計時</div>
       </div>
-
-      <div class="timer-right">
-        <div class="timer-presets" id="timerPresets">
-          <button type="button" data-sec="60">1分</button>
-          <button type="button" data-sec="120">2分</button>
-          <button type="button" data-sec="180">3分</button>
-          <button type="button" data-sec="300">5分</button>
+      <div class="timerRow">
+        <div>
+          <div id="timerBig" class="timerBig">02:00</div>
+          <div id="timerHint" class="hint">點選時間或按「開始」。</div>
         </div>
-        <div class="timer-actions">
-          <button type="button" id="btnTimerStart">開始</button>
-          <button type="button" id="btnTimerPause">暫停</button>
-          <button type="button" id="btnTimerReset">重置</button>
+        <div id="timerPresets" class="timerPresets">
+          <button class="btn ghost" data-sec="60">1分</button>
+          <button class="btn ghost" data-sec="120">2分</button>
+          <button class="btn ghost" data-sec="180">3分</button>
+          <button class="btn ghost" data-sec="300">5分</button>
+
+          <button class="btn" id="btnTimerStart">開始</button>
+          <button class="btn ghost" id="btnTimerPause">暫停</button>
+          <button class="btn ghost" id="btnTimerReset">重置</button>
         </div>
       </div>
-    </section>
+    </div>
 
-    <div style="height:96px;"></div>
+    <!-- 底部 action bar -->
+    <div class="actionBar">
+      <button id="btnBack" class="btn ghost">上一步</button>
+      <button id="btnPrimary" class="btn">下一步</button>
+      <button id="btnCancel" class="btn ghost">取消</button>
+    </div>
   </div>
 
-  <!-- ===== 底部操作列 ===== -->
-  <div class="actionbar">
-    <button id="btnBack" class="btn ghost">上一步</button>
-    <button id="btnPrimary" class="btn primary">下一步</button>
-    <button id="btnCancel" class="btn ghost">取消</button>
-  </div>
-
-  <!-- ===== 設定視窗 ===== -->
+  <!-- Drawer（若你本來就有可保留） -->
   <div id="drawerBackdrop" class="backdrop hidden"></div>
   <div id="drawer" class="drawer hidden">
-    <div class="drawer-hd">
-      <div class="h2">設定</div>
-      <button id="btnCloseDrawer" class="iconbtn">✕</button>
+    <div class="drawerTop">
+      <div class="drawerTitle">設定</div>
+      <button id="btnCloseDrawer" class="iconBtn">✕</button>
     </div>
-
-    <div class="drawer-bd">
-      <div class="h3">勝負模式</div>
+    <div class="drawerBody">
       <div class="seg">
-        <button id="segEdge" type="button">屠邊</button>
-        <button id="segCity" type="button">屠城</button>
+        <button id="segEdge" class="segBtn">屠邊</button>
+        <button id="segCity" class="segBtn">屠城</button>
       </div>
-
-      <label class="row-between">
-        <span>上警（先保留開關）</span>
-        <input type="checkbox" id="togglePolice" />
+      <label class="row">
+        <span>上警</span>
+        <input id="togglePolice" type="checkbox" />
       </label>
+      <button id="btnReset" class="btn ghost" style="width:100%;">重置本局</button>
+    </div>
+  </div>
 
-      <button id="btnReset" class="btn danger" type="button">重置本局</button>
-
-      <div class="small muted" style="margin-top:10px; line-height:1.5;">
-        小提醒：iOS 若更新沒生效，請重整兩次或清除網站資料（SW 快取）。
+  <!-- ✅ ROLE MODAL：長按一定會跳出身份卡 -->
+  <div id="roleModal" class="modal hidden" aria-hidden="true">
+    <div class="modalCard">
+      <div class="modalTitle" id="roleModalTitle">—</div>
+      <div class="modalBody">
+        <div class="roleLine" id="roleModalRole">—</div>
+        <div class="roleLine small" id="roleModalCamp">—</div>
+        <div class="hint" style="margin-top:10px;">
+          看完請把手機交回上帝 🐺
+        </div>
+      </div>
+      <div class="modalActions">
+        <button id="btnRoleDone" class="btn">我看完了</button>
+        <button id="btnRoleClose" class="btn ghost">關閉</button>
       </div>
     </div>
   </div>
