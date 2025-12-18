@@ -1,0 +1,19 @@
+{
+  "id": "9-nohunter-city",
+  "title": "9 人（無獵人・屠城）",
+  "playersCount": 9,
+  "hasPolice": false,
+  "winCondition": { "mode": "city" },
+  "witchCanSelfSave": false,
+  "roles": [
+    { "roleId": "wolf", "count": 3 },
+    { "roleId": "seer", "count": 1 },
+    { "roleId": "witch", "count": 1 },
+    { "roleId": "villager", "count": 4 }
+  ],
+  "nightSteps": [
+    { "id": "wolf", "name": "狼人", "wakeOrder": 1, "alwaysShow": true, "actionType": "pick", "seatPickRule": { "allowNone": true } },
+    { "id": "seer", "name": "預言家", "wakeOrder": 2, "alwaysShow": true, "actionType": "pick" },
+    { "id": "witch", "name": "女巫", "wakeOrder": 3, "alwaysShow": true, "actionType": "pick" }
+  ]
+}
