@@ -1,20 +1,10 @@
 /* ================================
-   Werewolf God Helper - v31 (FULL)
-   - Single device (God) MVP for GitHub Pages
-   - SETUP: A1 choose count, A2 load board, A3 reveal roles (tap / longpress)
-   - NIGHT: rule-driven steps (wolf -> seer -> witch)
-   - Witch: no popup, mutual exclusive (save OR poison), click cancel to clear
-   - Resolve night deaths -> DAY announce (scrollable in prompt area)
-   - Hunter: exiled -> can shoot; night killed by wolf -> shoot at day announcement; poisoned -> cannot shoot
-   - Idiot: exiled first time -> not die, lose voting right (canVote=false)
-   - Voting: per-voter logging, tally, PK, revote, second tie => no exile
-   - Win condition: mode city(edge/city toggle). Edge = gods all dead OR villagers all dead => wolves win.
-     City = wolves >= goodAlive => wolves win. Always wolves=0 => good win.
-   - God view: show role+camp on ALL seats including dead.
-   - Timer: embedded panel
+   Werewolf God Helper - v33 (FULL)
+   - Adds Role Modal for identity reveal (SETUP:A3)
+   - Keeps v32 flow + hunter rules + timer embed
    ================================ */
 
-const STORAGE_KEY = "werewolf_state_v31";
+const STORAGE_KEY = "werewolf_state_v33";
 const LONGPRESS_MS = 300;
 
 /* ====== iOS anti-gesture ====== */
@@ -22,9 +12,10 @@ document.addEventListener("gesturestart", (e) => e.preventDefault());
 document.addEventListener("dblclick", (e) => e.preventDefault(), { passive: false });
 document.addEventListener("contextmenu", (e) => e.preventDefault());
 
-/* ====== DOM (tolerant to missing) ====== */
+/* ====== DOM helper ====== */
 const $ = (id) => document.getElementById(id);
 
+/* ====== DOM refs ====== */
 const uiStatus = $("uiStatus");
 const uiBoard = $("uiBoard");
 
@@ -61,6 +52,14 @@ const btnBack = $("btnBack");
 const btnPrimary = $("btnPrimary");
 const btnCancel = $("btnCancel");
 
+/* ====== Role Modal refs (NEW) ====== */
+const roleModal = $("roleModal");
+const roleModalTitle = $("roleModalTitle");
+const roleModalRole = $("roleModalRole");
+const roleModalCamp = $("roleModalCamp");
+const btnRoleDone = $("btnRoleDone");
+const btnRoleClose = $("btnRoleClose");
+
 /* ====== Roles ====== */
 const ROLE = {
   wolf:     { name: "狼人", camp: "wolf", isGod: false },
@@ -71,7 +70,7 @@ const ROLE = {
   villager: { name: "平民", camp: "good", isGod: false }
 };
 
-/* ====== Fallback boards (official) ====== */
+/* ====== Fallback boards ====== */
 const BOARD_FALLBACK = {
   "official-9": {
     id: "official-9",
@@ -153,11 +152,11 @@ render();
 renderBoardPicker();
 
 /* ================================
-   State + Storage
+   Storage
    ================================ */
 function makeInitialState(){
   return {
-    version: 31,
+    version: 33,
     config: {
       playersCount: null,
       boardId: null,
@@ -166,7 +165,7 @@ function makeInitialState(){
     },
     board: null,
 
-    players: [], // {seat, roleId, alive, canVote, idiotRevealed, seen}
+    players: [],
 
     flow: { phase: "SETUP", round: 1, stepId: "SETUP:A1" },
 
@@ -176,26 +175,26 @@ function makeInitialState(){
       round: 1,
       stepIndex: 0,
       steps: [],
-      pending: {},     // per-step pending actions
-      logByRound: {},  // round -> { wolf:{target}, seer:{seat,result}, witch:{save,poison} }
-      resolvedByRound: {} // round -> { deaths:[{seat, reason}], hunterMayShootSeat? }
+      pending: {},
+      logByRound: {},
+      resolvedByRound: {}
     },
 
     day: {
       round: 1,
-      announcement: null,      // {title, lines[], deaths[]}
-      vote: null,              // voting state
-      hunterShoot: null,       // {fromSeat, allowed, reason, pickedTarget}
-      end: null                // {winner, reason}
+      announcement: null,
+      vote: null,
+      hunterShoot: null,
+      end: null
     },
 
     witch: { usedAntidote:false, usedPoison:false },
+    hunter: { usedBullet:false },
 
     ui: {
       godExpanded: false,
       selectedSeat: null,
-      revealSeat: null, // for setup A3
-      scrollTop: 0
+      revealSeat: null
     },
 
     timer: { totalSec: 120, remainSec: 120, running:false, lastTs: 0 }
@@ -249,11 +248,7 @@ function wireUI(){
     saveAndRender();
   });
 
-  // MVP: 上一步保持可用（用簡單 history 會很長；我們用「安全退回」）
-  btnBack?.addEventListener("click", ()=>{
-    safeBack();
-  });
-
+  btnBack?.addEventListener("click", ()=> safeBack());
   btnCancel?.addEventListener("click", onCancel);
   btnPrimary?.addEventListener("click", onPrimary);
 
@@ -267,6 +262,13 @@ function wireUI(){
   btnTimerStart?.addEventListener("click", ()=> startTimer());
   btnTimerPause?.addEventListener("click", ()=> pauseTimer());
   btnTimerReset?.addEventListener("click", ()=> resetTimer());
+
+  /* Role modal close */
+  btnRoleDone?.addEventListener("click", closeRoleModal);
+  btnRoleClose?.addEventListener("click", closeRoleModal);
+  roleModal?.addEventListener("click", (e)=>{
+    if(e.target === roleModal) closeRoleModal();
+  });
 }
 
 /* ================================
@@ -280,7 +282,32 @@ function toast(msg){
 }
 
 /* ================================
-   Timer (embedded)
+   Role Modal (NEW)
+   ================================ */
+function openRoleModal(seat){
+  if(!roleModal) return; // tolerate if user didn't add modal yet
+  const p = state.players.find(x=>x.seat===seat);
+  if(!p || !p.roleId) return;
+
+  const r = ROLE[p.roleId] || { name: p.roleId, camp: "?" };
+
+  if(roleModalTitle) roleModalTitle.textContent = `抽身分：${seat}號`;
+  if(roleModalRole) roleModalRole.textContent = `你的身份是：${r.name}`;
+  if(roleModalCamp) roleModalCamp.textContent = `陣營：${r.camp === "wolf" ? "狼人" : "好人"}`;
+
+  roleModal.classList.remove("hidden");
+  roleModal.setAttribute("aria-hidden", "false");
+}
+
+function closeRoleModal(){
+  roleModal?.classList.add("hidden");
+  roleModal?.setAttribute("aria-hidden", "true");
+  state.ui.revealSeat = null;
+  saveAndRender();
+}
+
+/* ================================
+   Timer
    ================================ */
 let timerTick = null;
 
@@ -363,7 +390,6 @@ async function loadBoardCatalog(){
     boardCatalog = await r.json();
     return boardCatalog;
   }catch(e){
-    // Minimal fallback
     boardCatalog = {
       version: 1,
       boards: [
@@ -426,7 +452,6 @@ function renderBoardPicker(){
       div.addEventListener("click", async ()=>{
         state.config.boardId = b.id;
         await applyBoardByPath(b.path, b.id);
-        // keep step at A2 if still there
         if(state.flow.stepId === "SETUP:A1") state.flow.stepId = "SETUP:A2";
         saveAndRender();
         toast("已套用板子 ✅");
@@ -447,13 +472,11 @@ async function applyBoardByPath(path, id){
     board = BOARD_FALLBACK[id] || BOARD_FALLBACK["official-12"];
   }
 
-  // Apply
   state.board = board;
   state.config.playersCount = board.playersCount;
   state.config.hasPolice = !!board.hasPolice;
   state.config.winMode = board.winCondition?.mode || state.config.winMode;
 
-  // Reset core state for new board
   state.players = Array.from({length: board.playersCount}).map((_,i)=>({
     seat: i+1,
     roleId: null,
@@ -490,6 +513,7 @@ async function applyBoardByPath(path, id){
   };
 
   state.witch = { usedAntidote:false, usedPoison:false };
+  state.hunter = { usedBullet:false };
 }
 
 /* ================================
@@ -528,23 +552,22 @@ function onPrimary(){
     return;
   }
 
-  // If hunter shooting pending, primary acts as confirm shot/no-shot
   if(state.flow.phase === "DAY" && state.flow.stepId === "DAY:HS"){
-    confirmHunterShoot();
+    confirmHunterShoot(false);
     return;
   }
 
-  // Voting steps handled by primary
   if(state.flow.phase === "DAY" && state.flow.stepId === "DAY:VOTE"){
     confirmVoteForCurrentVoter();
+    saveAndRender();
     return;
   }
   if(state.flow.phase === "DAY" && state.flow.stepId === "DAY:PK"){
     confirmPKVoteForCurrentVoter();
+    saveAndRender();
     return;
   }
 
-  // Setup / Night / Day transitions
   const phase = state.flow.phase;
   const step = state.flow.stepId;
 
@@ -569,14 +592,13 @@ function onPrimary(){
     }
     if(step === "SETUP:A3"){
       if(!allSeen()) return toast("全部看完身分才能進夜晚");
-      enterNight();
+      enterNight(false);
       saveAndRender();
       return;
     }
   }
 
   if(phase === "NIGHT"){
-    // N0 -> start steps
     if(step === "NIGHT:N0"){
       state.flow.stepId = "NIGHT:STEP";
       state.night.stepIndex = 0;
@@ -585,14 +607,12 @@ function onPrimary(){
     }
 
     if(step === "NIGHT:STEP"){
-      // commit current step, go next
       commitNightStepAndNext();
       saveAndRender();
       return;
     }
 
     if(step === "NIGHT:RESOLVE"){
-      // auto resolve already done, go day announce
       enterDayAnnouncement();
       saveAndRender();
       return;
@@ -601,8 +621,7 @@ function onPrimary(){
 
   if(phase === "DAY"){
     if(step === "DAY:D1"){
-      // if hunter shoot exists, branch; else proceed to talk
-      if(shouldEnterHunterShoot()){
+      if(shouldEnterHunterShootFromNight()){
         state.flow.stepId = "DAY:HS";
         saveAndRender();
         return;
@@ -613,25 +632,12 @@ function onPrimary(){
     }
 
     if(step === "DAY:D2"){
-      // go to vote
       startVoting(false);
       saveAndRender();
       return;
     }
 
-    if(step === "DAY:EXILE_DONE"){
-      // after exile resolved, check win, then next night
-      const ended = checkAndMaybeEnd();
-      if(ended){
-        saveAndRender();
-        return;
-      }
-      enterNight(true);
-      saveAndRender();
-      return;
-    }
-
-    if(step === "DAY:NO_EXILE_DONE"){
+    if(step === "DAY:EXILE_DONE" || step === "DAY:NO_EXILE_DONE"){
       const ended = checkAndMaybeEnd();
       if(ended){
         saveAndRender();
@@ -650,38 +656,37 @@ function onCancel(){
   const phase = state.flow.phase;
   const step = state.flow.stepId;
 
-  // Setup A3: close reveal
   if(phase==="SETUP" && step==="SETUP:A3"){
+    // 若彈窗開著就關彈窗；不然就是清除提示
+    if(roleModal && !roleModal.classList.contains("hidden")){
+      closeRoleModal();
+      return;
+    }
     state.ui.revealSeat = null;
     saveAndRender();
     return;
   }
 
-  // Night: clear selection/pending for current step
   if(phase==="NIGHT" && step==="NIGHT:STEP"){
     clearNightPendingForCurrentStep();
     saveAndRender();
     return;
   }
 
-  // Day vote: allow abstain on confirm? cancel clears current selection
   if(phase==="DAY" && (step==="DAY:VOTE" || step==="DAY:PK")){
     state.ui.selectedSeat = null;
     saveAndRender();
     return;
   }
 
-  // Hunter shoot: cancel means "不開槍"
   if(phase==="DAY" && step==="DAY:HS"){
-    state.day.hunterShoot.pickedTarget = null;
-    confirmHunterShoot(true); // force no-shot
+    confirmHunterShoot(true);
     return;
   }
 
   toast("已取消");
 }
 
-/* MVP safe back: go to previous major step without breaking logs */
 function safeBack(){
   const { phase, stepId } = state.flow;
 
@@ -692,15 +697,7 @@ function safeBack(){
     return;
   }
 
-  if(phase==="NIGHT"){
-    toast("夜晚不建議上一步（避免資料錯亂）");
-    return;
-  }
-
-  if(phase==="DAY"){
-    toast("白天不建議上一步（避免投票/公告錯亂）");
-    return;
-  }
+  toast("本階段不建議上一步（避免資料錯亂）");
 }
 
 /* ================================
@@ -733,7 +730,6 @@ function allSeen(){
 function countSeen(){
   return Object.keys(state.setup.seenSeats||{}).length;
 }
-
 function shuffle(a){
   for(let i=a.length-1;i>0;i--){
     const j = Math.floor(Math.random()*(i+1));
@@ -744,15 +740,20 @@ function shuffle(a){
 /* ================================
    Night flow
    ================================ */
-function enterNight(isNextRound=false){
+function enterNight(nextRound){
   state.flow.phase = "NIGHT";
   state.flow.stepId = "NIGHT:N0";
-  if(isNextRound){
+
+  if(nextRound){
     state.night.round += 1;
     state.day.round = state.night.round;
+    state.flow.round = state.night.round;
+  }else{
+    state.night.round = state.night.round || 1;
+    state.flow.round = 1;
+    state.day.round = 1;
   }
 
-  // build steps from board
   const steps = (state.board?.nightSteps || [])
     .slice()
     .sort((a,b)=> (a.wakeOrder||0) - (b.wakeOrder||0));
@@ -762,8 +763,8 @@ function enterNight(isNextRound=false){
   state.night.pending = {};
   state.ui.selectedSeat = null;
 
-  // ensure round logs container
-  state.night.logByRound[String(state.night.round)] = state.night.logByRound[String(state.night.round)] || {};
+  const roundKey = String(state.night.round);
+  state.night.logByRound[roundKey] = state.night.logByRound[roundKey] || {};
 }
 
 function getCurrentNightStep(){
@@ -781,24 +782,19 @@ function clearNightPendingForCurrentStep(){
 function commitNightStepAndNext(){
   const step = getCurrentNightStep();
   if(!step){
-    // no steps? resolve directly
     state.flow.stepId = "NIGHT:RESOLVE";
     resolveNight();
     return;
   }
 
-  // Always show step, but action may be locked if role dead
-  const actor = findFirstByRole(step.id); // step ids are same as role ids for MVP
+  const actor = findFirstByRole(step.id);
   const actorAlive = actor ? actor.alive : false;
 
-  // Get pending
   const pending = state.night.pending[step.id] || {};
-
   const roundKey = String(state.night.round);
   const rlog = state.night.logByRound[roundKey] || (state.night.logByRound[roundKey] = {});
 
   if(step.id === "wolf"){
-    // allow none
     if(actorAlive){
       rlog.wolf = { target: (pending.target ?? null) };
     }else{
@@ -822,24 +818,16 @@ function commitNightStepAndNext(){
   }
 
   if(step.id === "witch"){
-    // witch rule-driven, mutual exclusive; if witch dead, still record no action
     if(!actorAlive){
       rlog.witch = { save: null, poison: null, note: "女巫已死/不存在（流程照唸）" };
     }else{
       const w = pending || {};
       rlog.witch = { save: w.save ?? null, poison: w.poison ?? null };
-
-      // consume potions when actually used
-      if(w.save){
-        state.witch.usedAntidote = true;
-      }
-      if(w.poison){
-        state.witch.usedPoison = true;
-      }
+      if(w.save) state.witch.usedAntidote = true;
+      if(w.poison) state.witch.usedPoison = true;
     }
   }
 
-  // advance step
   state.night.stepIndex += 1;
   state.ui.selectedSeat = null;
 
@@ -854,23 +842,19 @@ function resolveNight(){
   const rlog = state.night.logByRound[roundKey] || {};
 
   const deaths = [];
-  const reasonMap = new Map(); // seat -> reason
+  const reasonMap = new Map();
 
   const wolfTarget = rlog.wolf?.target ?? null;
   const witchSave = rlog.witch?.save ?? null;
   const witchPoison = rlog.witch?.poison ?? null;
 
-  // wolf kill (unless saved)
   if(wolfTarget && wolfTarget !== witchSave){
     reasonMap.set(wolfTarget, "wolf");
   }
-
-  // poison kill always kills (even if also wolf)
   if(witchPoison){
     reasonMap.set(witchPoison, "poison");
   }
 
-  // Build deaths list (exclude already dead)
   for(const [seat, reason] of reasonMap.entries()){
     const p = state.players.find(x=>x.seat===seat);
     if(p && p.alive){
@@ -878,19 +862,19 @@ function resolveNight(){
     }
   }
 
-  // Determine if hunter can shoot at day announcement (night killed by wolf only)
   let hunterMayShootSeat = null;
-  for(const d of deaths){
-    const p = state.players.find(x=>x.seat===d.seat);
-    if(p?.roleId === "hunter" && d.reason === "wolf"){
-      hunterMayShootSeat = d.seat;
-      break;
+  if(!state.hunter.usedBullet){
+    for(const d of deaths){
+      const p = state.players.find(x=>x.seat===d.seat);
+      if(p?.roleId === "hunter" && d.reason === "wolf"){
+        hunterMayShootSeat = d.seat;
+        break;
+      }
     }
   }
 
   state.night.resolvedByRound[roundKey] = { deaths, hunterMayShootSeat };
 
-  // Prepare announcement (deaths not applied until DAY:D1 confirm)
   const lines = [];
   if(deaths.length === 0){
     lines.push("平安夜。");
@@ -903,11 +887,7 @@ function resolveNight(){
     deaths
   };
 
-  // Apply deaths now (so board shows dead in day)
   applyDeaths(deaths);
-
-  // Win check immediately after night deaths (but hunter may still shoot)
-  // We delay final END until after announcement/hunter shot to match流程
 }
 
 /* ================================
@@ -917,28 +897,21 @@ function enterDayAnnouncement(){
   state.flow.phase = "DAY";
   state.flow.stepId = "DAY:D1";
   state.ui.selectedSeat = null;
-
-  // clear vote/hunter states
   state.day.vote = null;
   state.day.hunterShoot = null;
-
-  // if announcement missing, build from last resolved
-  if(!state.day.announcement){
-    state.day.announcement = { title:"天亮了", lines:["（無資料）"], deaths:[] };
-  }
 }
 
-function shouldEnterHunterShoot(){
+function shouldEnterHunterShootFromNight(){
+  if(state.hunter.usedBullet) return false;
+
   const roundKey = String(state.night.round);
   const res = state.night.resolvedByRound[roundKey];
   const seat = res?.hunterMayShootSeat || null;
   if(!seat) return false;
 
-  // confirm hunter is still dead and not poisoned
   const p = state.players.find(x=>x.seat===seat);
   if(!p || p.alive) return false;
 
-  // create hunter shoot state
   state.day.hunterShoot = {
     fromSeat: seat,
     allowed: true,
@@ -948,24 +921,30 @@ function shouldEnterHunterShoot(){
   return true;
 }
 
-function confirmHunterShoot(forceNoShot=false){
+function confirmHunterShoot(forceNoShot){
   const hs = state.day.hunterShoot;
-  if(!hs) {
+  if(!hs){
     state.flow.stepId = "DAY:D2";
+    saveAndRender();
+    return;
+  }
+
+  const backStep = (hs.reason === "exiled") ? "DAY:EXILE_DONE" : "DAY:D2";
+
+  if(!hs.allowed){
+    state.day.hunterShoot = null;
+    state.flow.stepId = backStep;
     saveAndRender();
     return;
   }
 
   if(forceNoShot || !hs.pickedTarget){
-    // no shot
     state.day.hunterShoot = null;
-    // proceed to talk
-    state.flow.stepId = "DAY:D2";
+    state.flow.stepId = backStep;
     saveAndRender();
     return;
   }
 
-  // shoot target (must be alive)
   const tgt = state.players.find(x=>x.seat===hs.pickedTarget);
   if(!tgt || !tgt.alive){
     toast("目標無效（必須選存活者）");
@@ -974,17 +953,18 @@ function confirmHunterShoot(forceNoShot=false){
 
   applyDeaths([{ seat: tgt.seat, reason: "hunter" }]);
 
-  // clear hunter shoot
+  // only shooting consumes bullet
+  state.hunter.usedBullet = true;
+
   state.day.hunterShoot = null;
 
-  // check end after shot
   const ended = checkAndMaybeEnd();
   if(ended){
     saveAndRender();
     return;
   }
 
-  state.flow.stepId = "DAY:D2";
+  state.flow.stepId = backStep;
   saveAndRender();
 }
 
@@ -1006,8 +986,7 @@ function startVoting(isPK){
     isPK: !!isPK,
     voters,
     voterIndex: 0,
-    currentTarget: null,
-    log: [], // {voter, target}
+    log: [],
     tally: null,
     pkCandidates: null,
     pkRound: 0
@@ -1031,42 +1010,33 @@ function confirmVoteForCurrentVoter(){
   if(!voter) return;
 
   const target = state.ui.selectedSeat || null;
-
-  // allow abstain by pressing primary without selection
   v.log.push({ voter, target });
 
   v.voterIndex += 1;
   state.ui.selectedSeat = null;
 
   if(v.voterIndex >= v.voters.length){
-    // tally
-    v.tally = buildTally(v.log, null); // all alive candidates
+    v.tally = buildTally(v.log, null);
     const top = getTopCandidates(v.tally);
 
     if(top.length === 0){
-      // nobody got votes => no exile
       state.flow.stepId = "DAY:NO_EXILE_DONE";
       return;
     }
 
     if(top.length === 1){
-      // exile
       resolveExile(top[0].seat);
       return;
     }
 
-    // tie => PK
     v.pkCandidates = top.map(x=>x.seat);
     v.pkRound = 1;
-    startPKVoting(v.pkCandidates);
+    startPKVoting(v.pkCandidates, 1);
     return;
   }
-
-  // continue next voter
 }
 
-function startPKVoting(candidates){
-  // reset vote state for PK round
+function startPKVoting(candidates, roundNo){
   const voters = state.players
     .filter(p=> p.alive && p.canVote)
     .map(p=> p.seat);
@@ -1075,11 +1045,10 @@ function startPKVoting(candidates){
     isPK: true,
     voters,
     voterIndex: 0,
-    currentTarget: null,
     log: [],
     tally: null,
     pkCandidates: candidates.slice(),
-    pkRound: (state.day.vote?.pkRound || 1)
+    pkRound: roundNo
   };
 
   state.ui.selectedSeat = null;
@@ -1094,8 +1063,6 @@ function confirmPKVoteForCurrentVoter(){
   if(!voter) return;
 
   const target = state.ui.selectedSeat || null;
-
-  // PK vote: only allow candidates, otherwise treat as abstain
   if(target && !v.pkCandidates.includes(target)){
     toast("PK 只能投候選人（或不選＝棄票）");
     return;
@@ -1114,28 +1081,22 @@ function confirmPKVoteForCurrentVoter(){
       return;
     }
 
-    // still tie
     if(v.pkRound >= 2){
-      // second tie => no exile
       state.flow.stepId = "DAY:NO_EXILE_DONE";
       return;
     }
 
-    // PK revote round 2
     const cand = top.map(x=>x.seat);
-    startPKVoting(cand);
-    state.day.vote.pkRound = 2;
+    startPKVoting(cand, 2);
     return;
   }
 }
 
 function buildTally(log, restrictSeats){
-  const map = new Map(); // seat->count
-  // initialize restrictSeats
+  const map = new Map();
   if(Array.isArray(restrictSeats)){
     restrictSeats.forEach(s=> map.set(s, 0));
   }else{
-    // all alive are valid candidates
     state.players.filter(p=>p.alive).forEach(p=> map.set(p.seat, 0));
   }
 
@@ -1145,7 +1106,6 @@ function buildTally(log, restrictSeats){
     map.set(it.target, (map.get(it.target) || 0) + 1);
   }
 
-  // to array
   const arr = [];
   for(const [seat,count] of map.entries()){
     arr.push({ seat, count });
@@ -1168,11 +1128,10 @@ function resolveExile(seat){
     return;
   }
 
-  // Idiot rule: first time exiled -> NOT die, lose vote right
+  // Idiot: first time exiled -> alive, lose vote
   if(p.roleId === "idiot" && !p.idiotRevealed){
     p.idiotRevealed = true;
     p.canVote = false;
-    // remains alive
     state.flow.stepId = "DAY:EXILE_DONE";
     toast("白癡被放逐：不死，但失去投票權");
     return;
@@ -1181,13 +1140,12 @@ function resolveExile(seat){
   // Normal exile death
   applyDeaths([{ seat, reason: "vote" }]);
 
-  // Hunter: if exiled and not poisoned, can shoot immediately (per spec: 放逐後先提示是否開槍)
+  // Hunter exiled: can shoot (if bullet unused)
   if(p.roleId === "hunter"){
-    // poisoned death cannot shoot
-    // exile reason is vote => allowed
+    const canShoot = !state.hunter.usedBullet;
     state.day.hunterShoot = {
       fromSeat: seat,
-      allowed: true,
+      allowed: canShoot,
       reason: "exiled",
       pickedTarget: null
     };
@@ -1199,7 +1157,7 @@ function resolveExile(seat){
 }
 
 /* ================================
-   Death application
+   Death apply
    ================================ */
 function applyDeaths(deaths){
   for(const d of deaths){
@@ -1207,30 +1165,25 @@ function applyDeaths(deaths){
     if(!p) continue;
     if(!p.alive) continue;
     p.alive = false;
-    // dead still shows role in god view by design
   }
-
-  // Special: if hunter died by poison, he cannot shoot (handled by checks)
-  // Special: if idiot dies by other reasons (night/hunter), treat as normal death (no special)
 }
 
 /* ================================
    Win condition
    ================================ */
-function countAliveBy(filterFn){
-  return state.players.filter(p=>p.alive).filter(filterFn).length;
-}
-
 function isWolf(p){ return ROLE[p.roleId]?.camp === "wolf"; }
 function isGood(p){ return ROLE[p.roleId]?.camp === "good"; }
 function isGodRole(p){ return !!ROLE[p.roleId]?.isGod; }
 function isVillagerRole(p){ return p.roleId === "villager"; }
 
+function countAliveBy(fn){
+  return state.players.filter(p=>p.alive).filter(fn).length;
+}
+
 function checkAndMaybeEnd(){
   const wolves = countAliveBy(isWolf);
   const goodAll = countAliveBy(isGood);
 
-  // Good win priority: wolves all dead
   if(wolves === 0){
     endGame("好人勝", "狼人全滅");
     return true;
@@ -1239,7 +1192,6 @@ function checkAndMaybeEnd(){
   const mode = state.config.winMode || state.board?.winCondition?.mode || "edge";
 
   if(mode === "city"){
-    // wolves >= good => wolves win
     if(wolves >= goodAll){
       endGame("狼人勝", "屠城：狼人數 ≥ 好人數");
       return true;
@@ -1247,7 +1199,6 @@ function checkAndMaybeEnd(){
     return false;
   }
 
-  // edge: gods all dead OR villagers all dead => wolves win
   const godsAlive = state.players.filter(p=>p.alive && isGodRole(p)).length;
   const villagersAlive = state.players.filter(p=>p.alive && isVillagerRole(p)).length;
 
@@ -1276,21 +1227,18 @@ function onSeatClick(seat){
   const phase = state.flow.phase;
   const step = state.flow.stepId;
 
-  // Setup reveal
   if(phase==="SETUP" && step==="SETUP:A3"){
+    // click also reveals (modal)
     revealRole(seat);
     return;
   }
 
-  // Night step selection
   if(phase==="NIGHT" && step==="NIGHT:STEP"){
     handleNightSeatPick(seat);
     return;
   }
 
-  // Day vote selection
   if(phase==="DAY" && (step==="DAY:VOTE" || step==="DAY:PK")){
-    // only allow picking alive targets
     const p = state.players.find(x=>x.seat===seat);
     if(!p || !p.alive){
       toast("只能投存活者");
@@ -1301,7 +1249,6 @@ function onSeatClick(seat){
     return;
   }
 
-  // Hunter shoot selection
   if(phase==="DAY" && step==="DAY:HS"){
     const p = state.players.find(x=>x.seat===seat);
     if(!p || !p.alive){
@@ -1315,6 +1262,7 @@ function onSeatClick(seat){
   }
 }
 
+/* ✅ reveal = mark seen + OPEN MODAL */
 function revealRole(seat){
   const p = state.players.find(x=>x.seat===seat);
   if(!p) return;
@@ -1322,7 +1270,10 @@ function revealRole(seat){
   state.ui.revealSeat = seat;
   state.setup.seenSeats[String(seat)] = true;
   p.seen = true;
-  saveAndRender();
+
+  saveState();        // 防止當掉
+  openRoleModal(seat);
+  render();           // 立刻刷新（不關閉 modal）
 }
 
 function handleNightSeatPick(seat){
@@ -1331,8 +1282,6 @@ function handleNightSeatPick(seat){
 
   const actor = findFirstByRole(step.id);
   const actorAlive = actor ? actor.alive : false;
-
-  // if actor dead, no actions
   if(!actorAlive){
     toast(`${step.name}已死（流程照唸，不能操作）`);
     return;
@@ -1344,9 +1293,7 @@ function handleNightSeatPick(seat){
     return;
   }
 
-  // step-specific rules
   if(step.id === "wolf"){
-    // allow none; clicking seat sets target
     state.night.pending.wolf = state.night.pending.wolf || {};
     state.night.pending.wolf.target = seat;
     state.ui.selectedSeat = seat;
@@ -1363,21 +1310,17 @@ function handleNightSeatPick(seat){
   }
 
   if(step.id === "witch"){
-    // Witch: click knife target = save (if available), click other = poison (if available), mutual exclusive
     const roundKey = String(state.night.round);
     const rlog = state.night.logByRound[roundKey] || {};
     const wolfTarget = rlog.wolf?.target ?? null;
 
     state.night.pending.witch = state.night.pending.witch || { save:null, poison:null };
 
-    // Decide save vs poison based on whether clicked seat == wolfTarget
     if(seat === wolfTarget){
-      // save
       if(state.witch.usedAntidote){
         toast("解藥已用過（不能救）");
         return;
       }
-      // self-save rule: if witch is victim and not allowed, block
       if(!state.board?.witchCanSelfSave){
         const witchSeat = findFirstByRole("witch")?.seat;
         if(witchSeat && wolfTarget === witchSeat){
@@ -1392,7 +1335,6 @@ function handleNightSeatPick(seat){
       return;
     }
 
-    // poison
     if(state.witch.usedPoison){
       toast("毒藥已用過（不能毒）");
       return;
@@ -1409,25 +1351,26 @@ function findFirstByRole(roleId){
   return state.players.find(p=>p.roleId===roleId) || null;
 }
 
-/* Long press helper */
+/* ✅ Long press (more stable on iOS) */
 function addLongPress(el, fn, ms){
   let t = null;
   const clear = ()=>{ if(t){ clearTimeout(t); t=null; } };
 
-  el.addEventListener("touchstart", ()=>{
+  const start = (e)=>{
+    try{ e.preventDefault?.(); }catch(_){}
     clear();
     t = setTimeout(()=>{ fn(); clear(); }, ms);
-  }, {passive:true});
-  el.addEventListener("touchmove", clear, {passive:true});
-  el.addEventListener("touchend", clear, {passive:true});
-  el.addEventListener("touchcancel", clear, {passive:true});
+  };
+  const end = ()=> clear();
 
-  el.addEventListener("mousedown", ()=>{
-    clear();
-    t = setTimeout(()=>{ fn(); clear(); }, ms);
-  });
-  el.addEventListener("mouseup", clear);
-  el.addEventListener("mouseleave", clear);
+  el.addEventListener("touchstart", start, { passive:false });
+  el.addEventListener("touchmove", end, { passive:true });
+  el.addEventListener("touchend", end, { passive:true });
+  el.addEventListener("touchcancel", end, { passive:true });
+
+  el.addEventListener("mousedown", start);
+  el.addEventListener("mouseup", end);
+  el.addEventListener("mouseleave", end);
 }
 
 /* ================================
@@ -1438,7 +1381,7 @@ function render(){
   renderTimerOnly();
 
   if(uiStatus) uiStatus.textContent = `${state.flow.phase} / R${state.flow.round} / ${state.flow.stepId}`;
-  if(uiBoard) uiBoard.textContent = state.board?.title || boardTitleFromCount();
+  if(uiBoard) uiBoard.textContent = state.board?.title || "—";
 
   if(toggleGodView) toggleGodView.checked = !!state.ui.godExpanded;
   if(togglePolice) togglePolice.checked = !!(state.board?.hasPolice ?? state.config.hasPolice);
@@ -1450,20 +1393,12 @@ function render(){
   renderActions();
 }
 
-function boardTitleFromCount(){
-  if(!state.config.playersCount) return "—";
-  if(state.config.playersCount===9) return "9 人官方標準局";
-  if(state.config.playersCount===10) return "10 人官方標準局";
-  return "12 人官方標準局";
-}
-
 function renderPrompt(){
   if(!promptTitle || !promptText || !promptFoot) return;
 
   const phase = state.flow.phase;
   const step = state.flow.stepId;
 
-  // END
   if(phase==="END"){
     promptTitle.textContent = "遊戲結束";
     promptText.textContent = `${state.day.end?.winner || "—"}\n${state.day.end?.reason || ""}`;
@@ -1471,7 +1406,6 @@ function renderPrompt(){
     return;
   }
 
-  // SETUP
   if(phase==="SETUP"){
     if(step==="SETUP:A1"){
       promptTitle.textContent = "選擇人數";
@@ -1498,7 +1432,7 @@ function renderPrompt(){
       promptTitle.textContent = "可選板子";
       promptText.textContent =
         `已選：${state.config.playersCount}人\n` +
-        `請在上方「可選板子」區塊點選板子套用。\n\n` +
+        `請在「可選板子」區塊點選板子套用。\n\n` +
         `提示：\n` +
         `• 屠邊/屠城可在設定切換\n` +
         `• 上警可在設定開關（MVP）`;
@@ -1507,30 +1441,16 @@ function renderPrompt(){
     }
 
     if(step==="SETUP:A3"){
-      if(state.ui.revealSeat){
-        const p = state.players.find(x=>x.seat===state.ui.revealSeat);
-        const info = p ? (ROLE[p.roleId] || { name:p.roleId, camp:"?" }) : null;
-        promptTitle.textContent = `抽身分：${state.ui.revealSeat}號`;
-        promptText.textContent =
-          `你的身份是：${info?.name || "—"}\n` +
-          `陣營：${info?.camp === "wolf" ? "狼人" : "好人"}\n\n` +
-          `看完請把手機交回上帝。\n` +
-          `（按「取消」可關閉身分畫面）`;
-        promptFoot.textContent = `已查看：${countSeen()} / ${state.players.length}`;
-        return;
-      }
-
       promptTitle.textContent = "抽身分";
       promptText.textContent =
         "請大家依序查看身份。看完請把手機交回上帝。\n\n" +
         `操作：長按 ${LONGPRESS_MS/1000} 秒翻牌；或點座位重看。\n\n` +
-        `已查看：${countSeen()} / ${state.players.length}（全部看完才能進夜晚）`;
-      promptFoot.textContent = "";
+        `已查看：${Object.keys(state.setup.seenSeats||{}).length} / ${state.players.length}（全部看完才能進夜晚）`;
+      promptFoot.textContent = "提示：會跳出身份彈窗，按「我看完了」關閉。";
       return;
     }
   }
 
-  // NIGHT
   if(phase==="NIGHT"){
     if(step==="NIGHT:N0"){
       promptTitle.textContent = "天黑請閉眼";
@@ -1585,7 +1505,6 @@ function renderPrompt(){
         if(!actorAlive) text += "\n（女巫已死/不存在，本步照唸但無行動）";
       }
 
-      // God-only quick info
       if(state.ui.godExpanded && s.id==="seer"){
         const pending = state.night.pending.seer?.target ?? null;
         if(pending){
@@ -1616,7 +1535,6 @@ function renderPrompt(){
     }
   }
 
-  // DAY
   if(phase==="DAY"){
     if(step==="DAY:D1"){
       const ann = state.day.announcement;
@@ -1624,7 +1542,6 @@ function renderPrompt(){
       const lines = ann?.lines || ["—"];
       let text = lines.join("\n");
 
-      // add god-only details
       if(state.ui.godExpanded){
         const roundKey = String(state.night.round);
         const rlog = state.night.logByRound[roundKey] || {};
@@ -1636,39 +1553,34 @@ function renderPrompt(){
       }
 
       promptText.textContent = text;
-      promptFoot.textContent = "按「下一步」進入白天（若獵人夜刀死亡，會先提示開槍）。";
+      promptFoot.textContent = "按「下一步」進入白天（若獵人夜刀死亡，會先提示是否開槍）。";
       return;
     }
 
     if(step==="DAY:HS"){
       const hs = state.day.hunterShoot;
       const from = hs?.fromSeat;
-      const reason = hs?.reason;
 
-      // If hunterShoot exists but not allowed, skip
       if(!hs || !from){
         state.flow.stepId = "DAY:D2";
         saveAndRender();
         return;
       }
 
-      // poisoned check (if somehow)
-      // Night poison cannot shoot:
-      if(reason === "night_poison"){
+      if(!hs.allowed){
         promptTitle.textContent = "獵人開槍";
-        promptText.textContent = `獵人（${from}號）是被毒死：不能開槍。`;
-        promptFoot.textContent = "按「下一步」繼續白天。";
-        // auto clear on next primary
-        hs.pickedTarget = null;
+        promptText.textContent = `獵人（${from}號）無法開槍。`;
+        promptFoot.textContent = "按「下一步」繼續流程。";
         return;
       }
 
       promptTitle.textContent = "獵人開槍";
       promptText.textContent =
-        `獵人（${from}號）可以開槍。\n\n` +
+        `獵人（${from}號）可以開槍（子彈僅一次）。\n\n` +
         `• 點一位存活者作為目標\n` +
         `• 不開槍：按「取消」\n` +
-        `• 確認：按「下一步」`;
+        `• 確認：按「下一步」\n\n` +
+        `（投票照常繼續）`;
       promptFoot.textContent = state.ui.selectedSeat ? `已選目標：${state.ui.selectedSeat}號` : "尚未選目標（可不開槍）";
       return;
     }
@@ -1681,60 +1593,54 @@ function renderPrompt(){
     }
 
     if(step==="DAY:VOTE"){
-      const v = state.day.vote;
       const voter = currentVoterSeat();
+      const v = state.day.vote;
       promptTitle.textContent = "白天投票";
       promptText.textContent =
         `輪到：${voter}號投票\n\n` +
         `• 點選要投的存活座位\n` +
-        `• 不選＝棄票（直接按「下一步」）\n` +
-        `\n進度：${(v?.voterIndex||0)+1} / ${v?.voters?.length||0}`;
+        `• 不選＝棄票（直接按「確認」）\n\n` +
+        `進度：${(v?.voterIndex||0)+1} / ${v?.voters?.length||0}`;
       promptFoot.textContent = state.ui.selectedSeat ? `已選：${state.ui.selectedSeat}號` : "（棄票）";
       return;
     }
 
     if(step==="DAY:PK"){
-      const v = state.day.vote;
       const voter = currentVoterSeat();
+      const v = state.day.vote;
       const cand = v?.pkCandidates || [];
       promptTitle.textContent = `PK 投票（第${v?.pkRound||1}輪）`;
       promptText.textContent =
         `候選人：${cand.map(x=>`${x}號`).join("、")}\n\n` +
         `輪到：${voter}號投票\n` +
         `• 只能投候選人\n` +
-        `• 不選＝棄票（直接按「下一步」）\n` +
-        `\n進度：${(v?.voterIndex||0)+1} / ${v?.voters?.length||0}`;
+        `• 不選＝棄票（直接按「確認」）\n\n` +
+        `進度：${(v?.voterIndex||0)+1} / ${v?.voters?.length||0}`;
       promptFoot.textContent = state.ui.selectedSeat ? `已選：${state.ui.selectedSeat}號` : "（棄票）";
       return;
     }
 
     if(step==="DAY:EXILE_DONE"){
-      // show tally summary if exists
-      const v = state.day.vote;
-      const summary = buildVoteSummary(v);
       promptTitle.textContent = "投票結算";
-      promptText.textContent = summary;
+      promptText.textContent = buildVoteSummary(state.day.vote, false);
       promptFoot.textContent = "按「下一步」進入下一晚（或若已結束則顯示結局）。";
       return;
     }
 
     if(step==="DAY:NO_EXILE_DONE"){
-      const v = state.day.vote;
-      const summary = buildVoteSummary(v, true);
       promptTitle.textContent = "投票結算";
-      promptText.textContent = summary;
+      promptText.textContent = buildVoteSummary(state.day.vote, true);
       promptFoot.textContent = "按「下一步」進入下一晚（或若已結束則顯示結局）。";
       return;
     }
   }
 
-  // fallback
   promptTitle.textContent = "—";
   promptText.textContent = "—";
   promptFoot.textContent = "";
 }
 
-function buildVoteSummary(v, noExile=false){
+function buildVoteSummary(v, noExile){
   if(!v){
     return noExile ? "無人放逐。" : "投票結束。";
   }
@@ -1771,10 +1677,9 @@ function renderGodInfo(){
     lines.push(`抽身分：尚未分配`);
   }
 
-  // show witch potion status
   lines.push(`女巫：解藥${state.witch.usedAntidote ? "已用" : "可用"} / 毒藥${state.witch.usedPoison ? "已用" : "可用"}`);
+  lines.push(`獵人：子彈${state.hunter.usedBullet ? "已用" : "可用"}`);
 
-  // show alive counts
   const wolves = countAliveBy(isWolf);
   const goodAll = countAliveBy(isGood);
   lines.push(`存活：狼 ${wolves} / 好 ${goodAll}`);
@@ -1792,8 +1697,6 @@ function renderSeats(){
       "seat" +
       (!p.alive ? " dead" : "") +
       (state.ui.selectedSeat === p.seat ? " selected" : "");
-
-    seat.dataset.seat = String(p.seat);
 
     const top = document.createElement("div");
     top.className = "seat-top";
@@ -1829,7 +1732,6 @@ function renderSeats(){
       right.appendChild(b1);
       right.appendChild(b2);
 
-      // idiot reveal info
       if(p.roleId==="idiot" && p.idiotRevealed){
         const b3 = document.createElement("span");
         b3.className = "badge";
@@ -1851,7 +1753,7 @@ function renderSeats(){
 
     seat.addEventListener("click", ()=> onSeatClick(p.seat));
 
-    // Long press reveal in A3
+    // SETUP:A3 long press reveal (modal)
     if(state.flow.phase==="SETUP" && state.flow.stepId==="SETUP:A3"){
       addLongPress(seat, ()=> revealRole(p.seat), LONGPRESS_MS);
     }
@@ -1898,7 +1800,7 @@ function renderActions(){
       btnBack.textContent = "上一步";
       btnPrimary.textContent = "確認進夜晚";
       btnPrimary.disabled = !allSeen();
-      btnCancel.textContent = state.ui.revealSeat ? "關閉" : "取消";
+      btnCancel.textContent = "取消";
       return;
     }
   }
@@ -1906,14 +1808,13 @@ function renderActions(){
   if(phase==="NIGHT"){
     if(step==="NIGHT:N0"){
       btnBack.textContent = "上一步";
-      btnBack.disabled = false;
       btnPrimary.textContent = "開始夜晚";
       btnCancel.textContent = "取消";
       return;
     }
     if(step==="NIGHT:STEP"){
       btnBack.textContent = "上一步";
-      btnBack.disabled = true; // night no back for safety
+      btnBack.disabled = true;
       btnPrimary.textContent = "下一步";
       btnCancel.textContent = "清除";
       return;
@@ -1949,14 +1850,7 @@ function renderActions(){
       btnCancel.textContent = "取消";
       return;
     }
-    if(step==="DAY:VOTE"){
-      btnBack.textContent = "上一步";
-      btnBack.disabled = true;
-      btnPrimary.textContent = "確認";
-      btnCancel.textContent = "清除";
-      return;
-    }
-    if(step==="DAY:PK"){
+    if(step==="DAY:VOTE" || step==="DAY:PK"){
       btnBack.textContent = "上一步";
       btnBack.disabled = true;
       btnPrimary.textContent = "確認";
@@ -1972,7 +1866,6 @@ function renderActions(){
     }
   }
 
-  // fallback
   btnPrimary.textContent = "下一步";
   btnCancel.textContent = "取消";
   btnBack.textContent = "上一步";
@@ -1983,66 +1876,9 @@ function renderActions(){
    ================================ */
 function pickCount(n){
   state.config.playersCount = n;
-  // default board id
   state.config.boardId = (n===9) ? "official-9" : (n===10) ? "official-10" : "official-12";
   applyBoardByPath(`./boards/${state.config.boardId}.json`, state.config.boardId).then(()=>{
     state.flow.stepId = "SETUP:A2";
     saveAndRender();
   });
-}
-
-/* ================================
-   Night enter (first time)
-   ================================ */
-function enterNight(firstTime=false){
-  state.flow.phase = "NIGHT";
-  state.flow.stepId = "NIGHT:N0";
-  if(firstTime){
-    state.night.round = 1;
-    state.flow.round = 1;
-    state.day.round = 1;
-  }else{
-    state.flow.round = state.night.round;
-  }
-  enterNight(true); // we reuse enterNight(true) earlier for next round, but this would increment
-  // NOTE: to avoid recursion, we do inline below
-}
-
-/* Fix: the function name above conflicts; keep single implementation */
-function enterNight(isNextRound){
-  state.flow.phase = "NIGHT";
-  state.flow.stepId = "NIGHT:N0";
-
-  if(isNextRound){
-    // if already in night previously, increment; else keep at 1
-    if(state.flow.phase === "NIGHT" && state.flow.stepId !== "SETUP:A3"){
-      // no-op
-    }
-  }
-
-  // build steps
-  const steps = (state.board?.nightSteps || [])
-    .slice()
-    .sort((a,b)=> (a.wakeOrder||0) - (b.wakeOrder||0));
-
-  state.night.steps = steps;
-  state.night.stepIndex = 0;
-  state.night.pending = {};
-  state.ui.selectedSeat = null;
-
-  // ensure round logs
-  const roundKey = String(state.night.round);
-  state.night.logByRound[roundKey] = state.night.logByRound[roundKey] || {};
-
-  // clear day announcement until resolve
-  state.day.announcement = null;
-  state.day.vote = null;
-  state.day.hunterShoot = null;
-}
-
-/* ================================
-   Utilities
-   ================================ */
-function boardTitleFromId(){
-  return state.config.boardId || "—";
 }
