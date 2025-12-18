@@ -1,606 +1,594 @@
-import ROLES from "./roles.js";
-import BOARDS from "./boards.js";
+/* =========================
+   Werewolf MVP - Day0~Day2
+   - SETUP:A1 choose count
+   - SETUP:A2 load board + config winMode/hasPolice
+   - SETUP:A3 assign roles + long-press reveal (0.3s) + seen gate
+   ========================= */
 
-/* ======================
-   全域遊戲狀態（讓 index.html 的紀錄可讀）
-====================== */
-export const Game = {
-  boardId: null,
-  board: null,
-  players: [],
-  phase: "setup", // setup | deal | night | day
-  dealIndex: 0,
+const STORAGE_KEY = "werewolf_mvp_state_v1";
 
-  nightStepIndex: 0,
-  nightSteps: [],
-  logs: [],
-
-  settings: {
-    playerCount: 9
-  },
-
-  night: {
-    wolfTarget: null,
-    guardTarget: null,
-    seerTarget: null,
-    seerResult: null,
-    witchSave: false,
-    witchPoisonTarget: null
-  }
-};
-// 讓 index.html 的 showLogs() 能抓到
-window.Game = Game;
-
-/* ======================
-   角色配置（9～12 + 各板子預設）
-   你之後要調整，只改這裡就好
-====================== */
-const PRESETS = {
-  basic: {
-    9:  { werewolf: 2, villager: 5, seer: 1, witch: 1, hunter: 0, guard: 0 },
-    10: { werewolf: 3, villager: 5, seer: 1, witch: 1, hunter: 0, guard: 0 },
-    11: { werewolf: 3, villager: 5, seer: 1, witch: 1, hunter: 1, guard: 0 },
-    12: { werewolf: 3, villager: 5, seer: 1, witch: 1, hunter: 1, guard: 1 }
-  },
-
-  wolfKings: {
-    10: { werewolf: 2, whiteWolfKing: 1, blackWolfKing: 1, villager: 4, seer: 1, witch: 1 },
-    11: { werewolf: 2, whiteWolfKing: 1, blackWolfKing: 1, villager: 5, seer: 1, witch: 1 },
-    12: { werewolf: 2, whiteWolfKing: 1, blackWolfKing: 1, villager: 6, seer: 1, witch: 1 }
-  },
-
-  lovers: {
-    9:  { werewolf: 2, villager: 4, seer: 1, witch: 1, cupid: 1, admirer: 0 },
-    10: { werewolf: 3, villager: 4, seer: 1, witch: 1, cupid: 1, admirer: 0 },
-    11: { werewolf: 3, villager: 5, seer: 1, witch: 1, cupid: 1, admirer: 0 },
-    12: { werewolf: 3, villager: 5, seer: 1, witch: 1, cupid: 1, admirer: 1 }
-  },
-
-  control: {
-    10: { werewolf: 3, villager: 3, seer: 1, witch: 1, elder: 1, dreamer: 1, magician: 0 },
-    11: { werewolf: 3, villager: 4, seer: 1, witch: 1, elder: 1, dreamer: 1, magician: 0 },
-    12: { werewolf: 3, villager: 4, seer: 1, witch: 1, elder: 1, dreamer: 1, magician: 1 }
-  },
-
-  chaos: {
-    10: { werewolf: 3, villager: 2, seer: 1, witch: 1, marketDealer: 1, lucky: 1, idiot: 1, demonHunter: 0 },
-    11: { werewolf: 3, villager: 3, seer: 1, witch: 1, marketDealer: 1, lucky: 1, idiot: 1, demonHunter: 0 },
-    12: { werewolf: 3, villager: 3, seer: 1, witch: 1, marketDealer: 1, lucky: 1, idiot: 1, demonHunter: 1 }
-  }
+const ROLE_LABELS = {
+  wolf:   { name: "狼人", camp: "wolf" },
+  seer:   { name: "預言家", camp: "good" },
+  witch:  { name: "女巫", camp: "good" },
+  hunter: { name: "獵人", camp: "good" },
+  idiot:  { name: "白癡", camp: "good", isGod: true },
+  villager:{ name: "平民", camp: "good" }
 };
 
-/* ======================
-   啟動：一進頁面就顯示「選板子」
-====================== */
-document.addEventListener("DOMContentLoaded", () => {
-  renderSetup();
-});
+// ----- UI refs
+const uiStatus = document.getElementById("uiStatus");
+const uiBoard = document.getElementById("uiBoard");
+const promptTitle = document.getElementById("promptTitle");
+const promptText = document.getElementById("promptText");
+const promptFoot = document.getElementById("promptFoot");
+const godText = document.getElementById("godText");
+const toggleGodView = document.getElementById("toggleGodView");
 
-/* ======================
-   Setup UI（像手機 App 一樣）
-====================== */
-function renderSetup(selectedBoardId = Game.boardId || "basic") {
-  Game.phase = "setup";
-  Game.boardId = selectedBoardId;
-  Game.board = BOARDS[selectedBoardId];
+const seatsGrid = document.getElementById("seatsGrid");
 
-  // 可選人數：取板子支援的 players（我們 boards.js 有 players: [9..]）
-  const counts = Game.board.players || [9, 10, 11, 12];
+const btnSettings = document.getElementById("btnSettings");
+const drawer = document.getElementById("drawer");
+const drawerBackdrop = document.getElementById("drawerBackdrop");
+const btnCloseDrawer = document.getElementById("btnCloseDrawer");
+const segEdge = document.getElementById("segEdge");
+const segCity = document.getElementById("segCity");
+const togglePolice = document.getElementById("togglePolice");
+const btnReset = document.getElementById("btnReset");
 
-  // 若目前人數不在可選範圍，修正成第一個
-  if (!counts.includes(Game.settings.playerCount)) {
-    Game.settings.playerCount = counts[0];
-  }
+const btnBack = document.getElementById("btnBack");
+const btnPrimary = document.getElementById("btnPrimary");
+const btnCancel = document.getElementById("btnCancel");
 
-  const boardCards = Object.values(BOARDS)
-    .map(b => {
-      const active = b.id === selectedBoardId ? "active" : "";
-      return `
-        <button class="board-card ${active}" onclick="selectBoard('${b.id}')">
-          <div class="board-title">${b.name}</div>
-          <div class="board-intro">${b.intro || ""}</div>
-          <div class="board-meta">
-            適合人數：${(b.players || []).join("–")}
-            ・女巫自救：${b.rules?.witchSelfSave === "forbidden" ? "不允許" : "允許"}
-          </div>
-        </button>
-      `;
-    })
-    .join("");
+// ----- State
+let state = loadState() ?? makeInitialState();
+render();
 
-  const countButtons = counts
-    .map(n => {
-      const active = n === Game.settings.playerCount ? "active" : "";
-      return `<button class="pill ${active}" onclick="setPlayerCount(${n})">${n} 人</button>`;
-    })
-    .join("");
+// =========================
+// iOS anti-zoom / anti-callout (extra hardening)
+// =========================
+document.addEventListener("gesturestart", (e) => e.preventDefault());
+document.addEventListener("dblclick", (e) => e.preventDefault(), { passive: false });
+document.addEventListener("contextmenu", (e) => e.preventDefault());
 
-  const roleSummary = presetSummary(selectedBoardId, Game.settings.playerCount);
-
-  document.getElementById("main").innerHTML = `
-    <section class="panel">
-      <h2 class="h2">請選擇板子開始遊戲</h2>
-      <div class="grid">${boardCards}</div>
-    </section>
-
-    <section class="panel">
-      <h3 class="h3">玩家人數</h3>
-      <div class="row">${countButtons}</div>
-      <div class="hint">（可先用預設配置開局，之後再做手動微調功能）</div>
-    </section>
-
-    <section class="panel">
-      <h3 class="h3">本局角色配置（預設）</h3>
-      <div class="card">${roleSummary}</div>
-      <button class="primary" onclick="startDeal()">開始抽牌（輪流看身分）</button>
-    </section>
-  `;
-}
-
-// 讓 index.html 也能呼叫（你底部有角色圖鑑、紀錄）
-window.selectBoard = (id) => renderSetup(id);
-window.setPlayerCount = (n) => {
-  Game.settings.playerCount = n;
-  renderSetup(Game.boardId);
-};
-
-function presetSummary(boardId, count) {
-  const preset = PRESETS[boardId]?.[count];
-  if (!preset) return `⚠️ 這個板子目前沒有 ${count} 人的預設配置（請改選其他人數或先用基本板）。`;
-
-  const parts = Object.entries(preset)
-    .filter(([, v]) => v > 0)
-    .map(([roleId, v]) => `${ROLES[roleId]?.name || roleId} × ${v}`)
-    .join("、");
-
-  return parts;
-}
-
-/* ======================
-   產生 roleList（依預設配置）
-====================== */
-function buildRoleList(boardId, count) {
-  const preset = PRESETS[boardId]?.[count];
-  if (!preset) throw new Error("找不到此板子的人數預設配置");
-
-  const list = [];
-  for (const [roleId, qty] of Object.entries(preset)) {
-    for (let i = 0; i < qty; i++) list.push(roleId);
-  }
-  // 安全檢查：總數要等於玩家數
-  if (list.length !== count) {
-    throw new Error(`角色數量(${list.length})不等於玩家數(${count})，請檢查 PRESETS。`);
-  }
-  return shuffle(list);
-}
-
-/* ======================
-   抽牌（Pass & Play）
-====================== */
-window.startDeal = function () {
-  Game.board = BOARDS[Game.boardId];
-  Game.players = createPlayers(Game.settings.playerCount, buildRoleList(Game.boardId, Game.settings.playerCount));
-  Game.phase = "deal";
-  Game.dealIndex = 0;
-  renderDeal();
-};
-
-function renderDeal() {
-  const p = Game.players[Game.dealIndex];
-  document.getElementById("main").innerHTML = `
-    <section class="panel">
-      <h2 class="h2">請 ${p.seat} 號拿手機</h2>
-      <div class="hint">按下後會顯示你的身分，請看完交給下一位。</div>
-      <button class="primary" onclick="showRole()">查看身分</button>
-      <button class="ghost" onclick="backToSetup()">返回選板子</button>
-    </section>
-  `;
-}
-
-window.backToSetup = function () {
-  renderSetup(Game.boardId);
-};
-
-window.showRole = function () {
-  const p = Game.players[Game.dealIndex];
-  const role = ROLES[p.roleId];
-  alert(`你是【${role.name}】\n\n${role.skill}`);
-
-  Game.dealIndex++;
-  if (Game.dealIndex >= Game.players.length) {
-    startNight();
-  } else {
-    renderDeal();
-  }
-};
-
-/* ======================
-   夜晚流程
-====================== */
-function startNight() {
-  Game.phase = "night";
-  Game.nightStepIndex = 0;
-  Game.night = {
-    wolfTarget: null,
-    guardTarget: null,
-    seerTarget: null,
-    seerResult: null,
-    witchSave: false,
-    witchPoisonTarget: null
-  };
-  Game.nightSteps = (Game.board.nightOrder || []).slice();
-  renderNightStep();
-}
-
-function renderNightStep() {
-  const step = Game.nightSteps[Game.nightStepIndex];
-  if (!step) {
-    resolveNight();
+// =========================
+// Events
+// =========================
+btnPrimary.addEventListener("click", () => {
+  if (state.flow.phase === "SETUP" && state.flow.stepId === "SETUP:A1") {
+    // Must choose playersCount
+    if (!state.config.playersCount) {
+      toast("請先選人數");
+      return;
+    }
+    goStep("SETUP:A2");
     return;
   }
 
-  const stepTitle = {
-    guard: "守衛",
-    werewolf: "狼人",
-    seer: "預言家",
-    witch: "女巫",
-    cupid: "邱比特",
-    admirer: "暗戀者",
-    elder: "禁言長老",
-    dreamer: "攝夢人",
-    magician: "魔術師"
-  }[step] || step;
-
-  // 上帝帶流程提示（像主持稿）
-  const scriptLine = {
-    guard: "請說：守衛請睜眼，你要守誰？",
-    werewolf: "請說：狼人請睜眼，你們要刀誰？",
-    seer: "請說：預言家請睜眼，你要查驗誰？",
-    witch: "請說：女巫請睜眼。",
-    cupid: "請說：邱比特請睜眼，請指定兩位成為情侶。",
-    admirer: "請說：暗戀者請睜眼，你要暗戀誰？",
-    elder: "請說：禁言長老請睜眼，你要禁言誰？",
-    dreamer: "請說：攝夢人請睜眼，你要讓誰進入夢境？",
-    magician: "請說：魔術師請睜眼，你要交換哪兩位？"
-  }[step] || "";
-
-  document.getElementById("main").innerHTML = `
-    <section class="panel">
-      <div class="tag">🌙 夜晚步驟 ${Game.nightStepIndex + 1}/${Game.nightSteps.length}</div>
-      <h2 class="h2">${stepTitle}行動</h2>
-      ${scriptLine ? `<div class="script">${scriptLine}</div>` : ""}
-      <div id="stepBody"></div>
-      <button class="ghost" onclick="forceNextNight()">跳過這一步</button>
-    </section>
-  `;
-
-  // 渲染各步驟操作
-  switch (step) {
-    case "guard":
-      pickTarget("stepBody", "守衛守誰？", "guardTarget");
-      break;
-    case "werewolf":
-      pickTarget("stepBody", "狼人刀誰？", "wolfTarget");
-      break;
-    case "seer":
-      pickTarget("stepBody", "預言家驗誰？", "seerTarget", true);
-      break;
-    case "witch":
-      renderWitch("stepBody");
-      break;
-    default:
-      // 其他特殊角色先做「可選目標」的通用版本（不影響你後續擴充）
-      pickTarget("stepBody", `${stepTitle}選擇目標`, `__${step}_target`);
-      break;
-  }
-}
-
-window.forceNextNight = function () {
-  nextNightStep();
-};
-
-function nextNightStep() {
-  Game.nightStepIndex++;
-  renderNightStep();
-}
-
-function pickTarget(containerId, title, key, reveal = false) {
-  const container = document.getElementById(containerId);
-  const buttons = Game.players
-    .filter(p => p.alive)
-    .map(p => `<button class="seat" onclick="confirmTarget('${key}', ${p.seat}, ${reveal ? "true" : "false"})">${p.seat}</button>`)
-    .join("");
-
-  container.innerHTML = `
-    <div class="hint">${title}</div>
-    <div class="seats">${buttons}</div>
-  `;
-}
-
-window.confirmTarget = function (key, seat, reveal) {
-  Game.night[key] = seat;
-
-  if (reveal) {
-    const target = Game.players.find(p => p.seat === seat);
-    const team = ROLES[target.roleId].team === "wolf" ? "狼人" : "好人";
-    Game.night.seerResult = team;
-    alert(`查驗結果：${seat} 號是【${team}】`);
-  }
-  nextNightStep();
-};
-
-function renderWitch(containerId) {
-  const container = document.getElementById(containerId);
-  const wolfTarget = Game.night.wolfTarget;
-  const witchSeat = Game.players.find(p => p.alive && ROLES[p.roleId].id === "witch")?.seat;
-
-  const cannotSelfSave =
-    wolfTarget && witchSeat && wolfTarget === witchSeat && Game.board.rules?.witchSelfSave === "forbidden";
-
-  container.innerHTML = `
-    <div class="hint">今晚被刀：<b>${wolfTarget ? wolfTarget + " 號" : "無"}</b></div>
-    ${cannotSelfSave ? `<div class="warn">本板子規則：女巫不可自救（解藥鎖定）</div>` : ""}
-
-    <div class="row">
-      <button class="primary" ${cannotSelfSave || !wolfTarget ? "disabled" : ""} onclick="witchSave()">用解藥</button>
-      <button class="primary" onclick="witchPoisonPick()">用毒藥</button>
-      <button class="ghost" onclick="nextNightStep()">不用</button>
-    </div>
-  `;
-}
-
-window.witchSave = function () {
-  Game.night.witchSave = true;
-  nextNightStep();
-};
-
-window.witchPoisonPick = function () {
-  pickTarget("stepBody", "女巫毒誰？", "witchPoisonTarget");
-};
-
-/* ======================
-   夜晚結算
-====================== */
-function resolveNight() {
-  const deaths = new Set();
-
-  // 狼刀判定
-  if (Game.night.wolfTarget) {
-    const blocked =
-      Game.night.wolfTarget === Game.night.guardTarget ||
-      Game.night.witchSave;
-    if (!blocked) deaths.add(Game.night.wolfTarget);
+  if (state.flow.phase === "SETUP" && state.flow.stepId === "SETUP:A2") {
+    // Confirm board -> A3
+    goStep("SETUP:A3");
+    // auto assign roles when enter A3
+    if (!state.setup.rolesAssigned) assignRolesForSetup();
+    return;
   }
 
-  // 毒藥判定
-  if (Game.night.witchPoisonTarget) deaths.add(Game.night.witchPoisonTarget);
-
-  // 執行死亡
-  deaths.forEach(seat => killPlayer(seat, Game.night.witchPoisonTarget === seat ? "poison" : "night"));
-
-  const deathList = [...deaths].map(s => `${s} 號`).join("、") || "沒有人";
-  const announce = `天亮了，昨晚死亡的是：${deathList}`;
-  Game.logs.push(announce);
-
-  startDay(announce);
-}
-
-/* ======================
-   死亡處理（黑狼王/白狼王 先保留鉤子）
-====================== */
-function killPlayer(seat, reason) {
-  const p = Game.players.find(x => x.seat === seat);
-  if (!p || !p.alive) return;
-  p.alive = false;
-
-  const role = ROLES[p.roleId];
-
-  // 黑狼王：非毒殺、非自爆（此版本未做自爆按鈕，reason=explode 預留）
-  if (role.id === "blackWolfKing") {
-    if (reason !== "poison" && reason !== "explode") {
-      alert("黑狼王可發動【狼王之爪】（類似獵人）");
-      // 先用簡化：立刻選帶走對象並死亡
-      pickTarget("main", "黑狼王要帶走誰？", "__blackWolfClaw");
-      // 注意：這裡先不 nextNightStep，因為可能在結算階段
-      window.confirmTarget = function (key, targetSeat) {
-        // 帶走
-        const tp = Game.players.find(x => x.seat === targetSeat);
-        if (tp && tp.alive) {
-          tp.alive = false;
-          Game.logs.push(`黑狼王臨死帶走：${targetSeat} 號`);
-        }
-        startDay(`天亮了（含狼王技能結算），請查看紀錄`);
-      };
-    }
-  }
-
-  // 白狼王：通常是白天被票出才觸發（reason=vote 預留）
-  if (role.id === "whiteWolfKing" && reason === "vote") {
-    alert("白狼王發動技能（被放逐時可帶走一人）");
-  }
-}
-
-/* ======================
-   白天（含發言倒數）
-====================== */
-function startDay(announceText) {
-  Game.phase = "day";
-  document.getElementById("main").innerHTML = `
-    <section class="panel">
-      <div class="tag">☀️ 白天</div>
-      <div class="card">
-        <div style="font-weight:800;margin-bottom:6px;">公告</div>
-        <div>${escapeHtml(announceText)}</div>
-        <div class="row" style="margin-top:10px;">
-          <button class="ghost" onclick="copyText(${JSON.stringify(announceText)})">一鍵複製公告</button>
-          <button class="ghost" onclick="startNight()">進入下一夜</button>
-        </div>
-      </div>
-
-      <div class="card">
-        <div style="font-weight:800;margin-bottom:6px;">🕒 白天發言倒數</div>
-        <div class="row">
-          <button class="pill" onclick="setSpeechMinutes(1)">1 分</button>
-          <button class="pill" onclick="setSpeechMinutes(2)">2 分</button>
-          <button class="pill" onclick="setSpeechMinutes(3)">3 分</button>
-          <button class="pill" onclick="setSpeechMinutes(5)">5 分</button>
-        </div>
-
-        <div id="speechTimerDisplay" class="timer">02:00</div>
-
-        <div class="row">
-          <button class="primary" onclick="startSpeechTimer()">開始</button>
-          <button class="ghost" onclick="pauseSpeechTimer()">暫停</button>
-          <button class="ghost" onclick="resetSpeechTimer()">重置</button>
-        </div>
-      </div>
-
-      <div class="card">
-        <div style="font-weight:800;margin-bottom:6px;">👥 存活座位</div>
-        <div class="seats">
-          ${Game.players.map(p => `<span class="seat-chip ${p.alive ? "" : "dead"}">${p.seat}</span>`).join("")}
-        </div>
-        <div class="hint">（上帝模式之後我可以再幫你加：點座位看身分）</div>
-      </div>
-    </section>
-  `;
-
-  // 初始顯示更新
-  updateSpeechTimerDisplay();
-}
-
-/* ======================
-   白天發言倒數計時器
-====================== */
-const speechTimer = {
-  duration: 120,
-  remaining: 120,
-  running: false,
-  intervalId: null
-};
-
-window.setSpeechMinutes = function (min) {
-  if (speechTimer.running) return;
-  speechTimer.duration = min * 60;
-  speechTimer.remaining = min * 60;
-  updateSpeechTimerDisplay();
-};
-
-window.startSpeechTimer = function () {
-  if (speechTimer.running) return;
-  speechTimer.running = true;
-
-  speechTimer.intervalId = setInterval(() => {
-    speechTimer.remaining--;
-    if (speechTimer.remaining <= 0) {
-      speechTimer.remaining = 0;
-      pauseSpeechTimer();
-      updateSpeechTimerDisplay();
-      alert("⏰ 發言時間到！");
+  if (state.flow.phase === "SETUP" && state.flow.stepId === "SETUP:A3") {
+    if (!allSeatsSeen()) {
+      toast("還有人沒看身分喔～");
       return;
     }
-    updateSpeechTimerDisplay();
-  }, 1000);
-};
+    // next to night (we'll stop here for Day2)
+    toast("✅ Day2 完成：已可進夜晚（下一版接 NIGHT）");
+    // You can switch to NIGHT:N0 later
+    return;
+  }
+});
 
-window.pauseSpeechTimer = function () {
-  speechTimer.running = false;
-  clearInterval(speechTimer.intervalId);
-  speechTimer.intervalId = null;
-};
+btnCancel.addEventListener("click", () => {
+  // clear reveal/pending etc
+  state.ui.revealingSeat = null;
+  saveAndRender();
+});
 
-window.resetSpeechTimer = function () {
-  pauseSpeechTimer();
-  speechTimer.remaining = speechTimer.duration;
-  updateSpeechTimerDisplay();
-};
+btnSettings.addEventListener("click", () => openDrawer());
+btnCloseDrawer.addEventListener("click", () => closeDrawer());
+drawerBackdrop.addEventListener("click", () => closeDrawer());
 
-function updateSpeechTimerDisplay() {
-  const el = document.getElementById("speechTimerDisplay");
-  if (!el) return;
+toggleGodView.addEventListener("change", () => {
+  state.ui.godExpanded = !!toggleGodView.checked;
+  saveAndRender(false);
+});
 
-  const m = Math.floor(speechTimer.remaining / 60);
-  const s = speechTimer.remaining % 60;
-  el.textContent = `${String(m).padStart(2, "0")}:${String(s).padStart(2, "0")}`;
+segEdge.addEventListener("click", () => setWinMode("edge"));
+segCity.addEventListener("click", () => setWinMode("city"));
 
-  el.classList.toggle("danger", speechTimer.remaining <= 10 && speechTimer.remaining > 0);
+togglePolice.addEventListener("change", () => {
+  if (!isSetupPhase()) return;
+  state.board.hasPolice = !!togglePolice.checked;
+  saveAndRender();
+});
+
+btnReset.addEventListener("click", () => {
+  if (!confirm("確定要重置本局？（會清除存檔）")) return;
+  localStorage.removeItem(STORAGE_KEY);
+  state = makeInitialState();
+  render();
+});
+
+// =========================
+// State helpers
+// =========================
+function makeInitialState() {
+  return {
+    meta: { version: "mvp-1.0", createdAt: Date.now(), updatedAt: Date.now() },
+    config: { playersCount: null },
+    board: null, // loaded board config
+    players: [],
+    flow: {
+      phase: "SETUP",
+      round: 1,
+      stepId: "SETUP:A1",
+      stepIndex: 0,
+      pending: null
+    },
+    setup: {
+      rolesAssigned: false,
+      seenSeats: [] // seat numbers
+    },
+    ui: {
+      godExpanded: false,
+      revealingSeat: null
+    }
+  };
 }
 
-/* ======================
-   玩家建立 + 工具
-====================== */
-function createPlayers(count, roleList) {
-  return Array.from({ length: count }, (_, i) => ({
+function isSetupPhase() {
+  return state.flow.phase === "SETUP";
+}
+
+function goStep(stepId) {
+  state.flow.stepId = stepId;
+  state.flow.stepIndex += 1;
+  // keep phase as SETUP for Day2
+  state.meta.updatedAt = Date.now();
+  saveAndRender();
+}
+
+function saveAndRender(shouldSave = true) {
+  if (shouldSave) saveState(state);
+  render();
+}
+
+function saveState(s) {
+  s.meta.updatedAt = Date.now();
+  localStorage.setItem(STORAGE_KEY, JSON.stringify(s));
+}
+
+function loadState() {
+  try {
+    const raw = localStorage.getItem(STORAGE_KEY);
+    if (!raw) return null;
+    return JSON.parse(raw);
+  } catch {
+    return null;
+  }
+}
+
+// =========================
+// Board loading + players init
+// =========================
+async function loadBoardByCount(count) {
+  const map = {
+    9: "./boards/official-9.json",
+    10: "./boards/official-10.json",
+    12: "./boards/official-12.json"
+  };
+  const url = map[count];
+  if (!url) throw new Error("Unsupported playersCount");
+  const res = await fetch(url, { cache: "no-store" });
+  if (!res.ok) throw new Error("Board load failed");
+  return await res.json();
+}
+
+function initPlayers(count) {
+  state.players = Array.from({ length: count }, (_, i) => ({
     seat: i + 1,
-    roleId: roleList[i],
+    name: `${i + 1}號`,
     alive: true,
-    isChief: false,
-    status: {}
+    roleId: null,
+    camp: null,
+    revealed: false,
+    markers: {
+      isPolice: false,
+      isChief: false,
+      hasBadge: false,
+      idiotRevealed: false,
+      hunterCanShoot: true
+    }
   }));
+  state.setup.seenSeats = [];
+  state.setup.rolesAssigned = false;
+}
+
+function setPlayersCount(count) {
+  state.config.playersCount = count;
+  initPlayers(count);
+  // Load board
+  loadBoardByCount(count).then((board) => {
+    state.board = board;
+    // board default options
+    // allow setup override
+    state.board.winCondition = state.board.winCondition || { mode: "city" };
+    state.meta.updatedAt = Date.now();
+    saveAndRender();
+  }).catch((err) => {
+    console.error(err);
+    toast("讀取板子失敗（請檢查 boards 檔案）");
+  });
+}
+
+// =========================
+// Role assignment for SETUP.A3
+// =========================
+function assignRolesForSetup() {
+  const board = state.board;
+  if (!board) return;
+
+  // Build role list by counts
+  const roleList = [];
+  for (const r of board.roles) {
+    for (let i = 0; i < r.count; i++) roleList.push(r.roleId);
+  }
+  if (roleList.length !== state.players.length) {
+    console.warn("Role count mismatch", roleList.length, state.players.length);
+  }
+  shuffle(roleList);
+
+  // Assign
+  state.players.forEach((p, idx) => {
+    const roleId = roleList[idx] ?? "villager";
+    const spec = ROLE_LABELS[roleId] ?? { name: roleId, camp: "good" };
+    p.roleId = roleId;
+    p.camp = spec.camp;
+    p.revealed = false;
+  });
+
+  // apply board hasPolice default to settings UI
+  state.setup.rolesAssigned = true;
+  state.setup.seenSeats = [];
+  saveAndRender();
 }
 
 function shuffle(arr) {
-  const a = [...arr];
-  for (let i = a.length - 1; i > 0; i--) {
+  for (let i = arr.length - 1; i > 0; i--) {
     const j = Math.floor(Math.random() * (i + 1));
-    [a[i], a[j]] = [a[j], a[i]];
+    [arr[i], arr[j]] = [arr[j], arr[i]];
   }
-  return a;
+  return arr;
 }
 
-window.copyText = async function (txt) {
-  try {
-    await navigator.clipboard.writeText(txt);
-    alert("已複製 ✅");
-  } catch {
-    alert("複製失敗（iOS 有時會限制，請長按自行複製）");
-  }
-};
-
-function escapeHtml(str) {
-  return String(str)
-    .replaceAll("&", "&amp;")
-    .replaceAll("<", "&lt;")
-    .replaceAll(">", "&gt;")
-    .replaceAll('"', "&quot;")
-    .replaceAll("'", "&#039;");
+function allSeatsSeen() {
+  return state.players.length > 0 && state.setup.seenSeats.length === state.players.length;
 }
 
-/* ======================
-   補一點 UI class（讓它更像 App）
-   你不用改 style.css 也能先跑，
-   但建議我下一步幫你把 style.css 也加這些 class
-====================== */
-(function injectMiniStyles() {
-  const css = `
-  .panel{padding:14px}
-  .h2{margin:0 0 10px;font-size:22px}
-  .h3{margin:0 0 8px;font-size:16px;opacity:.85}
-  .hint{font-size:13px;opacity:.7;margin:6px 0}
-  .warn{background:#fff1f1;border:1px solid #f2b4b4;padding:10px;border-radius:10px;color:#7a1a1a;margin:8px 0;font-size:13px}
-  .tag{display:inline-block;padding:6px 10px;border-radius:999px;background:#fff;opacity:.85;font-size:12px;margin-bottom:10px}
-  .grid{display:grid;grid-template-columns:1fr;gap:10px}
-  .board-card{width:100%;text-align:left;border:0;border-radius:14px;padding:12px;background:#fff;box-shadow:0 3px 10px rgba(0,0,0,.08)}
-  .board-card.active{outline:2px solid #5a0000}
-  .board-title{font-weight:900;font-size:16px;margin-bottom:6px}
-  .board-intro{font-size:13px;opacity:.8;margin-bottom:6px}
-  .board-meta{font-size:12px;opacity:.65}
-  .row{display:flex;gap:8px;flex-wrap:wrap;margin:8px 0}
-  .pill{border:0;border-radius:999px;padding:10px 12px;background:#eee}
-  .pill.active{background:#5a0000;color:#fff}
-  .primary{width:100%;border:0;border-radius:14px;padding:14px 12px;background:#5a0000;color:#fff;font-weight:800}
-  .ghost{width:100%;border:1px solid #ddd;border-radius:14px;padding:12px;background:#fff}
-  .card{background:#fff;border-radius:14px;padding:12px;box-shadow:0 3px 10px rgba(0,0,0,.06)}
-  .seats{display:flex;flex-wrap:wrap;gap:8px;margin-top:8px}
-  .seat{border:0;border-radius:12px;padding:12px 0;width:64px;background:#f0f0f0;font-weight:800}
-  .seat-chip{display:inline-flex;align-items:center;justify-content:center;width:36px;height:36px;border-radius:12px;background:#f0f0f0;font-weight:800}
-  .seat-chip.dead{opacity:.35;text-decoration:line-through}
-  .script{background:#fff7e6;border:1px solid #e7d2a6;border-radius:14px;padding:10px;font-size:13px;line-height:1.5}
-  .timer{font-size:42px;font-weight:900;text-align:center;padding:10px 0}
-  .timer.danger{color:#c62828;animation:blink 1s infinite}
-  @keyframes blink{50%{opacity:.25}}
-  `;
-  const style = document.createElement("style");
-  style.textContent = css;
-  document.head.appendChild(style);
-})();
+// =========================
+// Seat rendering + long-press reveal
+// =========================
+function renderSeats() {
+  const n = state.players.length || 9;
+  // columns suggestion
+  let cols = 3;
+  if (n === 12) cols = 4;
+  else if (n === 10) cols = 5;
+  else cols = 3;
+  seatsGrid.dataset.cols = String(cols);
+
+  seatsGrid.innerHTML = "";
+
+  state.players.forEach((p) => {
+    const el = document.createElement("div");
+    el.className = "seat";
+    el.dataset.seat = String(p.seat);
+
+    if (!p.alive) el.classList.add("dead");
+    if (state.setup.seenSeats.includes(p.seat)) el.classList.add("seen");
+    if (state.ui.revealingSeat === p.seat) el.classList.add("reveal");
+
+    const corner = document.createElement("div");
+    corner.className = "corner";
+    corner.textContent = state.setup.seenSeats.includes(p.seat) ? "已看" : "未看";
+
+    const num = document.createElement("div");
+    num.className = "num";
+    num.textContent = `${p.seat}號`;
+
+    const tag = document.createElement("div");
+    tag.className = "tag";
+
+    // Show role only when revealing (SETUP:A3)
+    if (state.flow.stepId === "SETUP:A3" && state.ui.revealingSeat === p.seat) {
+      const spec = ROLE_LABELS[p.roleId] || { name: "未知", camp: "good" };
+      tag.textContent = `${spec.name} · ${spec.camp === "wolf" ? "狼人陣營" : "好人陣營"}`;
+    } else {
+      tag.textContent = p.alive ? "存活" : "死亡";
+    }
+
+    el.appendChild(corner);
+    el.appendChild(num);
+    el.appendChild(tag);
+
+    // interactions:
+    wireSeatInteractions(el, p.seat);
+
+    seatsGrid.appendChild(el);
+  });
+}
+
+function wireSeatInteractions(el, seat) {
+  // Only meaningful in SETUP:A3 for now
+  if (state.flow.stepId !== "SETUP:A3") {
+    el.addEventListener("click", () => toast(`點了 ${seat}號（目前非抽身分步驟）`));
+    return;
+  }
+
+  let pressTimer = null;
+  const PRESS_MS = 300;
+
+  const startPress = (e) => {
+    e.preventDefault();
+    clearTimeout(pressTimer);
+    pressTimer = setTimeout(() => {
+      // reveal
+      state.ui.revealingSeat = seat;
+      if (!state.setup.seenSeats.includes(seat)) state.setup.seenSeats.push(seat);
+      saveAndRender();
+    }, PRESS_MS);
+  };
+
+  const endPress = (e) => {
+    e.preventDefault();
+    clearTimeout(pressTimer);
+    pressTimer = null;
+    // hide reveal when release
+    if (state.ui.revealingSeat === seat) {
+      state.ui.revealingSeat = null;
+      saveAndRender(false);
+    }
+  };
+
+  // Touch
+  el.addEventListener("touchstart", startPress, { passive: false });
+  el.addEventListener("touchend", endPress, { passive: false });
+  el.addEventListener("touchcancel", endPress, { passive: false });
+
+  // Mouse (desktop testing)
+  el.addEventListener("mousedown", startPress);
+  el.addEventListener("mouseup", endPress);
+  el.addEventListener("mouseleave", endPress);
+
+  // Tap to re-view (your requirement)
+  el.addEventListener("click", (e) => {
+    e.preventDefault();
+    // quick tap toggles reveal (for re-view)
+    state.ui.revealingSeat = (state.ui.revealingSeat === seat) ? null : seat;
+    if (state.ui.revealingSeat === seat && !state.setup.seenSeats.includes(seat)) {
+      state.setup.seenSeats.push(seat);
+    }
+    saveAndRender();
+  });
+}
+
+// =========================
+// Settings drawer helpers
+// =========================
+function openDrawer() {
+  drawer.classList.remove("hidden");
+  drawerBackdrop.classList.remove("hidden");
+  syncDrawerUI();
+}
+function closeDrawer() {
+  drawer.classList.add("hidden");
+  drawerBackdrop.classList.add("hidden");
+}
+function setWinMode(mode) {
+  if (!isSetupPhase()) {
+    toast("進入夜晚後不可更改勝負模式");
+    syncDrawerUI();
+    return;
+  }
+  if (!state.board) {
+    toast("請先選人數並套用板子");
+    return;
+  }
+  state.board.winCondition = state.board.winCondition || {};
+  state.board.winCondition.mode = mode;
+  saveAndRender();
+  syncDrawerUI();
+}
+
+function syncDrawerUI() {
+  const mode = state.board?.winCondition?.mode || "city";
+  segEdge.classList.toggle("active", mode === "edge");
+  segCity.classList.toggle("active", mode === "city");
+
+  togglePolice.checked = !!state.board?.hasPolice;
+
+  // lock when not in setup
+  const lock = !isSetupPhase() || state.flow.stepId.startsWith("NIGHT");
+  segEdge.disabled = lock;
+  segCity.disabled = lock;
+  togglePolice.disabled = lock;
+}
+
+// =========================
+// Render
+// =========================
+function render() {
+  // status
+  uiStatus.textContent = `${state.flow.phase} / R${state.flow.round} / ${state.flow.stepId}`;
+  uiBoard.textContent = state.board ? state.board.title : "未套用板子";
+
+  toggleGodView.checked = !!state.ui.godExpanded;
+
+  // prompt by step
+  renderPrompt();
+
+  // god panel
+  renderGodPanel();
+
+  // seats
+  renderSeats();
+
+  // action buttons state
+  renderActions();
+
+  // persist minimal
+  saveState(state);
+}
+
+function renderPrompt() {
+  const step = state.flow.stepId;
+
+  if (step === "SETUP:A1") {
+    promptTitle.textContent = "選擇人數";
+    promptText.textContent = "請選擇人數：9人、10人或12人。";
+    promptFoot.textContent = state.config.playersCount ? `已選：${state.config.playersCount}人` : "尚未選擇";
+  } else if (step === "SETUP:A2") {
+    promptTitle.textContent = "確認板子";
+    if (!state.board) {
+      promptText.textContent = "載入板子中…（若一直卡住，請檢查 boards/ 檔案）";
+    } else {
+      const mode = state.board.winCondition?.mode === "edge" ? "屠邊" : "屠城";
+      promptText.textContent =
+        `已套用：${state.board.title}\n` +
+        `上警：${state.board.hasPolice ? "啟用" : "關閉"}\n` +
+        `勝負：${mode}（可在⚙️調整）\n\n按「下一步」進入抽身分。`;
+      promptFoot.textContent = "提示：進夜晚後，上警/勝負模式會鎖定。";
+    }
+  } else if (step === "SETUP:A3") {
+    promptTitle.textContent = "抽身分";
+    promptText.textContent =
+      "請大家依序查看身分。看完請把手機交回上帝。\n\n" +
+      "操作：長按 0.3 秒翻牌；也可以點座位重看。";
+    promptFoot.textContent = `已查看：${state.setup.seenSeats.length} / ${state.players.length}（全部看完才能進夜晚）`;
+  } else {
+    promptTitle.textContent = "（未定義步驟）";
+    promptText.textContent = "目前步驟尚未定義 prompt。";
+    promptFoot.textContent = "";
+  }
+}
+
+function renderGodPanel() {
+  if (!state.ui.godExpanded) {
+    godText.textContent = "（收合中）";
+    return;
+  }
+
+  const step = state.flow.stepId;
+  if (step === "SETUP:A1") {
+    godText.textContent = "選完人數後會自動載入對應官方板子。";
+  } else if (step === "SETUP:A2") {
+    if (!state.board) {
+      godText.textContent = "載入板子中…";
+    } else {
+      const roleCounts = state.board.roles.map(r => `${ROLE_LABELS[r.roleId]?.name ?? r.roleId}×${r.count}`).join("、");
+      godText.textContent =
+        `板子ID：${state.board.id}\n` +
+        `角色配置：${roleCounts}\n` +
+        `夜晚流程：${state.board.nightSteps.map(s=>`${s.wakeOrder}.${s.name}`).join(" → ")}\n` +
+        `勝負模式：${state.board.winCondition?.mode}\n` +
+        `上警：${state.board.hasPolice}`;
+    }
+  } else if (step === "SETUP:A3") {
+    const seen = new Set(state.setup.seenSeats);
+    const unseen = state.players.filter(p => !seen.has(p.seat)).map(p => p.seat);
+    godText.textContent =
+      `抽身分狀態：${state.setup.rolesAssigned ? "已分配" : "未分配"}\n` +
+      `未查看座位：${unseen.length ? unseen.join("、") : "（無）"}\n\n` +
+      `提示：只有在抽身分階段才顯示角色；其他階段不顯示。`;
+  } else {
+    godText.textContent = "（此步驟尚未定義上帝資訊）";
+  }
+}
+
+function renderActions() {
+  const step = state.flow.stepId;
+
+  btnBack.disabled = true; // Day0~2 先鎖
+  btnCancel.disabled = (state.flow.stepId !== "SETUP:A3");
+
+  if (step === "SETUP:A1") {
+    btnPrimary.textContent = "下一步";
+    btnPrimary.disabled = !state.config.playersCount;
+  } else if (step === "SETUP:A2") {
+    btnPrimary.textContent = "下一步";
+    btnPrimary.disabled = !state.board;
+  } else if (step === "SETUP:A3") {
+    btnPrimary.textContent = allSeatsSeen() ? "確認進夜晚" : "確認進夜晚";
+    btnPrimary.disabled = !allSeatsSeen();
+  } else {
+    btnPrimary.textContent = "下一步";
+    btnPrimary.disabled = false;
+  }
+
+  // render count selection buttons inside prompt foot on A1
+  if (step === "SETUP:A1") {
+    promptFoot.innerHTML = `
+      <div class="quick-row">
+        <button class="quick" data-count="9">9人</button>
+        <button class="quick" data-count="10">10人</button>
+        <button class="quick" data-count="12">12人</button>
+      </div>
+      <div style="margin-top:6px;">${state.config.playersCount ? `已選：${state.config.playersCount}人` : "尚未選擇"}</div>
+    `;
+    promptFoot.querySelectorAll(".quick").forEach(btn => {
+      btn.addEventListener("click", () => {
+        const count = Number(btn.dataset.count);
+        setPlayersCount(count);
+        toast(`已選 ${count} 人`);
+      });
+    });
+  }
+}
+
+// add minimal styles for inline buttons
+const styleTag = document.createElement("style");
+styleTag.textContent = `
+.quick-row{ display:flex; gap:8px; margin-top:6px; }
+.quick{
+  flex:1; border:2px solid var(--line); background:#fff;
+  border-radius:999px; padding:10px 12px; font-weight:900;
+}
+`;
+document.head.appendChild(styleTag);
+
+// =========================
+// Toast
+// =========================
+let toastTimer = null;
+function toast(msg) {
+  clearTimeout(toastTimer);
+  let el = document.getElementById("toast");
+  if (!el) {
+    el = document.createElement("div");
+    el.id = "toast";
+    el.style.position = "fixed";
+    el.style.left = "50%";
+    el.style.bottom = "calc(84px + env(safe-area-inset-bottom, 0px))";
+    el.style.transform = "translateX(-50%)";
+    el.style.background = "rgba(0,0,0,.75)";
+    el.style.color = "#fff";
+    el.style.padding = "10px 12px";
+    el.style.borderRadius = "999px";
+    el.style.fontSize = "12px";
+    el.style.zIndex = "999";
+    document.body.appendChild(el);
+  }
+  el.textContent = msg;
+  el.style.display = "block";
+  toastTimer = setTimeout(() => (el.style.display = "none"), 1400);
+}
+
+// initial sync for drawer
+syncDrawerUI();
