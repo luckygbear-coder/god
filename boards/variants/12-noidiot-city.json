@@ -1,0 +1,20 @@
+{
+  "id": "12-noidiot-city",
+  "title": "12 人（無白癡・屠城）",
+  "playersCount": 12,
+  "hasPolice": true,
+  "winCondition": { "mode": "city" },
+  "witchCanSelfSave": false,
+  "roles": [
+    { "roleId": "wolf", "count": 4 },
+    { "roleId": "seer", "count": 1 },
+    { "roleId": "witch", "count": 1 },
+    { "roleId": "hunter", "count": 1 },
+    { "roleId": "villager", "count": 5 }
+  ],
+  "nightSteps": [
+    { "id": "wolf", "name": "狼人", "wakeOrder": 1, "alwaysShow": true, "actionType": "pick", "seatPickRule": { "allowNone": true } },
+    { "id": "seer", "name": "預言家", "wakeOrder": 2, "alwaysShow": true, "actionType": "pick" },
+    { "id": "witch", "name": "女巫", "wakeOrder": 3, "alwaysShow": true, "actionType": "pick" }
+  ]
+}
