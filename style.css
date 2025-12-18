@@ -236,3 +236,64 @@ body{
 /* ===== Day4~Day5：投票/PK 變色 ===== */
 .seat.pick-vote{ border-color:#f4a63a; box-shadow: 0 0 0 3px rgba(244,166,58,.22); }
 .seat.pick-pk{ border-color:#ff7aa2; box-shadow: 0 0 0 3px rgba(255,122,162,.22); }
+
+/* ===== 清晰度強化（字更深、卡片更清楚） ===== */
+:root{
+  --text-strong:#2e2430;
+  --text:#3d3140;
+  --muted:#6a5a6f;
+}
+
+body{ color: var(--text); }
+
+.card{
+  border-width: 2px;
+  box-shadow: 0 6px 18px rgba(0,0,0,.10); /* 更清楚但不髒 */
+}
+
+.title, .h2, .h3, .num{
+  color: var(--text-strong);
+}
+
+.small, .muted{
+  color: var(--muted);
+}
+
+.seat{
+  border-width: 2px;
+  box-shadow: 0 2px 10px rgba(0,0,0,.06);
+}
+
+.seat .tag{
+  color: var(--muted);
+  font-weight: 800;
+}
+
+.seat .godrole{
+  margin-top: 6px;
+  font-size: 12px;
+  line-height: 1.2;
+  font-weight: 900;
+  color: var(--text-strong);
+}
+
+.seat .godcamp{
+  display:inline-block;
+  margin-left:6px;
+  padding:2px 8px;
+  border-radius: 999px;
+  font-size: 11px;
+  font-weight: 900;
+  border: 2px solid #e8caa1;
+  background: #fff7ea;
+}
+
+.seat.camp-wolf .godcamp{
+  border-color:#ffb0c2;
+  background:#fff0f4;
+}
+
+.seat.camp-good .godcamp{
+  border-color:#a8e3c1;
+  background:#effff5;
+}
