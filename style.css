@@ -232,3 +232,7 @@ body{
 
 /* Reduce accidental selection */
 .panel, .seat, .btn, .topbar, .drawer{ -webkit-user-select:none; user-select:none; }
+
+/* ===== Day4~Day5：投票/PK 變色 ===== */
+.seat.pick-vote{ border-color:#f4a63a; box-shadow: 0 0 0 3px rgba(244,166,58,.22); }
+.seat.pick-pk{ border-color:#ff7aa2; box-shadow: 0 0 0 3px rgba(255,122,162,.22); }
