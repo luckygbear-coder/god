@@ -806,14 +806,21 @@ function commitNightStepAndNext(){
   const roundKey = String(state.night.round);
   const rlog = state.night.logByRound[roundKey] || (state.night.logByRound[roundKey] = {});
 
-  if(step.id === "wolf"){
-    if(actorAlive){
-      rlog.wolf = { target: (pending.target ?? null) };
-    }else{
-      rlog.wolf = { target: null, note: "狼人已死/不存在（流程照唸）" };
-    }
-  }
+const aliveWolves = getAliveWolves(state);
+const canWolfAct = aliveWolves.length > 0;
 
+if (!canWolfAct) {
+  // ✅ 只有狼人全滅才鎖
+  setSeatMode?.("disabled");          // 你若有這種函式就留著
+  state.ui = state.ui || {};
+  state.ui.seatDisabled = true;       // 沒有就當旗標
+  promptFoot.textContent = "狼人已全滅（流程照唸，不能操作）";
+} else {
+  // ✅ 只要狼人陣營還有人活著，就要能刀
+  state.ui = state.ui || {};
+  state.ui.seatDisabled = false;
+  promptFoot.textContent = `狼人仍有存活（${aliveWolves.length}）→ 點座位選刀，或直接按「下一步」空刀`;
+}
   if(step.id === "seer"){
     if(actorAlive){
       const seat = pending.target ?? null;
