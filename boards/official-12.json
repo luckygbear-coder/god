@@ -18,3 +18,16 @@
     { "id": "witch", "name": "女巫", "wakeOrder": 3, "alwaysShow": true, "actionType": "pick" }
   ]
 }
+{
+  "id": "official-12",
+  "name": "12人官方標準局",
+  "players": 12,
+  "roles": ["werewolf","werewolf","werewolf","werewolf","seer","witch","guard","hunter","villager","villager","villager","villager"],
+  "swaps": [
+    {
+      "label": "守衛 ↔ 白癡",
+      "from": "guard",
+      "to": "idiot"
+    }
+  ]
+}
