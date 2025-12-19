@@ -4,151 +4,129 @@
   --stroke:#f5d3a6;
   --ink:#4b3044;
   --muted:#7a5a6a;
+  --brand:#f4a63a;
+  --brand2:#ffd07a;
   --shadow:0 8px 18px rgba(0,0,0,0.14);
+  --shadow2:0 14px 30px rgba(0,0,0,0.14);
+  --r:18px;
 
-  --topH:64px;
-  --tabsH:54px;
-
-  /* 底部 Dock 估高（timerStrip + actionBar + padding） */
-  --dockH:168px;
-
-  --radius:18px;
+  --topH: 74px;
+  --dockH: 156px;
+  --safeB: env(safe-area-inset-bottom);
+  --safeT: env(safe-area-inset-top);
 }
 
-*{ box-sizing:border-box; }
+*{ box-sizing:border-box; -webkit-tap-highlight-color: transparent; }
 html,body{ height:100%; margin:0; padding:0; }
-
 body{
   background:var(--bg);
   font-family:"Noto Sans TC",-apple-system,BlinkMacSystemFont,sans-serif;
   color:var(--ink);
-
-  /* ✅ 整頁不捲動，捲動交給 panels 內部 */
-  overflow:hidden;
-
-  /* ✅ iOS 互動手勢更穩 */
-  -webkit-text-size-adjust:100%;
-  touch-action:manipulation;
+  overflow:hidden; /* ✅ page itself won't scroll */
 }
 
-/* =========================
-   App Layout (fixed top/bottom + scrollable middle)
-========================= */
+/* ===== app frame ===== */
 .app{
-  position:relative;
-  height:100dvh;              /* ✅ iOS 新版動態視窗高度 */
-  height:100vh;               /* fallback */
   max-width:480px;
   margin:0 auto;
-  background:var(--bg);
+  height:100dvh;
+  position:relative;
+  padding-top: calc(var(--topH) + var(--safeT));
+  padding-bottom: calc(var(--dockH) + var(--safeB));
 }
 
-/* Top fixed */
+/* ===== top bar ===== */
 .top{
   position:fixed;
   left:50%;
   transform:translateX(-50%);
   top:0;
-  width:min(480px, 100vw);
-  height:calc(var(--topH) + env(safe-area-inset-top));
-  padding-top:env(safe-area-inset-top);
-  padding-left:12px;
-  padding-right:12px;
-
+  width:min(480px, 100%);
+  height: calc(var(--topH) + var(--safeT));
+  padding: calc(10px + var(--safeT)) 10px 10px;
+  background: linear-gradient(180deg, #ffe8bb, #ffe1a5);
+  border-bottom: 2px solid rgba(245,211,166,0.9);
+  z-index:20;
   display:flex;
-  align-items:center;
+  align-items:flex-end;
   justify-content:space-between;
   gap:10px;
-
-  background:linear-gradient(#ffe9c1, #ffeec9);
-  z-index:50;
 }
 
-.topLeft{ display:flex; flex-direction:column; gap:2px; }
-.uiStatus{ font-size:12px; color:var(--muted); }
-.uiBoard{ font-size:18px; font-weight:800; letter-spacing:.2px; }
-
-.topRight{ display:flex; gap:10px; align-items:center; }
-
-/* Tabs fixed under top */
-.tabs{
-  position:fixed;
-  left:50%;
-  transform:translateX(-50%);
-  top:calc(var(--topH) + env(safe-area-inset-top));
-  width:min(480px, 100vw);
-  height:var(--tabsH);
-
-  display:flex;
-  gap:10px;
-  padding:10px 12px;
-
-  background:linear-gradient(#ffeec9, #ffeec9);
-  z-index:49;
+.topLeft{ display:flex; flex-direction:column; gap:2px; min-width: 0; }
+.uiStatus{
+  font-size:12px;
+  color:var(--muted);
+  letter-spacing:0.2px;
+}
+.uiBoard{
+  font-weight:800;
+  font-size:18px;
+  line-height:1.1;
+  white-space:nowrap;
+  overflow:hidden;
+  text-overflow:ellipsis;
 }
 
-/* ✅ 讓 panels 成為唯一可滾動區 */
-.panels{
-  position:fixed;
-  left:50%;
-  transform:translateX(-50%);
-  top:calc(var(--topH) + var(--tabsH) + env(safe-area-inset-top));
-  bottom:calc(var(--dockH) + env(safe-area-inset-bottom));
-  width:min(480px, 100vw);
+.topRight{ display:flex; gap:10px; }
+.iconBtn{
+  border:none;
+  width:44px;
+  height:44px;
+  border-radius:14px;
+  background: #fff3dc;
+  box-shadow: var(--shadow);
+  border:2px solid var(--stroke);
+  font-size:20px;
+  display:grid;
+  place-items:center;
+  touch-action: manipulation;
+}
+.iconBtn:active{ transform: translateY(1px); }
 
-  padding:10px 12px 14px;
-  overflow:hidden;            /* panel 自己控制 */
-  z-index:1;
+/* tabs hidden (kept for JS) */
+.visuallyHidden{
+  position:absolute !important;
+  width:1px !important;
+  height:1px !important;
+  padding:0 !important;
+  margin:-1px !important;
+  overflow:hidden !important;
+  clip:rect(0,0,0,0) !important;
+  white-space:nowrap !important;
+  border:0 !important;
 }
 
-.panel{
-  display:none;
-  height:100%;
-  overflow-y:auto;            /* ✅ 這裡才允許捲動 */
-  -webkit-overflow-scrolling:touch;
-  padding-right:2px;          /* 避免 iOS 捲軸壓到字 */
-}
-.panel.active{ display:block; }
-
-/* Bottom dock fixed */
-.bottomDock{
-  position:fixed;
-  left:50%;
-  transform:translateX(-50%);
-  bottom:0;
-  width:min(480px, 100vw);
-
-  padding:10px 12px calc(10px + env(safe-area-inset-bottom));
-  background:linear-gradient(#ffeec9, #ffe0aa);
-  z-index:60;
+/* ===== main scroll area (internal only) ===== */
+.mainScroll{
+  position:absolute;
+  left:0; right:0;
+  top: calc(var(--topH) + var(--safeT));
+  bottom: calc(var(--dockH) + var(--safeB));
+  padding: 10px 10px 14px;
+  overflow:auto;
+  -webkit-overflow-scrolling: touch;
 }
 
-/* =========================
-   Components
-========================= */
+/* ===== cards ===== */
 .card{
   background:var(--card);
   border:2px solid var(--stroke);
-  border-radius:var(--radius);
+  border-radius:var(--r);
   box-shadow:var(--shadow);
-  padding:10px 10px 12px;
+  padding:12px;
 }
-
-.card + .card{ margin-top:10px; }
-
-.card.tight{ padding:10px; }
+.card + .card{ margin-top:12px; }
 
 .cardTitle{
   font-weight:900;
   font-size:16px;
-  margin-bottom:6px;
+  margin-bottom:8px;
 }
-
 .cardFoot{
-  margin-top:8px;
+  margin-top:10px;
   font-size:12px;
   color:var(--muted);
-  white-space:pre-wrap;
 }
 
 .hint{
@@ -164,277 +142,285 @@ body{
   gap:10px;
 }
 
-/* ✅ 只有卡片內文字可以捲（不影響整體） */
+.tight{ padding:10px; }
+
+/* prompt text box */
 .cardText{
   margin:0;
-  font-size:13px;
-  line-height:1.6;
-  color:var(--ink);
   white-space:pre-wrap;
   word-break:break-word;
+  color:var(--ink);
+  font-size:13px;
+  line-height:1.6;
 }
-
 .scrollBox{
-  max-height:220px;
+  max-height: 160px; /* ✅ prevents pushing content off-screen */
   overflow:auto;
-  -webkit-overflow-scrolling:touch;
+  -webkit-overflow-scrolling: touch;
   padding:10px;
   border-radius:14px;
-  background:rgba(255,255,255,0.55);
-  border:1px solid rgba(245,211,166,0.9);
+  border:1.5px dashed rgba(245,211,166,0.95);
+  background: rgba(255,255,255,0.45);
 }
 
-/* =========================
-   Buttons
-========================= */
-.iconBtn{
-  width:44px;
-  height:44px;
-  border-radius:14px;
-  border:2px solid var(--stroke);
-  background:rgba(255,255,255,0.55);
-  box-shadow:var(--shadow);
-  font-size:18px;
-  display:grid;
-  place-items:center;
-  color:var(--ink);
+/* tool row */
+.toolRow{
+  display:flex;
+  align-items:center;
+  justify-content:flex-end;
+  gap:10px;
+  margin-top:10px;
 }
-
-.tab{
-  flex:1;
-  height:36px;
-  border-radius:18px;
-  border:2px solid var(--stroke);
-  background:rgba(255,255,255,0.55);
-  box-shadow:0 4px 12px rgba(0,0,0,0.08);
-  font-weight:800;
-  color:var(--ink);
-}
-.tab.active{
-  background:linear-gradient(#fff4d8, #ffe2a3);
-  border-color:#e9b56a;
-}
-
-.btn{
-  height:44px;
-  border-radius:16px;
-  border:2px solid #e9b56a;
-  background:linear-gradient(#ffd37a, #f7b84c);
-  box-shadow:var(--shadow);
-  font-weight:900;
-  color:var(--ink);
-  padding:0 14px;
-}
-.btn.ghost{
-  background:rgba(255,255,255,0.6);
-  border-color:var(--stroke);
-  font-weight:800;
-}
-.btn.small{ height:36px; border-radius:14px; padding:0 12px; }
-
 .hidden{ display:none !important; }
 
-.toolRow{
-  margin-top:8px;
-  display:flex;
-  gap:8px;
-  flex-wrap:wrap;
-}
-
-/* =========================
-   Seats
-========================= */
-.seatsGrid{
-  margin-top:10px;
+/* ===== board picker grid ===== */
+.boardPicker{
   display:grid;
-  grid-template-columns:repeat(4, 1fr);
+  grid-template-columns: repeat(2, minmax(0, 1fr));
   gap:10px;
-  padding-bottom:10px; /* ✅ 捲到底不會貼邊 */
+  margin-top:10px;
 }
 
-/* 如果你 seat button 是用 .seat */
-.seat{
-  border-radius:18px;
+/* supports various button shapes your app.js might generate */
+.boardPicker button,
+.boardPicker .boardOption,
+.boardPicker .boardItem{
+  width:100%;
+  text-align:left;
+  padding:12px 12px;
+  border-radius:16px;
   border:2px solid var(--stroke);
-  background:rgba(255,255,255,0.55);
-  box-shadow:0 4px 12px rgba(0,0,0,0.10);
-  padding:12px 8px;
-  text-align:center;
-  font-weight:900;
+  background:#fff3dc;
+  box-shadow: 0 6px 14px rgba(0,0,0,0.10);
+  color:var(--ink);
+  font-weight:800;
+  line-height:1.2;
+  touch-action: manipulation;
 }
-.seat .sub{
+
+/* subtitle lines inside option */
+.boardPicker button small,
+.boardPicker .boardOption small,
+.boardPicker .boardItem small{
   display:block;
-  margin-top:4px;
-  font-size:11px;
+  margin-top:6px;
   font-weight:700;
   color:var(--muted);
 }
 
-/* =========================
-   Timer strip + action bar
-========================= */
+/* ✅ selected/active states (covers several common patterns) */
+.boardPicker button.active,
+.boardPicker button.selected,
+.boardPicker button[aria-pressed="true"],
+.boardPicker .active,
+.boardPicker .selected{
+  background: linear-gradient(180deg, #ffd48a, #f4a63a);
+  border-color: rgba(205,125,20,0.55);
+  box-shadow: var(--shadow2);
+}
+
+.boardPicker button:active{ transform: translateY(1px); }
+
+/* ===== seats ===== */
+.seatsGrid{
+  margin-top:12px;
+  display:grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap:10px;
+}
+
+/* generic seat button style (in case app.js uses buttons/divs) */
+.seatsGrid button,
+.seatsGrid .seat{
+  width:100%;
+  min-height:56px;
+  border-radius:16px;
+  border:2px solid var(--stroke);
+  background:#fff3dc;
+  box-shadow: 0 6px 14px rgba(0,0,0,0.10);
+  display:flex;
+  align-items:center;
+  justify-content:center;
+  font-weight:900;
+  color:var(--ink);
+  touch-action: manipulation;
+}
+.seatsGrid button:active,
+.seatsGrid .seat:active{ transform: translateY(1px); }
+
+/* optional states if you already add classes in JS */
+.seatsGrid .dead,
+.seatsGrid button.dead{ opacity:0.55; filter:saturate(0.7); }
+
+/* ===== god panel toggle ===== */
+.toggle{
+  display:flex;
+  align-items:center;
+  gap:10px;
+  font-weight:800;
+  color:var(--muted);
+}
+.toggle input{ width:18px; height:18px; }
+
+/* ===== bottom dock ===== */
+.bottomDock{
+  position:fixed;
+  left:50%;
+  transform:translateX(-50%);
+  bottom:0;
+  width:min(480px, 100%);
+  padding: 10px 10px calc(10px + var(--safeB));
+  background: linear-gradient(180deg, rgba(255,236,201,0.0), rgba(255,232,187,0.92) 24%, rgba(255,225,165,0.98));
+  border-top: 2px solid rgba(245,211,166,0.9);
+  z-index:30;
+}
+
+/* timer strip */
 .timerStrip{
   display:flex;
   align-items:center;
   justify-content:space-between;
   gap:10px;
-  padding:10px 10px;
+  padding:10px 12px;
 }
 
-.timerStripLeft{
-  display:flex;
-  flex-direction:column;
-  gap:2px;
-  min-width:110px;
-}
-.timerStripTitle{ font-size:12px; color:var(--muted); font-weight:900; }
-.timerStripTime{ font-size:26px; font-weight:1000; letter-spacing:1px; }
+.timerStripLeft{ display:flex; flex-direction:column; gap:2px; }
+.timerStripTitle{ font-size:12px; color:var(--muted); font-weight:800; }
+.timerStripTime{ font-size:28px; font-weight:1000; letter-spacing:0.5px; }
 
 .timerStripRight{
   display:flex;
   flex-wrap:wrap;
-  justify-content:flex-end;
   gap:8px;
+  justify-content:flex-end;
 }
 
 .chip{
-  height:34px;
-  padding:0 12px;
-  border-radius:17px;
+  border-radius:999px;
   border:2px solid var(--stroke);
-  background:rgba(255,255,255,0.65);
+  background:#fff3dc;
+  padding:8px 12px;
   font-weight:900;
   color:var(--ink);
+  box-shadow: 0 6px 12px rgba(0,0,0,0.10);
+  touch-action: manipulation;
 }
 .chip.primary{
-  border-color:#e9b56a;
-  background:linear-gradient(#ffe6a8, #ffc86a);
+  background: linear-gradient(180deg, #ffd48a, #f4a63a);
+  border-color: rgba(205,125,20,0.55);
 }
+.chip:active{ transform: translateY(1px); }
 
+/* action bar */
 .actionBar{
   margin-top:10px;
   display:grid;
-  grid-template-columns:1fr 1fr 1fr;
+  grid-template-columns: 1fr 1.2fr 1fr;
   gap:10px;
 }
-.actionBar .btn{ width:100%; }
 
-/* =========================
-   Drawer / Modal
-========================= */
+.btn{
+  border-radius:18px;
+  border:2px solid rgba(205,125,20,0.35);
+  background: linear-gradient(180deg, #ffd48a, #f4a63a);
+  padding:14px 12px;
+  font-weight:1000;
+  color:var(--ink);
+  box-shadow: var(--shadow2);
+  touch-action: manipulation;
+}
+.btn.ghost{
+  background:#fff3dc;
+  border:2px solid var(--stroke);
+  box-shadow: var(--shadow);
+}
+.btn.small{ padding:10px 12px; border-radius:14px; font-weight:900; }
+.btn:active{ transform: translateY(1px); }
+
+/* ===== drawer / modal ===== */
 .backdrop{
   position:fixed;
   inset:0;
-  background:rgba(0,0,0,0.35);
-  z-index:80;
+  background: rgba(0,0,0,0.35);
+  z-index:50;
 }
 .drawer{
   position:fixed;
   left:50%;
   transform:translateX(-50%);
-  bottom:calc(10px + env(safe-area-inset-bottom));
-  width:min(480px, 100vw);
-  border-radius:22px;
+  bottom:0;
+  width:min(480px, 100%);
   background:var(--card);
   border:2px solid var(--stroke);
-  box-shadow:0 14px 30px rgba(0,0,0,0.25);
-  z-index:90;
-  overflow:hidden;
+  border-bottom:none;
+  border-radius:22px 22px 0 0;
+  box-shadow: var(--shadow2);
+  z-index:60;
+  max-height: 78dvh;
+  overflow:auto;
 }
 .drawerTop{
+  padding:12px 12px 8px;
   display:flex;
   align-items:center;
   justify-content:space-between;
-  padding:10px 12px;
-  border-bottom:1px solid rgba(245,211,166,0.9);
+  gap:10px;
+  border-bottom: 2px solid rgba(245,211,166,0.7);
 }
 .drawerTitle{ font-weight:1000; }
-.drawerBody{
-  padding:12px;
-  display:flex;
-  flex-direction:column;
-  gap:10px;
-}
-.seg{ display:grid; grid-template-columns:1fr 1fr; gap:8px; }
+.drawerBody{ padding:12px; }
+
+.seg{ display:flex; gap:10px; margin-bottom:12px; }
 .segBtn{
-  height:40px;
-  border-radius:16px;
+  flex:1;
+  border-radius:14px;
   border:2px solid var(--stroke);
-  background:rgba(255,255,255,0.65);
-  font-weight:900;
+  background:#fff3dc;
+  padding:10px 12px;
+  font-weight:1000;
+  touch-action: manipulation;
 }
-.toggle{ display:flex; align-items:center; gap:8px; font-size:13px; color:var(--muted); }
+.segBtn.active{
+  background: linear-gradient(180deg, #ffd48a, #f4a63a);
+  border-color: rgba(205,125,20,0.55);
+}
 
 .modal{
   position:fixed;
   inset:0;
+  background: rgba(0,0,0,0.35);
+  z-index:70;
   display:flex;
   align-items:center;
   justify-content:center;
   padding:16px;
-  z-index:100;
 }
 .modalCard{
-  width:min(440px, 100%);
-  border-radius:22px;
+  width:min(420px, 100%);
   background:var(--card);
   border:2px solid var(--stroke);
-  box-shadow:0 16px 40px rgba(0,0,0,0.30);
-  overflow:hidden;
+  border-radius:22px;
+  box-shadow: var(--shadow2);
+  padding:14px;
 }
-.modalTitle{
-  padding:12px 14px;
-  font-weight:1000;
-  border-bottom:1px solid rgba(245,211,166,0.9);
-}
-.modalBody{ padding:14px; }
-.modalActions{
-  padding:12px 14px 14px;
-  display:grid;
-  grid-template-columns:1fr 1fr;
-  gap:10px;
-}
-
+.modalTitle{ font-weight:1000; font-size:16px; margin-bottom:10px; }
+.modalBody{ padding:6px 2px 2px; }
+.modalActions{ display:flex; gap:10px; margin-top:12px; }
 .roleLine{ font-weight:1000; font-size:18px; }
-.roleLine.small{ font-size:13px; font-weight:800; color:var(--muted); }
+.roleLine.small{ font-size:13px; font-weight:900; color:var(--muted); }
 
 .diceResult{
-  font-size:34px;
-  font-weight:1000;
-  letter-spacing:2px;
+  font-size:32px;
+  font-weight:1100;
+  text-align:center;
+  padding:10px 0;
 }
 
-/* =========================
-   Board picker
-========================= */
-.boardPicker{
-  display:flex;
-  flex-direction:column;
-  gap:10px;
-  margin-top:10px;
-}
-.boardCard{
-  border-radius:18px;
-  border:2px solid var(--stroke);
-  background:rgba(255,255,255,0.55);
-  box-shadow:0 4px 12px rgba(0,0,0,0.10);
-  padding:12px;
-}
-.badgeRow{ display:flex; gap:6px; flex-wrap:wrap; margin-top:6px; }
-.badge{
-  font-size:11px;
-  font-weight:900;
-  padding:4px 10px;
-  border-radius:999px;
-  border:2px solid var(--stroke);
-  background:rgba(255,255,255,0.65);
-}
+.hidden{ display:none !important; }
 
-/* =========================
-   Selection (iOS)
-========================= */
-.noSelect, .iconBtn, .tab, .btn, .chip, .seat, .boardCard{
-  -webkit-user-select:none;
-  user-select:none;
-  -webkit-touch-callout:none;
+/* small screens */
+@media (max-width:360px){
+  .seatsGrid{ grid-template-columns: repeat(3, minmax(0, 1fr)); }
+  .timerStripTime{ font-size:24px; }
+  .scrollBox{ max-height: 140px; }
 }
