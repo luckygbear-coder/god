@@ -4,454 +4,597 @@
   --stroke:#f5d3a6;
   --ink:#4b3044;
   --muted:#7a5a6a;
-  --brand:#f4a63a;
-  --shadow:0 8px 18px rgba(0,0,0,0.14);
-  --shadow2:0 14px 30px rgba(0,0,0,0.14);
-  --r:18px;
 
-  --topH: 74px;
-  --dockH: 88px; /* ✅ 底部只剩 action bar */
-  --safeB: env(safe-area-inset-bottom);
-  --safeT: env(safe-area-inset-top);
+  --accent:#f4a63a;
+  --accent2:#f7c469;
+  --danger:#e26a6a;
+  --ok:#4fbf7a;
+  --shadow:0 10px 22px rgba(0,0,0,0.12);
+
+  --r:18px;
+  --r2:14px;
+
+  --topH:64px;
+  --tabsH:52px;
+  --dockH:88px;
+
+  --maxW:480px;
 }
 
 *{ box-sizing:border-box; -webkit-tap-highlight-color: transparent; }
 html,body{ height:100%; margin:0; padding:0; }
 body{
   background:var(--bg);
-  font-family:"Noto Sans TC",-apple-system,BlinkMacSystemFont,sans-serif;
   color:var(--ink);
+  font-family:"Noto Sans TC",-apple-system,BlinkMacSystemFont,sans-serif;
+
+  /* ✅ 不讓整頁亂滑，避免「顯示不完整」 */
   overflow:hidden;
+
+  /* iOS 防誤觸選字（但內容區仍可選） */
+  -webkit-user-select:none;
+  user-select:none;
 }
 
-/* ===== app frame ===== */
+/* ===================== APP LAYOUT ===================== */
 .app{
-  max-width:480px;
+  width:100%;
+  max-width:var(--maxW);
   margin:0 auto;
-  height:100dvh;
-  position:relative;
-  padding-top: calc(var(--topH) + var(--safeT));
-  padding-bottom: calc(var(--dockH) + var(--safeB));
+
+  /* ✅ iOS Safari 用 100svh 更穩 */
+  height:100svh;
+
+  display:flex;
+  flex-direction:column;
+  padding: 8px 10px 0;
+  padding-top: calc(8px + env(safe-area-inset-top));
 }
 
-/* ===== top bar ===== */
+/* top + tabs 佔位固定 */
+.top{ flex:0 0 auto; }
+.tabs{ flex:0 0 auto; }
+.panels{
+  flex:1 1 auto;
+  min-height:0; /* ✅ 讓內部可捲 */
+  overflow:hidden;
+
+  /* ✅ 留出底部 action bar 空間 */
+  padding-bottom: calc(var(--dockH) + env(safe-area-inset-bottom));
+}
+
+/* ===================== TOP BAR ===================== */
 .top{
-  position:fixed;
-  left:50%;
-  transform:translateX(-50%);
-  top:0;
-  width:min(480px, 100%);
-  height: calc(var(--topH) + var(--safeT));
-  padding: calc(10px + var(--safeT)) 10px 10px;
-  background: linear-gradient(180deg, #ffe8bb, #ffe1a5);
-  border-bottom: 2px solid rgba(245,211,166,0.9);
-  z-index:20;
+  height:var(--topH);
   display:flex;
-  align-items:flex-end;
+  align-items:center;
   justify-content:space-between;
   gap:10px;
+  padding: 6px 2px 8px;
 }
 
-.topLeft{ display:flex; flex-direction:column; gap:2px; min-width: 0; }
-.uiStatus{ font-size:12px; color:var(--muted); letter-spacing:0.2px; }
+.topLeft{ min-width:0; }
+.uiStatus{
+  font-size:12px;
+  color:var(--muted);
+  opacity:.95;
+  line-height:1.2;
+}
 .uiBoard{
-  font-weight:900;
+  margin-top:4px;
   font-size:18px;
+  font-weight:900;
+  letter-spacing:.2px;
   line-height:1.1;
-  white-space:nowrap;
-  overflow:hidden;
-  text-overflow:ellipsis;
 }
 
-.topRight{ display:flex; gap:10px; }
+.topRight{
+  display:flex;
+  align-items:center;
+  gap:8px;
+}
+
 .iconBtn{
-  border:none;
   width:44px;
   height:44px;
-  border-radius:14px;
-  background: #fff3dc;
-  box-shadow: var(--shadow);
+  border-radius:16px;
   border:2px solid var(--stroke);
-  font-size:20px;
-  display:grid;
-  place-items:center;
-  touch-action: manipulation;
+  background:rgba(255,255,255,.55);
+  box-shadow: 0 6px 14px rgba(0,0,0,0.10);
+  font-size:18px;
+  cursor:pointer;
 }
-.iconBtn:active{ transform: translateY(1px); }
-
-/* tabs hidden (kept for JS) */
-.visuallyHidden{
-  position:absolute !important;
-  width:1px !important;
-  height:1px !important;
-  padding:0 !important;
-  margin:-1px !important;
-  overflow:hidden !important;
-  clip:rect(0,0,0,0) !important;
-  white-space:nowrap !important;
-  border:0 !important;
+.iconBtn:active{
+  transform: translateY(1px) scale(.99);
+  box-shadow: 0 3px 10px rgba(0,0,0,0.10);
 }
 
-/* ===== main scroll area ===== */
-.mainScroll{
-  position:absolute;
-  left:0; right:0;
-  top: calc(var(--topH) + var(--safeT));
-  bottom: calc(var(--dockH) + var(--safeB));
-  padding: 10px 10px 14px;
+/* ===================== TABS ===================== */
+.tabs{
+  height:var(--tabsH);
+  display:flex;
+  align-items:center;
+  gap:10px;
+  padding: 0 2px 10px;
+}
+
+.tab{
+  flex:1 1 0;
+  height:44px;
+  border-radius:18px;
+  border:2px solid var(--stroke);
+  background:rgba(255,255,255,.55);
+  box-shadow: 0 6px 14px rgba(0,0,0,0.08);
+  font-weight:800;
+  color:var(--ink);
+  cursor:pointer;
+}
+.tab.active{
+  background: linear-gradient(180deg, #ffe6b4, #ffd08a);
+  border-color: #eebf73;
+  box-shadow: 0 10px 22px rgba(0,0,0,0.12);
+}
+.tab:active{ transform: translateY(1px); }
+
+/* ===================== PANELS ===================== */
+.panel{
+  display:none;
+  height:100%;
+  overflow:hidden;
+}
+.panel.active{
+  display:block;
+}
+
+/* 讓 panel 內容本身可捲（不捲整頁） */
+.panel > *{
+  user-select:none;
+}
+
+#panelFlow,
+#panelSeats,
+#panelGod{
+  height:100%;
   overflow:auto;
-  -webkit-overflow-scrolling: touch;
+  -webkit-overflow-scrolling:touch;
+  padding-bottom: 14px;
 }
 
-/* ===== cards ===== */
+/* ===================== CARDS ===================== */
 .card{
   background:var(--card);
   border:2px solid var(--stroke);
   border-radius:var(--r);
   box-shadow:var(--shadow);
-  padding:12px;
+  padding:12px 12px 14px;
+  margin-bottom:12px;
 }
-.card + .card{ margin-top:12px; }
 
-.cardTitle{ font-weight:900; font-size:16px; margin-bottom:8px; }
-.cardFoot{ margin-top:10px; font-size:12px; color:var(--muted); }
+.card.tight{ padding:10px 12px; }
 
-.hint{ font-size:12px; color:var(--muted); line-height:1.4; }
+.cardTitle{
+  font-weight:900;
+  font-size:18px;
+  letter-spacing:.2px;
+}
 
-.row{ display:flex; align-items:center; justify-content:space-between; gap:10px; }
-.tight{ padding:10px; }
+.hint{
+  color:var(--muted);
+  font-size:12px;
+  line-height:1.4;
+}
 
+.row{
+  display:flex;
+  align-items:center;
+  justify-content:space-between;
+  gap:10px;
+}
+
+.cardFoot{
+  margin-top:10px;
+  font-size:12px;
+  color:var(--muted);
+}
+
+/* ✅ 內容區可以選字、可以內捲 */
 .cardText{
-  margin:0;
-  white-space:pre-wrap;
-  word-break:break-word;
+  margin:10px 0 0;
+  padding:10px 10px;
+  background: rgba(255,255,255,.55);
+  border:2px dashed rgba(245,211,166,.9);
+  border-radius:14px;
   color:var(--ink);
   font-size:13px;
   line-height:1.6;
+  white-space:pre-wrap;
+
+  -webkit-user-select:text;
+  user-select:text;
 }
+
 .scrollBox{
-  max-height: 160px;
+  max-height: 34vh; /* ✅ 避免把畫面擠爆 */
   overflow:auto;
-  -webkit-overflow-scrolling: touch;
-  padding:10px;
-  border-radius:14px;
-  border:1.5px dashed rgba(245,211,166,0.95);
-  background: rgba(255,255,255,0.45);
+  -webkit-overflow-scrolling:touch;
 }
+
+/* ===================== BUTTONS ===================== */
+.btn{
+  height:52px;
+  border-radius:18px;
+  border:2px solid var(--stroke);
+  background: linear-gradient(180deg, #ffd188, #f4a63a);
+  box-shadow: 0 10px 22px rgba(0,0,0,0.12);
+  color:var(--ink);
+  font-weight:900;
+  font-size:16px;
+  cursor:pointer;
+}
+
+.btn.ghost{
+  background: rgba(255,255,255,.55);
+  box-shadow: 0 6px 14px rgba(0,0,0,0.10);
+}
+
+.btn.small{
+  height:40px;
+  border-radius:14px;
+  font-size:14px;
+  padding:0 12px;
+}
+
+.btn:active{ transform: translateY(1px) scale(.995); }
+.hidden{ display:none !important; }
+
+/* chips (for timer presets, drawer buttons) */
+.chip{
+  height:40px;
+  padding:0 14px;
+  border-radius:999px;
+  border:2px solid var(--stroke);
+  background: rgba(255,255,255,.58);
+  box-shadow: 0 6px 14px rgba(0,0,0,0.08);
+  font-weight:900;
+  color:var(--ink);
+  cursor:pointer;
+}
+.chip.primary{
+  background: linear-gradient(180deg, #ffe0a6, #f4a63a);
+  border-color:#eebf73;
+}
+.chip:active{ transform: translateY(1px); }
 
 .toolRow{
   display:flex;
-  align-items:center;
-  justify-content:flex-end;
   gap:10px;
+  align-items:center;
   margin-top:10px;
+  flex-wrap:wrap;
 }
-.hidden{ display:none !important; }
 
-/* ===== board picker grid ===== */
+/* ===================== BOARD PICKER ===================== */
+/* ✅ 格子按鈕區分 + 按下變色（配合 app.js 加 .boardBtn / .active） */
 .boardPicker{
   display:grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
+  grid-template-columns: 1fr;
   gap:10px;
   margin-top:10px;
 }
 
-.boardPicker button,
-.boardPicker .boardOption,
-.boardPicker .boardItem{
+@media (min-width:420px){
+  .boardPicker{ grid-template-columns: 1fr 1fr; }
+}
+
+/* 你 app.js 如果用 <button> 生成，請加 class="boardBtn" */
+.boardBtn{
   width:100%;
   text-align:left;
   padding:12px 12px;
-  border-radius:16px;
+  border-radius:18px;
   border:2px solid var(--stroke);
-  background:#fff3dc;
-  box-shadow: 0 6px 14px rgba(0,0,0,0.10);
-  color:var(--ink);
-  font-weight:900;
-  line-height:1.2;
-  touch-action: manipulation;
+  background: rgba(255,255,255,.55);
+  box-shadow: 0 8px 18px rgba(0,0,0,0.10);
+  cursor:pointer;
 }
 
-.boardPicker button small,
-.boardPicker .boardOption small,
-.boardPicker .boardItem small{
-  display:block;
-  margin-top:6px;
-  font-weight:800;
+.boardBtn .name{
+  font-weight:900;
+  font-size:16px;
+}
+.boardBtn .sub{
+  margin-top:4px;
+  font-size:12px;
   color:var(--muted);
 }
-
-.boardPicker button.active,
-.boardPicker button.selected,
-.boardPicker button[aria-pressed="true"],
-.boardPicker .active,
-.boardPicker .selected{
-  background: linear-gradient(180deg, #ffd48a, #f4a63a);
-  border-color: rgba(205,125,20,0.55);
-  box-shadow: var(--shadow2);
-}
-
-.boardPicker button:active{ transform: translateY(1px); }
-
-/* ===== seats ===== */
-.seatsGrid{
-  margin-top:12px;
-  display:grid;
-  grid-template-columns: repeat(4, minmax(0, 1fr));
-  gap:10px;
-}
-
-.seatsGrid button,
-.seatsGrid .seat{
-  width:100%;
-  min-height:56px;
-  border-radius:16px;
-  border:2px solid var(--stroke);
-  background:#fff3dc;
-  box-shadow: 0 6px 14px rgba(0,0,0,0.10);
+.boardBtn .tags{
+  margin-top:8px;
   display:flex;
+  gap:6px;
+  flex-wrap:wrap;
+}
+.badge{
+  display:inline-flex;
+  align-items:center;
+  height:26px;
+  padding:0 10px;
+  border-radius:999px;
+  border:2px solid rgba(245,211,166,.95);
+  background: rgba(255,255,255,.45);
+  font-size:12px;
+  font-weight:900;
+  color:var(--ink);
+}
+
+/* ✅ 選中變色更明顯 */
+.boardBtn.active,
+.boardBtn.isSelected{
+  background: linear-gradient(180deg, #ffe6b4, #ffd08a);
+  border-color:#eebf73;
+  box-shadow: 0 12px 26px rgba(0,0,0,0.14);
+}
+.boardBtn:active{ transform: translateY(1px); }
+
+/* ===================== SEATS ===================== */
+.seatsGrid{
+  display:grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap:10px;
+  padding-bottom: 8px;
+}
+
+/* 兼容你 app.js 可能用的 class 名 */
+.seat, .seatBtn{
+  height:74px;
+  border-radius:18px;
+  border:2px solid var(--stroke);
+  background: rgba(255,255,255,.55);
+  box-shadow: 0 8px 18px rgba(0,0,0,0.10);
+  display:flex;
+  flex-direction:column;
   align-items:center;
   justify-content:center;
-  font-weight:1000;
+  gap:6px;
+  font-weight:900;
   color:var(--ink);
-  touch-action: manipulation;
+  cursor:pointer;
 }
-.seatsGrid button:active,
-.seatsGrid .seat:active{ transform: translateY(1px); }
 
-.seatsGrid .dead,
-.seatsGrid button.dead{ opacity:0.55; filter:saturate(0.7); }
+.seat .no, .seatBtn .no{ font-size:18px; }
+.seat .st, .seatBtn .st{ font-size:13px; color:var(--muted); font-weight:800; }
 
-/* ===== god toggle ===== */
+/* ✅ 點選玩家號碼：變色更明顯 */
+.seat.selected,
+.seatBtn.selected,
+.seat.isSelected,
+.seatBtn.isSelected{
+  background: linear-gradient(180deg, #ffe6b4, #ffd08a);
+  border-color:#eebf73;
+  box-shadow: 0 14px 28px rgba(0,0,0,0.16);
+  transform: translateY(-1px);
+}
+
+/* 常見狀態（若 app.js 有加這些 class 就會套用） */
+.seat.dead, .seatBtn.dead, .seat.isDead, .seatBtn.isDead{
+  background: rgba(255,255,255,.35);
+  border-style:dashed;
+  color: rgba(75,48,68,.65);
+}
+.seat.dead .st, .seatBtn.dead .st{ color: rgba(122,90,106,.7); }
+
+/* 夜/白天/投票（你之前有提要變色） */
+.seat.mark-night, .seatBtn.mark-night{
+  outline: 3px solid rgba(96,105,176,.55);
+  outline-offset: 2px;
+}
+.seat.mark-day, .seatBtn.mark-day{
+  outline: 3px solid rgba(244,166,58,.55);
+  outline-offset: 2px;
+}
+.seat.mark-vote, .seatBtn.mark-vote{
+  outline: 3px solid rgba(226,106,106,.55);
+  outline-offset: 2px;
+}
+
+.seat:active, .seatBtn:active{ transform: translateY(1px); }
+
+/* ===================== TOGGLE ===================== */
 .toggle{
   display:flex;
   align-items:center;
-  gap:10px;
+  gap:8px;
   font-weight:900;
   color:var(--muted);
+  cursor:pointer;
 }
-.toggle input{ width:18px; height:18px; }
+.toggle input{
+  width:18px;
+  height:18px;
+  accent-color: var(--accent);
+}
 
-/* ===== bottom dock ===== */
+/* ===================== BOTTOM DOCK ===================== */
 .bottomDock{
   position:fixed;
   left:50%;
-  transform:translateX(-50%);
+  transform: translateX(-50%);
   bottom:0;
-  width:min(480px, 100%);
-  padding: 10px 10px calc(10px + var(--safeB));
-  background: linear-gradient(180deg, rgba(255,236,201,0.0), rgba(255,232,187,0.92) 24%, rgba(255,225,165,0.98));
-  border-top: 2px solid rgba(245,211,166,0.9);
-  z-index:30;
+  width:min(var(--maxW), 100%);
+  padding: 8px 10px;
+  padding-bottom: calc(10px + env(safe-area-inset-bottom));
+  background: linear-gradient(180deg, rgba(255,238,201,0), rgba(255,238,201,.92) 40%, rgba(255,238,201,1));
+  backdrop-filter: blur(6px);
 }
 
 .actionBar{
   display:grid;
-  grid-template-columns: 1fr 1.2fr 1fr;
+  grid-template-columns: 1fr 1fr 1fr;
   gap:10px;
 }
 
-.btn{
-  border-radius:18px;
-  border:2px solid rgba(205,125,20,0.35);
-  background: linear-gradient(180deg, #ffd48a, #f4a63a);
-  padding:14px 12px;
-  font-weight:1100;
-  color:var(--ink);
-  box-shadow: var(--shadow2);
-  touch-action: manipulation;
+.actionBar .btn{
+  height:58px;
+  border-radius:20px;
 }
-.btn.ghost{
-  background:#fff3dc;
-  border:2px solid var(--stroke);
-  box-shadow: var(--shadow);
-}
-.btn.small{ padding:10px 12px; border-radius:14px; font-weight:1000; }
-.btn:active{ transform: translateY(1px); }
 
-/* ===== drawers / modal ===== */
+/* ===================== DRAWER / BACKDROP ===================== */
 .backdrop{
   position:fixed;
   inset:0;
-  background: rgba(0,0,0,0.35);
+  background: rgba(0,0,0,0.28);
+  backdrop-filter: blur(2px);
   z-index:50;
 }
 
 .drawer{
   position:fixed;
   left:50%;
-  transform:translateX(-50%);
-  bottom:0;
-  width:min(480px, 100%);
-  background:var(--card);
+  transform: translateX(-50%);
+  bottom: 0;
+  width:min(var(--maxW), 100%);
+  max-height: 78svh;
+  background: rgba(255,247,230,.98);
   border:2px solid var(--stroke);
   border-bottom:none;
-  border-radius:22px 22px 0 0;
-  box-shadow: var(--shadow2);
+  border-radius: 22px 22px 0 0;
+  box-shadow: 0 -16px 32px rgba(0,0,0,0.18);
   z-index:60;
-  max-height: 78dvh;
-  overflow:auto;
-  -webkit-overflow-scrolling: touch;
+  overflow:hidden;
+
+  /* slide up */
+  animation: drawerIn .16s ease-out;
 }
+@keyframes drawerIn{
+  from{ transform: translateX(-50%) translateY(12px); opacity:.6; }
+  to{ transform: translateX(-50%) translateY(0); opacity:1; }
+}
+
 .drawerTop{
-  padding:12px 12px 8px;
   display:flex;
   align-items:center;
   justify-content:space-between;
-  gap:10px;
-  border-bottom: 2px solid rgba(245,211,166,0.7);
+  padding: 12px 12px;
+  border-bottom: 2px solid rgba(245,211,166,.8);
 }
-.drawerTitle{ font-weight:1100; }
-.drawerBody{ padding:12px; }
-
-.seg{ display:flex; gap:10px; margin-bottom:12px; }
-.segBtn{
-  flex:1;
-  border-radius:14px;
-  border:2px solid var(--stroke);
-  background:#fff3dc;
-  padding:10px 12px;
-  font-weight:1100;
-  touch-action: manipulation;
+.drawerTitle{
+  font-weight:900;
+  font-size:16px;
 }
-.segBtn.active{
-  background: linear-gradient(180deg, #ffd48a, #f4a63a);
-  border-color: rgba(205,125,20,0.55);
+.drawerBody{
+  padding: 12px 12px 16px;
+  overflow:auto;
+  -webkit-overflow-scrolling:touch;
 }
 
-/* ===== timer drawer extra ===== */
-.timerCard{
-  border:2px solid rgba(245,211,166,0.65);
-  background: rgba(255,255,255,0.35);
-  border-radius:18px;
-  padding:12px;
-}
-
-.timerBigWrap{
-  display:flex;
-  align-items:flex-end;
-  justify-content:space-between;
+/* seg buttons */
+.seg{
+  display:grid;
+  grid-template-columns: 1fr 1fr;
   gap:10px;
   margin-bottom:10px;
 }
-
-.timerBig{
-  font-size:38px;
-  font-weight:1200;
-  letter-spacing:0.5px;
-}
-
-.timerBtns{
-  display:flex;
-  flex-wrap:wrap;
-  gap:10px;
-}
-
-.timerCtrlRow{
-  width:100%;
-  display:flex;
-  gap:10px;
-  margin-top:2px;
-}
-
-.chip{
-  border-radius:999px;
+.segBtn{
+  height:44px;
+  border-radius:18px;
   border:2px solid var(--stroke);
-  background:#fff3dc;
-  padding:10px 14px;
-  font-weight:1100;
+  background: rgba(255,255,255,.55);
+  font-weight:900;
   color:var(--ink);
-  box-shadow: 0 6px 12px rgba(0,0,0,0.10);
-  touch-action: manipulation;
+  cursor:pointer;
+  box-shadow: 0 6px 14px rgba(0,0,0,0.08);
 }
-.chip.primary{
-  background: linear-gradient(180deg, #ffd48a, #f4a63a);
-  border-color: rgba(205,125,20,0.55);
+.segBtn.active{
+  background: linear-gradient(180deg, #ffe6b4, #ffd08a);
+  border-color:#eebf73;
 }
-.chip:active{ transform: translateY(1px); }
 
+/* timer big in drawer */
+.timerBig{
+  font-size:34px;
+  font-weight:1000;
+  letter-spacing:1px;
+}
+
+/* ===================== MODAL ===================== */
 .modal{
   position:fixed;
   inset:0;
-  background: rgba(0,0,0,0.35);
-  z-index:70;
+  z-index:80;
   display:flex;
   align-items:center;
   justify-content:center;
-  padding:16px;
+  padding: 16px;
+  background: rgba(0,0,0,0.28);
+  backdrop-filter: blur(2px);
 }
+
 .modalCard{
-  width:min(420px, 100%);
-  background:var(--card);
+  width:min(var(--maxW), 100%);
+  background: rgba(255,247,230,.98);
   border:2px solid var(--stroke);
   border-radius:22px;
-  box-shadow: var(--shadow2);
-  padding:14px;
+  box-shadow: 0 18px 40px rgba(0,0,0,0.22);
+  overflow:hidden;
+  animation: popIn .16s ease-out;
 }
-.modalTitle{ font-weight:1100; font-size:16px; margin-bottom:10px; }
-.modalBody{ padding:6px 2px 2px; }
-.modalActions{ display:flex; gap:10px; margin-top:12px; }
-.roleLine{ font-weight:1100; font-size:18px; }
-.roleLine.small{ font-size:13px; font-weight:1000; color:var(--muted); }
+@keyframes popIn{
+  from{ transform: scale(.98); opacity:.6; }
+  to{ transform: scale(1); opacity:1; }
+}
+
+.modalTitle{
+  padding: 12px 14px;
+  font-weight:1000;
+  font-size:16px;
+  border-bottom:2px solid rgba(245,211,166,.8);
+}
+.modalBody{
+  padding: 14px 14px 6px;
+}
+.modalActions{
+  display:grid;
+  grid-template-columns: 1fr 1fr;
+  gap:10px;
+  padding: 12px 14px 14px;
+}
+
+.roleLine{
+  font-weight:1000;
+  font-size:20px;
+}
+.roleLine.small{
+  margin-top:6px;
+  font-size:13px;
+  color:var(--muted);
+  font-weight:900;
+}
 
 .diceResult{
-  font-size:32px;
-  font-weight:1200;
+  font-size:38px;
+  font-weight:1000;
+  letter-spacing:1px;
   text-align:center;
-  padding:10px 0;
+  padding: 10px 0 4px;
 }
 
-@media (max-width:360px){
-  .seatsGrid{ grid-template-columns: repeat(3, minmax(0, 1fr)); }
-  .timerBig{ font-size:34px; }
-  .scrollBox{ max-height: 140px; }
+/* ===================== FORM ROW ===================== */
+label.row{
+  display:flex;
+  align-items:center;
+  justify-content:space-between;
+  gap:10px;
+  padding: 10px 4px;
 }
-/* =========================
-   Seat 基本
-   ========================= */
-.seat {
-  background: #fff7e6;
-  border: 2px solid #f5d3a6;
-  border-radius: 14px;
-  padding: 10px 8px;
-  transition: 
-    background-color .15s ease,
-    transform .12s ease,
-    box-shadow .12s ease,
-    border-color .12s ease;
-  user-select: none;
+label.row span{
+  font-weight:900;
 }
 
-/* =========================
-   可點擊時的 hover（桌機）
-   ========================= */
-.seat:not(.dead):hover {
-  background: #fff1cf;
-}
+/* ===================== SAFETY ===================== */
+pre{ margin:0; }
 
-/* =========================
-   ✅ 已選取座位（重點）
-   ========================= */
-.seat.selected {
-  background: #ffe0a8;                 /* 明顯但不刺眼 */
-  border-color: #f4a63a;
-  transform: scale(1.05);
-  box-shadow: 0 6px 14px rgba(244,166,58,0.45);
-  z-index: 2;
-}
-
-/* =========================
-   死亡座位
-   ========================= */
-.seat.dead {
-  opacity: 0.45;
-  filter: grayscale(0.6);
-}
-
-/* 死亡不可被誤選 */
-.seat.dead.selected {
-  background: #eee;
-  border-color: #ccc;
-  transform: none;
-  box-shadow: none;
+/* ✅ iOS safe areas: prevent content hiding behind notches */
+@supports(padding: max(0px)){
+  .top{
+    padding-top: max(6px, env(safe-area-inset-top));
+  }
 }
