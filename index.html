@@ -9,122 +9,148 @@
   <title>狼人殺上帝輔助</title>
 </head>
 <body>
-
   <div class="app">
-
+    <!-- Top fixed -->
     <div class="top">
       <div class="topLeft">
-        <div id="uiStatus" class="uiStatus"></div>
-        <div id="uiBoard" class="uiBoard"></div>
-      </div>
-      <button id="btnSettings" class="iconBtn" aria-label="設定">⚙️</button>
-    </div>
-
-    <div class="card">
-      <div class="cardTitle" id="promptTitle">—</div>
-      <!-- ✅ 改成 div（避免 pre + innerHTML 事件怪問題） -->
-      <div class="cardText" id="promptText">—</div>
-      <div class="cardFoot" id="promptFoot"></div>
-    </div>
-
-    <div class="card">
-      <div class="row between">
-        <div class="cardTitle">上帝資訊</div>
-        <label class="toggle">
-          <input id="toggleGodView" type="checkbox" />
-          <span>👁 展開</span>
-        </label>
-      </div>
-      <div class="cardText mono" id="godText"></div>
-    </div>
-
-    <!-- 板子選擇 -->
-    <div class="card" id="boardPickerCard">
-      <div class="cardTitle">可選板子</div>
-      <div class="hint" id="boardPickerHint"></div>
-      <div id="boardPicker" class="boardPicker"></div>
-    </div>
-
-    <!-- 座位 -->
-    <div id="seatsGrid" class="seatsGrid"></div>
-
-    <!-- 計時器：直接在下方（你說這樣最直覺） -->
-    <div class="card timerCard">
-      <div class="row between">
-        <div class="cardTitle">⏱ 倒數計時</div>
-        <div class="hint">（會自動記住狀態）</div>
+        <div id="uiStatus" class="uiStatus">—</div>
+        <div id="uiBoard" class="uiBoard">—</div>
       </div>
 
-      <div class="timerRow">
-        <div class="timerLeft">
-          <div id="timerBig" class="timerBig">02:00</div>
-          <div id="timerHint" class="hint">點選時間或按「開始」。</div>
+      <div class="topRight">
+        <button id="btnDice" class="iconBtn" aria-label="發言骰子">🎲</button>
+        <button id="btnSettings" class="iconBtn" aria-label="設定">⚙️</button>
+      </div>
+    </div>
+
+    <!-- Main scroll content -->
+    <div class="content">
+      <div class="card">
+        <div class="cardTitle" id="promptTitle">—</div>
+        <pre class="cardText" id="promptText">—</pre>
+
+        <!-- 這裡放小工具列（投票公告按鈕會出現在需要的步驟） -->
+        <div class="toolRow" id="toolRow">
+          <button id="btnVoteDrawer" class="btn ghost small hidden">投票公告</button>
         </div>
 
-        <div id="timerPresets" class="timerPresets">
-          <button class="btn ghost" data-sec="60">1分</button>
-          <button class="btn ghost" data-sec="120">2分</button>
-          <button class="btn ghost" data-sec="180">3分</button>
-          <button class="btn ghost" data-sec="300">5分</button>
-
-          <button class="btn" id="btnTimerStart">開始</button>
-          <button class="btn ghost" id="btnTimerPause">暫停</button>
-          <button class="btn ghost" id="btnTimerReset">重置</button>
-        </div>
+        <div class="cardFoot" id="promptFoot"></div>
       </div>
+
+      <div class="card">
+        <div class="row">
+          <div class="cardTitle">上帝資訊</div>
+          <label class="toggle">
+            <input id="toggleGodView" type="checkbox" />
+            <span>👁 展開</span>
+          </label>
+        </div>
+        <pre class="cardText" id="godText"></pre>
+      </div>
+
+      <!-- 板子選擇區（SETUP 才會顯示） -->
+      <div class="card" id="boardPickerCard">
+        <div class="cardTitle">可選板子</div>
+        <div class="hint" id="boardPickerHint"></div>
+        <div id="boardPicker" class="boardPicker"></div>
+      </div>
+
+      <!-- seats -->
+      <div id="seatsGrid" class="seatsGrid"></div>
+
+      <div class="spacerBottom"></div>
     </div>
 
-    <!-- 底部 Action Bar -->
-    <div class="actionBar">
-      <button id="btnBack" class="btn ghost">上一步</button>
-      <button id="btnPrimary" class="btn">下一步</button>
-      <button id="btnCancel" class="btn ghost">取消</button>
+    <!-- Bottom fixed: Timer strip + action bar -->
+    <div class="bottomDock">
+      <!-- ✅ Timer strip (thin) -->
+      <div class="timerStrip card">
+        <div class="timerStripLeft">
+          <div class="timerStripTitle">⏱ 倒數</div>
+          <div id="timerBig" class="timerStripTime">02:00</div>
+          <div id="timerHint" class="timerStripHint">點選時間或按「開始」。</div>
+        </div>
+
+        <div class="timerStripRight" id="timerPresets">
+          <button class="chip" data-sec="60">1分</button>
+          <button class="chip" data-sec="120">2分</button>
+          <button class="chip" data-sec="180">3分</button>
+          <button class="chip" data-sec="300">5分</button>
+
+          <button class="chip primary" id="btnTimerStart">開始</button>
+          <button class="chip" id="btnTimerPause">暫停</button>
+          <button class="chip" id="btnTimerReset">重置</button>
+        </div>
+      </div>
+
+      <!-- action bar -->
+      <div class="actionBar">
+        <button id="btnBack" class="btn ghost">上一步</button>
+        <button id="btnPrimary" class="btn">下一步</button>
+        <button id="btnCancel" class="btn ghost">取消</button>
+      </div>
     </div>
   </div>
 
-  <!-- Drawer -->
+  <!-- Settings drawer -->
   <div id="drawerBackdrop" class="backdrop hidden"></div>
-  <div id="drawer" class="drawer hidden">
+  <div id="drawer" class="drawer hidden" aria-hidden="true">
     <div class="drawerTop">
       <div class="drawerTitle">設定</div>
       <button id="btnCloseDrawer" class="iconBtn">✕</button>
     </div>
-
     <div class="drawerBody">
       <div class="seg">
         <button id="segEdge" class="segBtn">屠邊</button>
         <button id="segCity" class="segBtn">屠城</button>
       </div>
-
-      <label class="row between">
+      <label class="row">
         <span>上警</span>
         <input id="togglePolice" type="checkbox" />
       </label>
-
       <button id="btnReset" class="btn ghost" style="width:100%;">重置本局</button>
+    </div>
+  </div>
 
-      <div class="hint" style="margin-top:10px;">
-        提示：遊戲開始後不建議更動規則（避免資料錯亂）。
+  <!-- Vote announce drawer (NEW) -->
+  <div id="voteDrawerBackdrop" class="backdrop hidden"></div>
+  <div id="voteDrawer" class="drawer hidden" aria-hidden="true">
+    <div class="drawerTop">
+      <div class="drawerTitle">投票公告</div>
+      <button id="btnCloseVoteDrawer" class="iconBtn">✕</button>
+    </div>
+    <div class="drawerBody">
+      <pre id="voteAnnounceText" class="cardText" style="white-space:pre-wrap; margin:0;"></pre>
+    </div>
+  </div>
+
+  <!-- Role modal -->
+  <div id="roleModal" class="modal hidden" aria-hidden="true">
+    <div class="modalCard">
+      <div class="modalTitle" id="roleModalTitle">—</div>
+      <div class="modalBody">
+        <div class="roleLine" id="roleModalRole">—</div>
+        <div class="roleLine small" id="roleModalCamp">—</div>
+        <div class="hint" style="margin-top:10px;">看完請把手機交回上帝 🐺</div>
+      </div>
+      <div class="modalActions">
+        <button id="btnRoleDone" class="btn">我看完了</button>
+        <button id="btnRoleClose" class="btn ghost">關閉</button>
       </div>
     </div>
   </div>
 
-  <!-- ✅ ROLE MODAL：抽身分彈窗 -->
-  <div id="roleModal" class="modal hidden" aria-hidden="true">
+  <!-- Dice popup (NEW) -->
+  <div id="diceModal" class="modal hidden" aria-hidden="true">
     <div class="modalCard">
-      <div class="modalTitle" id="roleModalTitle">—</div>
-
+      <div class="modalTitle">🎲 今日發言順序</div>
       <div class="modalBody">
-        <div class="roleLine" id="roleModalRole">—</div>
-        <div class="roleLine small" id="roleModalCamp">—</div>
-        <div class="hint" style="margin-top:10px;">
-          看完請把手機交回上帝 🐺
-        </div>
+        <div id="diceResult" class="diceResult">—</div>
+        <div class="hint" style="margin-top:10px;">（只會從「存活座位」隨機抽）</div>
       </div>
-
       <div class="modalActions">
-        <button id="btnRoleDone" class="btn">我看完了</button>
-        <button id="btnRoleClose" class="btn ghost">關閉</button>
+        <button id="btnDiceAgain" class="btn">再擲一次</button>
+        <button id="btnDiceClose" class="btn ghost">關閉</button>
       </div>
     </div>
   </div>
