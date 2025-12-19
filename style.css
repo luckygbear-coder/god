@@ -4,246 +4,158 @@
   --stroke:#f5d3a6;
   --ink:#4b3044;
   --muted:#7a5a6a;
+  --shadow:0 8px 18px rgba(0,0,0,0.14);
 
-  --accent:#f4a63a;
-  --accent2:#ffcf6e;
+  --topH:64px;
+  --tabsH:54px;
 
-  --shadow:0 10px 22px rgba(0,0,0,0.14);
-  --shadow2:0 14px 32px rgba(0,0,0,0.18);
+  /* 底部 Dock 估高（timerStrip + actionBar + padding） */
+  --dockH:168px;
 
   --radius:18px;
-  --radius2:14px;
-
-  --topH:62px;
-  --tabsH:50px;
-  --dockGap:10px;
-
-  --timerH:66px;  /* slim timer strip height */
-  --actionH:62px; /* action bar height */
 }
 
-*{ box-sizing:border-box; -webkit-tap-highlight-color: transparent; }
+*{ box-sizing:border-box; }
 html,body{ height:100%; margin:0; padding:0; }
+
 body{
   background:var(--bg);
-  font-family:"Noto Sans TC",-apple-system,BlinkMacSystemFont,system-ui,Segoe UI,Roboto,sans-serif;
+  font-family:"Noto Sans TC",-apple-system,BlinkMacSystemFont,sans-serif;
   color:var(--ink);
 
-  /* ✅ no full page scroll */
+  /* ✅ 整頁不捲動，捲動交給 panels 內部 */
   overflow:hidden;
 
-  /* iOS font smoothing */
-  -webkit-font-smoothing: antialiased;
-  -moz-osx-font-smoothing: grayscale;
+  /* ✅ iOS 互動手勢更穩 */
+  -webkit-text-size-adjust:100%;
+  touch-action:manipulation;
 }
 
-pre{ margin:0; font-family:inherit; white-space:pre-wrap; word-break:break-word; }
-
-/* =======================
-   Layout
-   ======================= */
+/* =========================
+   App Layout (fixed top/bottom + scrollable middle)
+========================= */
 .app{
-  height:100vh;
+  position:relative;
+  height:100dvh;              /* ✅ iOS 新版動態視窗高度 */
+  height:100vh;               /* fallback */
   max-width:480px;
   margin:0 auto;
-  position:relative;
-
-  /* background frame */
-  padding-top: env(safe-area-inset-top);
-  padding-bottom: env(safe-area-inset-bottom);
+  background:var(--bg);
 }
 
-/* =======================
-   Top fixed
-   ======================= */
+/* Top fixed */
 .top{
   position:fixed;
   left:50%;
   transform:translateX(-50%);
-  top: env(safe-area-inset-top);
+  top:0;
   width:min(480px, 100vw);
-  height:var(--topH);
-  padding:10px 12px;
+  height:calc(var(--topH) + env(safe-area-inset-top));
+  padding-top:env(safe-area-inset-top);
+  padding-left:12px;
+  padding-right:12px;
+
   display:flex;
   align-items:center;
   justify-content:space-between;
+  gap:10px;
+
+  background:linear-gradient(#ffe9c1, #ffeec9);
   z-index:50;
 }
 
-.topLeft{
-  display:flex;
-  flex-direction:column;
-  gap:4px;
-  min-width:0;
-}
+.topLeft{ display:flex; flex-direction:column; gap:2px; }
+.uiStatus{ font-size:12px; color:var(--muted); }
+.uiBoard{ font-size:18px; font-weight:800; letter-spacing:.2px; }
 
-.uiStatus{
-  font-size:12px;
-  color:var(--muted);
-  opacity:0.9;
-  white-space:nowrap;
-  overflow:hidden;
-  text-overflow:ellipsis;
-  max-width:260px;
-}
+.topRight{ display:flex; gap:10px; align-items:center; }
 
-.uiBoard{
-  font-size:14px;
-  font-weight:800;
-  letter-spacing:0.2px;
-  white-space:nowrap;
-  overflow:hidden;
-  text-overflow:ellipsis;
-  max-width:260px;
-}
-
-.topRight{
-  display:flex;
-  gap:8px;
-}
-
-.iconBtn{
-  width:42px;
-  height:42px;
-  border-radius:14px;
-  border:2px solid var(--stroke);
-  background:linear-gradient(180deg, #ffffff, #fff1d2);
-  box-shadow:0 8px 14px rgba(0,0,0,0.10);
-  color:var(--ink);
-  font-size:18px;
-  display:flex;
-  align-items:center;
-  justify-content:center;
-}
-.iconBtn:active{ transform: translateY(1px); }
-
-/* =======================
-   Tabs fixed
-   ======================= */
+/* Tabs fixed under top */
 .tabs{
   position:fixed;
   left:50%;
   transform:translateX(-50%);
-  top: calc(env(safe-area-inset-top) + var(--topH));
+  top:calc(var(--topH) + env(safe-area-inset-top));
   width:min(480px, 100vw);
   height:var(--tabsH);
-  padding:8px 10px;
+
   display:flex;
-  gap:8px;
-  z-index:45;
+  gap:10px;
+  padding:10px 12px;
+
+  background:linear-gradient(#ffeec9, #ffeec9);
+  z-index:49;
 }
 
-.tab{
-  flex:1;
-  height:100%;
-  border-radius:16px;
-  border:2px solid var(--stroke);
-  background:rgba(255,255,255,0.55);
-  color:var(--muted);
-  font-weight:900;
-  letter-spacing:0.6px;
-}
-.tab.active{
-  color:var(--ink);
-  background:linear-gradient(180deg, #fff, #fff1d2);
-  box-shadow:0 8px 16px rgba(0,0,0,0.12);
-}
-.tab:active{ transform: translateY(1px); }
-
-/* =======================
-   Panels area (internal scroll)
-   ======================= */
+/* ✅ 讓 panels 成為唯一可滾動區 */
 .panels{
-  position:absolute;
-  left:0; right:0;
-  top: calc(env(safe-area-inset-top) + var(--topH) + var(--tabsH));
-  bottom: calc(env(safe-area-inset-bottom) + var(--timerH) + var(--actionH) + var(--dockGap));
-  padding:10px 10px 0;
-  overflow:hidden; /* important: keep page fixed */
+  position:fixed;
+  left:50%;
+  transform:translateX(-50%);
+  top:calc(var(--topH) + var(--tabsH) + env(safe-area-inset-top));
+  bottom:calc(var(--dockH) + env(safe-area-inset-bottom));
+  width:min(480px, 100vw);
+
+  padding:10px 12px 14px;
+  overflow:hidden;            /* panel 自己控制 */
+  z-index:1;
 }
 
 .panel{
+  display:none;
   height:100%;
-  display:none;
-  overflow:hidden;
+  overflow-y:auto;            /* ✅ 這裡才允許捲動 */
+  -webkit-overflow-scrolling:touch;
+  padding-right:2px;          /* 避免 iOS 捲軸壓到字 */
 }
-.panel.active{
-  display:block;
+.panel.active{ display:block; }
+
+/* Bottom dock fixed */
+.bottomDock{
+  position:fixed;
+  left:50%;
+  transform:translateX(-50%);
+  bottom:0;
+  width:min(480px, 100vw);
+
+  padding:10px 12px calc(10px + env(safe-area-inset-bottom));
+  background:linear-gradient(#ffeec9, #ffe0aa);
+  z-index:60;
 }
 
-.panel .card{
-  margin-bottom:10px;
-}
-
-/* each panel can scroll internally if needed */
-#panelFlow,
-#panelGod{
-  overflow:hidden;
-}
-#panelSeats{
-  overflow:hidden;
-  display:none;
-}
-#panelSeats.active{
-  display:flex;
-  flex-direction:column;
-  gap:10px;
-}
-
-/* =======================
-   Card
-   ======================= */
+/* =========================
+   Components
+========================= */
 .card{
   background:var(--card);
   border:2px solid var(--stroke);
   border-radius:var(--radius);
   box-shadow:var(--shadow);
-  padding:12px 12px 12px;
+  padding:10px 10px 12px;
 }
 
-.card.tight{
-  padding:10px 12px;
-}
+.card + .card{ margin-top:10px; }
+
+.card.tight{ padding:10px; }
 
 .cardTitle{
-  font-size:16px;
   font-weight:900;
-  letter-spacing:0.6px;
+  font-size:16px;
+  margin-bottom:6px;
+}
+
+.cardFoot{
+  margin-top:8px;
+  font-size:12px;
+  color:var(--muted);
+  white-space:pre-wrap;
 }
 
 .hint{
   font-size:12px;
   color:var(--muted);
-  margin-top:4px;
+  line-height:1.4;
 }
-
-.cardFoot{
-  margin-top:10px;
-  font-size:12px;
-  color:var(--muted);
-  min-height:16px;
-}
-
-.cardText{
-  margin-top:10px;
-  font-size:13px;
-  line-height:1.6;
-  color:var(--ink);
-}
-
-/* ✅ internal scroll box (promptText/godText) */
-.scrollBox{
-  max-height: 34vh;         /* prevent pushing layout */
-  overflow:auto;
-  padding-right:6px;        /* keep scrollbar off text */
-  border-radius:12px;
-}
-.scrollBox::-webkit-scrollbar{ width:8px; }
-.scrollBox::-webkit-scrollbar-thumb{
-  background:rgba(122,90,106,0.25);
-  border-radius:999px;
-}
-.scrollBox::-webkit-scrollbar-track{ background:transparent; }
 
 .row{
   display:flex;
@@ -252,205 +164,121 @@ pre{ margin:0; font-family:inherit; white-space:pre-wrap; word-break:break-word;
   gap:10px;
 }
 
-/* =======================
-   Buttons
-   ======================= */
-.btn{
-  border:none;
-  border-radius:16px;
-  padding:12px 14px;
-  font-weight:900;
-  letter-spacing:0.6px;
-  background:linear-gradient(180deg, var(--accent2), var(--accent));
-  color:#4b3044;
-  box-shadow:0 10px 18px rgba(0,0,0,0.12);
+/* ✅ 只有卡片內文字可以捲（不影響整體） */
+.cardText{
+  margin:0;
+  font-size:13px;
+  line-height:1.6;
+  color:var(--ink);
+  white-space:pre-wrap;
+  word-break:break-word;
 }
-.btn:active{ transform: translateY(1px); }
-.btn:disabled{ opacity:0.55; filter:saturate(0.7); }
 
-.btn.ghost{
-  background:rgba(255,255,255,0.6);
+.scrollBox{
+  max-height:220px;
+  overflow:auto;
+  -webkit-overflow-scrolling:touch;
+  padding:10px;
+  border-radius:14px;
+  background:rgba(255,255,255,0.55);
+  border:1px solid rgba(245,211,166,0.9);
+}
+
+/* =========================
+   Buttons
+========================= */
+.iconBtn{
+  width:44px;
+  height:44px;
+  border-radius:14px;
   border:2px solid var(--stroke);
-  box-shadow:none;
+  background:rgba(255,255,255,0.55);
+  box-shadow:var(--shadow);
+  font-size:18px;
+  display:grid;
+  place-items:center;
   color:var(--ink);
 }
 
-.btn.small{
-  padding:8px 10px;
-  border-radius:14px;
-  font-size:12px;
-}
-
-/* tool row */
-.toolRow{
-  display:flex;
-  gap:10px;
-  flex-wrap:wrap;
-  margin-top:10px;
-}
-
-/* =======================
-   Toggle
-   ======================= */
-.toggle{
-  display:flex;
-  align-items:center;
-  gap:8px;
-  user-select:none;
-  font-size:12px;
-  color:var(--muted);
-}
-.toggle input{ transform:scale(1.1); }
-
-/* =======================
-   Board picker
-   ======================= */
-.boardPicker{
-  margin-top:10px;
-  display:flex;
-  flex-direction:column;
-  gap:8px;
-}
-
-.board-item{
-  display:flex;
-  align-items:center;
-  justify-content:space-between;
-  gap:10px;
-  padding:10px 12px;
-  border-radius:16px;
+.tab{
+  flex:1;
+  height:36px;
+  border-radius:18px;
   border:2px solid var(--stroke);
   background:rgba(255,255,255,0.55);
+  box-shadow:0 4px 12px rgba(0,0,0,0.08);
+  font-weight:800;
+  color:var(--ink);
 }
-.board-item.active{
-  background:linear-gradient(180deg, #fff, #fff1d2);
-  box-shadow:0 8px 16px rgba(0,0,0,0.10);
+.tab.active{
+  background:linear-gradient(#fff4d8, #ffe2a3);
+  border-color:#e9b56a;
 }
-.board-title{
+
+.btn{
+  height:44px;
+  border-radius:16px;
+  border:2px solid #e9b56a;
+  background:linear-gradient(#ffd37a, #f7b84c);
+  box-shadow:var(--shadow);
   font-weight:900;
-  font-size:14px;
+  color:var(--ink);
+  padding:0 14px;
 }
-.board-meta{
-  font-size:11px;
-  color:var(--muted);
-  margin-top:2px;
+.btn.ghost{
+  background:rgba(255,255,255,0.6);
+  border-color:var(--stroke);
+  font-weight:800;
 }
-.board-tags{
+.btn.small{ height:36px; border-radius:14px; padding:0 12px; }
+
+.hidden{ display:none !important; }
+
+.toolRow{
+  margin-top:8px;
   display:flex;
-  gap:6px;
-  flex-wrap:wrap;
-  justify-content:flex-end;
-}
-.tag{
-  font-size:11px;
-  padding:4px 8px;
-  border-radius:999px;
-  border:1.8px solid var(--stroke);
-  background:#fff;
-  color:var(--muted);
-}
-
-/* =======================
-   Seats grid
-   ======================= */
-.seatsGrid{
-  flex:1;
-  overflow:auto;
-  padding:2px 2px 14px;
-  display:grid;
-  grid-template-columns:repeat(2, minmax(0,1fr));
-  gap:10px;
-}
-@media (min-width: 420px){
-  .seatsGrid{ grid-template-columns:repeat(3, minmax(0,1fr)); }
-}
-
-.seat{
-  background:rgba(255,255,255,0.65);
-  border:2px solid var(--stroke);
-  border-radius:18px;
-  padding:10px 10px;
-  box-shadow:0 8px 16px rgba(0,0,0,0.10);
-  position:relative;
-  min-height:70px;
-}
-.seat:active{ transform: translateY(1px); }
-
-.seat.dead{
-  opacity:0.62;
-  filter:saturate(0.7);
-}
-
-.seat.selected{
-  outline:3px solid rgba(244,166,58,0.75);
-  outline-offset:2px;
-}
-
-.seat-top{
-  display:flex;
-  align-items:flex-start;
-  justify-content:space-between;
   gap:8px;
-}
-
-.seat-num{
-  font-size:15px;
-  font-weight:1000;
-}
-
-.seat-status{
-  margin-top:2px;
-  font-size:11px;
-  color:var(--muted);
-}
-
-.badge-wrap{
-  display:flex;
   flex-wrap:wrap;
-  gap:6px;
-  justify-content:flex-end;
 }
 
-.badge{
-  font-size:11px;
-  padding:4px 8px;
-  border-radius:999px;
-  border:1.8px solid var(--stroke);
-  background:#fff;
-  color:var(--muted);
+/* =========================
+   Seats
+========================= */
+.seatsGrid{
+  margin-top:10px;
+  display:grid;
+  grid-template-columns:repeat(4, 1fr);
+  gap:10px;
+  padding-bottom:10px; /* ✅ 捲到底不會貼邊 */
+}
+
+/* 如果你 seat button 是用 .seat */
+.seat{
+  border-radius:18px;
+  border:2px solid var(--stroke);
+  background:rgba(255,255,255,0.55);
+  box-shadow:0 4px 12px rgba(0,0,0,0.10);
+  padding:12px 8px;
+  text-align:center;
   font-weight:900;
 }
-.badge.wolf{
-  border-color:rgba(220,80,80,0.45);
-  color:#8a2e2e;
-  background:rgba(255,230,230,0.8);
-}
-.badge.good{
-  border-color:rgba(80,140,220,0.45);
-  color:#2f4c88;
-  background:rgba(230,242,255,0.85);
+.seat .sub{
+  display:block;
+  margin-top:4px;
+  font-size:11px;
+  font-weight:700;
+  color:var(--muted);
 }
 
-/* =======================
-   Bottom dock (fixed)
-   ======================= */
-.bottomDock{
-  position:fixed;
-  left:50%;
-  transform:translateX(-50%);
-  bottom: env(safe-area-inset-bottom);
-  width:min(480px, 100vw);
-  padding: 0 10px 10px;
-  z-index:60;
-}
-
+/* =========================
+   Timer strip + action bar
+========================= */
 .timerStrip{
-  height:var(--timerH);
-  padding:10px 10px;
   display:flex;
   align-items:center;
   justify-content:space-between;
   gap:10px;
+  padding:10px 10px;
 }
 
 .timerStripLeft{
@@ -459,211 +287,154 @@ pre{ margin:0; font-family:inherit; white-space:pre-wrap; word-break:break-word;
   gap:2px;
   min-width:110px;
 }
-
-.timerStripTitle{
-  font-size:12px;
-  color:var(--muted);
-  font-weight:900;
-}
-.timerStripTime{
-  font-size:22px;
-  font-weight:1000;
-  letter-spacing:1px;
-}
+.timerStripTitle{ font-size:12px; color:var(--muted); font-weight:900; }
+.timerStripTime{ font-size:26px; font-weight:1000; letter-spacing:1px; }
 
 .timerStripRight{
   display:flex;
   flex-wrap:wrap;
-  gap:8px;
   justify-content:flex-end;
-  align-items:center;
+  gap:8px;
 }
 
 .chip{
-  border-radius:999px;
-  padding:8px 10px;
+  height:34px;
+  padding:0 12px;
+  border-radius:17px;
   border:2px solid var(--stroke);
   background:rgba(255,255,255,0.65);
-  color:var(--ink);
   font-weight:900;
-  font-size:12px;
+  color:var(--ink);
 }
 .chip.primary{
-  border-color:rgba(244,166,58,0.55);
-  background:linear-gradient(180deg, #fff1d2, #ffd27b);
+  border-color:#e9b56a;
+  background:linear-gradient(#ffe6a8, #ffc86a);
 }
-.chip:active{ transform: translateY(1px); }
 
 .actionBar{
   margin-top:10px;
-  display:flex;
+  display:grid;
+  grid-template-columns:1fr 1fr 1fr;
   gap:10px;
 }
-.actionBar .btn{
-  flex:1;
-  height:var(--actionH);
-  display:flex;
-  align-items:center;
-  justify-content:center;
-}
+.actionBar .btn{ width:100%; }
 
-/* =======================
-   Drawer / Backdrop
-   ======================= */
-.hidden{ display:none !important; }
-
+/* =========================
+   Drawer / Modal
+========================= */
 .backdrop{
   position:fixed;
   inset:0;
   background:rgba(0,0,0,0.35);
-  z-index:90;
+  z-index:80;
 }
-
 .drawer{
   position:fixed;
   left:50%;
   transform:translateX(-50%);
-  bottom: 0;
+  bottom:calc(10px + env(safe-area-inset-bottom));
   width:min(480px, 100vw);
-  max-height:72vh;
+  border-radius:22px;
   background:var(--card);
   border:2px solid var(--stroke);
-  border-bottom:none;
-  border-radius:22px 22px 0 0;
-  box-shadow:var(--shadow2);
-  z-index:100;
+  box-shadow:0 14px 30px rgba(0,0,0,0.25);
+  z-index:90;
   overflow:hidden;
 }
-
 .drawerTop{
   display:flex;
   align-items:center;
   justify-content:space-between;
-  padding:12px 12px 10px;
-  border-bottom:2px solid rgba(245,211,166,0.65);
+  padding:10px 12px;
+  border-bottom:1px solid rgba(245,211,166,0.9);
 }
-
-.drawerTitle{
-  font-weight:1000;
-  font-size:16px;
-}
-
+.drawerTitle{ font-weight:1000; }
 .drawerBody{
   padding:12px;
-  overflow:auto;
-  max-height: calc(72vh - 56px);
-}
-
-.seg{
   display:flex;
-  gap:8px;
-  margin-bottom:12px;
-}
-.segBtn{
-  flex:1;
-  border-radius:16px;
-  padding:10px 10px;
-  border:2px solid var(--stroke);
-  background:rgba(255,255,255,0.6);
-  font-weight:1000;
-  color:var(--muted);
-}
-.segBtn.active{
-  color:var(--ink);
-  background:linear-gradient(180deg, #fff, #fff1d2);
-  box-shadow:0 8px 16px rgba(0,0,0,0.10);
-}
-
-/* row label in drawer */
-label.row{
-  display:flex;
-  align-items:center;
-  justify-content:space-between;
+  flex-direction:column;
   gap:10px;
-  padding:10px 10px;
-  border-radius:16px;
-  border:2px solid rgba(245,211,166,0.7);
-  background:rgba(255,255,255,0.55);
-  margin-bottom:12px;
 }
+.seg{ display:grid; grid-template-columns:1fr 1fr; gap:8px; }
+.segBtn{
+  height:40px;
+  border-radius:16px;
+  border:2px solid var(--stroke);
+  background:rgba(255,255,255,0.65);
+  font-weight:900;
+}
+.toggle{ display:flex; align-items:center; gap:8px; font-size:13px; color:var(--muted); }
 
-/* =======================
-   Modal
-   ======================= */
 .modal{
   position:fixed;
   inset:0;
-  background:rgba(0,0,0,0.38);
-  z-index:120;
   display:flex;
   align-items:center;
   justify-content:center;
-  padding:18px;
+  padding:16px;
+  z-index:100;
 }
-
 .modalCard{
-  width:min(420px, 92vw);
+  width:min(440px, 100%);
+  border-radius:22px;
   background:var(--card);
   border:2px solid var(--stroke);
-  border-radius:22px;
-  box-shadow:var(--shadow2);
-  padding:14px 14px 12px;
+  box-shadow:0 16px 40px rgba(0,0,0,0.30);
+  overflow:hidden;
 }
-
 .modalTitle{
+  padding:12px 14px;
   font-weight:1000;
-  font-size:16px;
-  margin-bottom:10px;
+  border-bottom:1px solid rgba(245,211,166,0.9);
+}
+.modalBody{ padding:14px; }
+.modalActions{
+  padding:12px 14px 14px;
+  display:grid;
+  grid-template-columns:1fr 1fr;
+  gap:10px;
 }
 
-.modalBody{
-  padding:8px 4px 10px;
-}
-
-.roleLine{
-  font-size:14px;
-  font-weight:900;
-  margin-top:6px;
-}
-.roleLine.small{
-  font-size:12px;
-  color:var(--muted);
-  font-weight:800;
-}
+.roleLine{ font-weight:1000; font-size:18px; }
+.roleLine.small{ font-size:13px; font-weight:800; color:var(--muted); }
 
 .diceResult{
-  font-size:22px;
+  font-size:34px;
   font-weight:1000;
-  letter-spacing:1px;
-  padding:10px 10px;
-  border-radius:18px;
-  border:2px dashed rgba(245,211,166,0.9);
-  background:rgba(255,255,255,0.65);
-  text-align:center;
+  letter-spacing:2px;
 }
 
-.modalActions{
+/* =========================
+   Board picker
+========================= */
+.boardPicker{
   display:flex;
+  flex-direction:column;
   gap:10px;
   margin-top:10px;
 }
-.modalActions .btn{ flex:1; }
-
-/* =======================
-   Small tweaks
-   ======================= */
-#voteAnnounceText{
-  font-size:13px;
-  line-height:1.6;
+.boardCard{
+  border-radius:18px;
+  border:2px solid var(--stroke);
+  background:rgba(255,255,255,0.55);
+  box-shadow:0 4px 12px rgba(0,0,0,0.10);
+  padding:12px;
+}
+.badgeRow{ display:flex; gap:6px; flex-wrap:wrap; margin-top:6px; }
+.badge{
+  font-size:11px;
+  font-weight:900;
+  padding:4px 10px;
+  border-radius:999px;
+  border:2px solid var(--stroke);
+  background:rgba(255,255,255,0.65);
 }
 
-/* reduce overscroll bounce in inner scroll */
-.seatsGrid, .scrollBox, .drawerBody{
-  overscroll-behavior: contain;
-}
-
-/* iOS safe-area helpers for very small screens */
-@media (max-height: 720px){
-  .scrollBox{ max-height: 30vh; }
-  .timerStripTime{ font-size:20px; }
+/* =========================
+   Selection (iOS)
+========================= */
+.noSelect, .iconBtn, .tab, .btn, .chip, .seat, .boardCard{
+  -webkit-user-select:none;
+  user-select:none;
+  -webkit-touch-callout:none;
 }
