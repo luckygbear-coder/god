@@ -5,13 +5,12 @@
   --ink:#4b3044;
   --muted:#7a5a6a;
   --brand:#f4a63a;
-  --brand2:#ffd07a;
   --shadow:0 8px 18px rgba(0,0,0,0.14);
   --shadow2:0 14px 30px rgba(0,0,0,0.14);
   --r:18px;
 
   --topH: 74px;
-  --dockH: 156px;
+  --dockH: 88px; /* ✅ 底部只剩 action bar */
   --safeB: env(safe-area-inset-bottom);
   --safeT: env(safe-area-inset-top);
 }
@@ -22,7 +21,7 @@ body{
   background:var(--bg);
   font-family:"Noto Sans TC",-apple-system,BlinkMacSystemFont,sans-serif;
   color:var(--ink);
-  overflow:hidden; /* ✅ page itself won't scroll */
+  overflow:hidden;
 }
 
 /* ===== app frame ===== */
@@ -54,13 +53,9 @@ body{
 }
 
 .topLeft{ display:flex; flex-direction:column; gap:2px; min-width: 0; }
-.uiStatus{
-  font-size:12px;
-  color:var(--muted);
-  letter-spacing:0.2px;
-}
+.uiStatus{ font-size:12px; color:var(--muted); letter-spacing:0.2px; }
 .uiBoard{
-  font-weight:800;
+  font-weight:900;
   font-size:18px;
   line-height:1.1;
   white-space:nowrap;
@@ -97,7 +92,7 @@ body{
   border:0 !important;
 }
 
-/* ===== main scroll area (internal only) ===== */
+/* ===== main scroll area ===== */
 .mainScroll{
   position:absolute;
   left:0; right:0;
@@ -118,33 +113,14 @@ body{
 }
 .card + .card{ margin-top:12px; }
 
-.cardTitle{
-  font-weight:900;
-  font-size:16px;
-  margin-bottom:8px;
-}
-.cardFoot{
-  margin-top:10px;
-  font-size:12px;
-  color:var(--muted);
-}
+.cardTitle{ font-weight:900; font-size:16px; margin-bottom:8px; }
+.cardFoot{ margin-top:10px; font-size:12px; color:var(--muted); }
 
-.hint{
-  font-size:12px;
-  color:var(--muted);
-  line-height:1.4;
-}
+.hint{ font-size:12px; color:var(--muted); line-height:1.4; }
 
-.row{
-  display:flex;
-  align-items:center;
-  justify-content:space-between;
-  gap:10px;
-}
-
+.row{ display:flex; align-items:center; justify-content:space-between; gap:10px; }
 .tight{ padding:10px; }
 
-/* prompt text box */
 .cardText{
   margin:0;
   white-space:pre-wrap;
@@ -154,7 +130,7 @@ body{
   line-height:1.6;
 }
 .scrollBox{
-  max-height: 160px; /* ✅ prevents pushing content off-screen */
+  max-height: 160px;
   overflow:auto;
   -webkit-overflow-scrolling: touch;
   padding:10px;
@@ -163,7 +139,6 @@ body{
   background: rgba(255,255,255,0.45);
 }
 
-/* tool row */
 .toolRow{
   display:flex;
   align-items:center;
@@ -181,7 +156,6 @@ body{
   margin-top:10px;
 }
 
-/* supports various button shapes your app.js might generate */
 .boardPicker button,
 .boardPicker .boardOption,
 .boardPicker .boardItem{
@@ -193,22 +167,20 @@ body{
   background:#fff3dc;
   box-shadow: 0 6px 14px rgba(0,0,0,0.10);
   color:var(--ink);
-  font-weight:800;
+  font-weight:900;
   line-height:1.2;
   touch-action: manipulation;
 }
 
-/* subtitle lines inside option */
 .boardPicker button small,
 .boardPicker .boardOption small,
 .boardPicker .boardItem small{
   display:block;
   margin-top:6px;
-  font-weight:700;
+  font-weight:800;
   color:var(--muted);
 }
 
-/* ✅ selected/active states (covers several common patterns) */
 .boardPicker button.active,
 .boardPicker button.selected,
 .boardPicker button[aria-pressed="true"],
@@ -229,7 +201,6 @@ body{
   gap:10px;
 }
 
-/* generic seat button style (in case app.js uses buttons/divs) */
 .seatsGrid button,
 .seatsGrid .seat{
   width:100%;
@@ -241,23 +212,22 @@ body{
   display:flex;
   align-items:center;
   justify-content:center;
-  font-weight:900;
+  font-weight:1000;
   color:var(--ink);
   touch-action: manipulation;
 }
 .seatsGrid button:active,
 .seatsGrid .seat:active{ transform: translateY(1px); }
 
-/* optional states if you already add classes in JS */
 .seatsGrid .dead,
 .seatsGrid button.dead{ opacity:0.55; filter:saturate(0.7); }
 
-/* ===== god panel toggle ===== */
+/* ===== god toggle ===== */
 .toggle{
   display:flex;
   align-items:center;
   gap:10px;
-  font-weight:800;
+  font-weight:900;
   color:var(--muted);
 }
 .toggle input{ width:18px; height:18px; }
@@ -275,45 +245,7 @@ body{
   z-index:30;
 }
 
-/* timer strip */
-.timerStrip{
-  display:flex;
-  align-items:center;
-  justify-content:space-between;
-  gap:10px;
-  padding:10px 12px;
-}
-
-.timerStripLeft{ display:flex; flex-direction:column; gap:2px; }
-.timerStripTitle{ font-size:12px; color:var(--muted); font-weight:800; }
-.timerStripTime{ font-size:28px; font-weight:1000; letter-spacing:0.5px; }
-
-.timerStripRight{
-  display:flex;
-  flex-wrap:wrap;
-  gap:8px;
-  justify-content:flex-end;
-}
-
-.chip{
-  border-radius:999px;
-  border:2px solid var(--stroke);
-  background:#fff3dc;
-  padding:8px 12px;
-  font-weight:900;
-  color:var(--ink);
-  box-shadow: 0 6px 12px rgba(0,0,0,0.10);
-  touch-action: manipulation;
-}
-.chip.primary{
-  background: linear-gradient(180deg, #ffd48a, #f4a63a);
-  border-color: rgba(205,125,20,0.55);
-}
-.chip:active{ transform: translateY(1px); }
-
-/* action bar */
 .actionBar{
-  margin-top:10px;
   display:grid;
   grid-template-columns: 1fr 1.2fr 1fr;
   gap:10px;
@@ -324,7 +256,7 @@ body{
   border:2px solid rgba(205,125,20,0.35);
   background: linear-gradient(180deg, #ffd48a, #f4a63a);
   padding:14px 12px;
-  font-weight:1000;
+  font-weight:1100;
   color:var(--ink);
   box-shadow: var(--shadow2);
   touch-action: manipulation;
@@ -334,16 +266,17 @@ body{
   border:2px solid var(--stroke);
   box-shadow: var(--shadow);
 }
-.btn.small{ padding:10px 12px; border-radius:14px; font-weight:900; }
+.btn.small{ padding:10px 12px; border-radius:14px; font-weight:1000; }
 .btn:active{ transform: translateY(1px); }
 
-/* ===== drawer / modal ===== */
+/* ===== drawers / modal ===== */
 .backdrop{
   position:fixed;
   inset:0;
   background: rgba(0,0,0,0.35);
   z-index:50;
 }
+
 .drawer{
   position:fixed;
   left:50%;
@@ -358,6 +291,7 @@ body{
   z-index:60;
   max-height: 78dvh;
   overflow:auto;
+  -webkit-overflow-scrolling: touch;
 }
 .drawerTop{
   padding:12px 12px 8px;
@@ -367,7 +301,7 @@ body{
   gap:10px;
   border-bottom: 2px solid rgba(245,211,166,0.7);
 }
-.drawerTitle{ font-weight:1000; }
+.drawerTitle{ font-weight:1100; }
 .drawerBody{ padding:12px; }
 
 .seg{ display:flex; gap:10px; margin-bottom:12px; }
@@ -377,13 +311,64 @@ body{
   border:2px solid var(--stroke);
   background:#fff3dc;
   padding:10px 12px;
-  font-weight:1000;
+  font-weight:1100;
   touch-action: manipulation;
 }
 .segBtn.active{
   background: linear-gradient(180deg, #ffd48a, #f4a63a);
   border-color: rgba(205,125,20,0.55);
 }
+
+/* ===== timer drawer extra ===== */
+.timerCard{
+  border:2px solid rgba(245,211,166,0.65);
+  background: rgba(255,255,255,0.35);
+  border-radius:18px;
+  padding:12px;
+}
+
+.timerBigWrap{
+  display:flex;
+  align-items:flex-end;
+  justify-content:space-between;
+  gap:10px;
+  margin-bottom:10px;
+}
+
+.timerBig{
+  font-size:38px;
+  font-weight:1200;
+  letter-spacing:0.5px;
+}
+
+.timerBtns{
+  display:flex;
+  flex-wrap:wrap;
+  gap:10px;
+}
+
+.timerCtrlRow{
+  width:100%;
+  display:flex;
+  gap:10px;
+  margin-top:2px;
+}
+
+.chip{
+  border-radius:999px;
+  border:2px solid var(--stroke);
+  background:#fff3dc;
+  padding:10px 14px;
+  font-weight:1100;
+  color:var(--ink);
+  box-shadow: 0 6px 12px rgba(0,0,0,0.10);
+  touch-action: manipulation;
+}
+.chip.primary{
+  background: linear-gradient(180deg, #ffd48a, #f4a63a);
+  border-color: rgba(205,125,20,0.55);
+}
+.chip:active{ transform: translateY(1px); }
 
 .modal{
   position:fixed;
@@ -403,24 +388,21 @@ body{
   box-shadow: var(--shadow2);
   padding:14px;
 }
-.modalTitle{ font-weight:1000; font-size:16px; margin-bottom:10px; }
+.modalTitle{ font-weight:1100; font-size:16px; margin-bottom:10px; }
 .modalBody{ padding:6px 2px 2px; }
 .modalActions{ display:flex; gap:10px; margin-top:12px; }
-.roleLine{ font-weight:1000; font-size:18px; }
-.roleLine.small{ font-size:13px; font-weight:900; color:var(--muted); }
+.roleLine{ font-weight:1100; font-size:18px; }
+.roleLine.small{ font-size:13px; font-weight:1000; color:var(--muted); }
 
 .diceResult{
   font-size:32px;
-  font-weight:1100;
+  font-weight:1200;
   text-align:center;
   padding:10px 0;
 }
 
-.hidden{ display:none !important; }
-
-/* small screens */
 @media (max-width:360px){
   .seatsGrid{ grid-template-columns: repeat(3, minmax(0, 1fr)); }
-  .timerStripTime{ font-size:24px; }
+  .timerBig{ font-size:34px; }
   .scrollBox{ max-height: 140px; }
 }
