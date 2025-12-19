@@ -18,25 +18,30 @@
       </div>
 
       <div class="topRight">
-        <button type="button" id="btnTimer" class="iconBtn" aria-label="計時器">⌛️</button>
+        <!-- 👁 放在 ⌛️ 旁邊 -->
+        <button type="button" id="btnGodQuick" class="iconBtn" aria-label="上帝資訊顯示切換">👁️</button>
+        <button type="button" id="btnTimer" class="iconBtn" aria-label="倒數計時器">⌛️</button>
+
         <button type="button" id="btnDice" class="iconBtn" aria-label="發言骰子">🎲</button>
         <button type="button" id="btnSettings" class="iconBtn" aria-label="設定">⚙️</button>
       </div>
     </div>
 
-    <!-- Tabs：保留給 app.js 用，但 UI 隱藏（方案A同頁） -->
-    <div class="tabs visuallyHidden" aria-hidden="true">
-      <button type="button" id="tabFlow" class="tab active">流程</button>
-      <button type="button" id="tabSeats" class="tab">座位</button>
-      <button type="button" id="tabGod" class="tab">上帝</button>
+    <!-- Tabs (從上面切換) -->
+    <div class="tabs" role="tablist" aria-label="主分頁">
+      <button type="button" id="tabFlow" class="tab active" role="tab" aria-selected="true" aria-controls="panelFlow">流程</button>
+      <button type="button" id="tabSeats" class="tab" role="tab" aria-selected="false" aria-controls="panelSeats">座位</button>
+      <button type="button" id="tabGod" class="tab" role="tab" aria-selected="false" aria-controls="panelGod">上帝</button>
     </div>
 
-    <!-- ✅ MAIN: single-page sections, internal scroll only -->
-    <div class="mainScroll" id="mainScroll">
-      <!-- FLOW -->
-      <section id="panelFlow" class="panel alwaysOn">
+    <!-- Main area (高度/捲動由 style.css 控制) -->
+    <div class="panels">
+      <!-- FLOW PANEL -->
+      <section id="panelFlow" class="panel active" role="tabpanel" aria-labelledby="tabFlow">
         <div class="card">
           <div class="cardTitle" id="promptTitle">—</div>
+
+          <!-- prompt text: allow internal scroll if needed -->
           <pre class="cardText scrollBox" id="promptText">—</pre>
 
           <div class="toolRow" id="toolRow">
@@ -46,7 +51,7 @@
           <div class="cardFoot" id="promptFoot"></div>
         </div>
 
-        <!-- board picker -->
+        <!-- board picker only shown in setup -->
         <div class="card" id="boardPickerCard">
           <div class="cardTitle">可選板子</div>
           <div class="hint" id="boardPickerHint"></div>
@@ -54,8 +59,8 @@
         </div>
       </section>
 
-      <!-- SEATS -->
-      <section id="panelSeats" class="panel alwaysOn">
+      <!-- SEATS PANEL -->
+      <section id="panelSeats" class="panel" role="tabpanel" aria-labelledby="tabSeats">
         <div class="card tight">
           <div class="row">
             <div class="cardTitle">座位</div>
@@ -65,12 +70,12 @@
         <div id="seatsGrid" class="seatsGrid"></div>
       </section>
 
-      <!-- GOD -->
-      <section id="panelGod" class="panel alwaysOn">
+      <!-- GOD PANEL -->
+      <section id="panelGod" class="panel" role="tabpanel" aria-labelledby="tabGod">
         <div class="card">
           <div class="row">
             <div class="cardTitle">上帝資訊</div>
-            <label class="toggle">
+            <label class="toggle" title="展開/收合上帝資訊">
               <input id="toggleGodView" type="checkbox" />
               <span>👁 展開</span>
             </label>
@@ -110,6 +115,40 @@
     </div>
   </div>
 
+  <!-- Timer drawer (⌛️) -->
+  <div id="timerDrawerBackdrop" class="backdrop hidden"></div>
+  <div id="timerDrawer" class="drawer hidden" role="dialog" aria-modal="true" aria-hidden="true">
+    <div class="drawerTop">
+      <div class="drawerTitle">⌛️ 倒數計時</div>
+      <button type="button" id="btnCloseTimerDrawer" class="iconBtn" aria-label="關閉">✕</button>
+    </div>
+    <div class="drawerBody">
+      <div class="card" style="margin:0 0 12px;">
+        <div class="row" style="align-items:flex-end;">
+          <div>
+            <div class="hint">目前倒數</div>
+            <div id="timerBig" class="timerBig">01:30</div>
+          </div>
+          <div class="hint" style="margin-left:auto;">（重整不中斷由 app.js 控制）</div>
+        </div>
+      </div>
+
+      <div class="hint" style="margin:8px 0 6px;">快速設定</div>
+      <div id="timerPresets" class="toolRow" style="gap:8px; flex-wrap:wrap;">
+        <button type="button" class="chip" data-sec="30">30秒</button>
+        <button type="button" class="chip" data-sec="60">1分鐘</button>
+        <button type="button" class="chip" data-sec="90">1分半</button>
+      </div>
+
+      <div class="hint" style="margin:10px 0 6px;">控制</div>
+      <div class="toolRow" style="gap:8px; flex-wrap:wrap;">
+        <button type="button" class="chip primary" id="btnTimerStart">開始</button>
+        <button type="button" class="chip" id="btnTimerPause">暫停</button>
+        <button type="button" class="chip" id="btnTimerReset">重置</button>
+      </div>
+    </div>
+  </div>
+
   <!-- Vote announce drawer -->
   <div id="voteDrawerBackdrop" class="backdrop hidden"></div>
   <div id="voteDrawer" class="drawer hidden" role="dialog" aria-modal="true" aria-hidden="true">
@@ -119,42 +158,6 @@
     </div>
     <div class="drawerBody">
       <pre id="voteAnnounceText" class="cardText" style="white-space:pre-wrap; margin:0;"></pre>
-    </div>
-  </div>
-
-  <!-- ✅ Timer drawer (NEW) -->
-  <div id="timerDrawerBackdrop" class="backdrop hidden"></div>
-  <div id="timerDrawer" class="drawer hidden" role="dialog" aria-modal="true" aria-hidden="true">
-    <div class="drawerTop">
-      <div class="drawerTitle">⌛️ 計時器</div>
-      <button type="button" id="btnCloseTimerDrawer" class="iconBtn" aria-label="關閉">✕</button>
-    </div>
-
-    <div class="drawerBody">
-      <div class="timerCard">
-        <div class="timerBigWrap">
-          <div class="hint">倒數</div>
-          <div id="timerBig" class="timerBig">01:30</div>
-        </div>
-
-        <div class="timerBtns" id="timerPresets">
-          <button type="button" class="chip" data-sec="30">30秒</button>
-          <button type="button" class="chip" data-sec="60">1分鐘</button>
-          <button type="button" class="chip" data-sec="90">1分半</button>
-          <button type="button" class="chip" data-sec="120">2分鐘</button>
-          <button type="button" class="chip" data-sec="180">3分鐘</button>
-
-          <div class="timerCtrlRow">
-            <button type="button" class="chip primary" id="btnTimerStart">開始</button>
-            <button type="button" class="chip" id="btnTimerPause">暫停</button>
-            <button type="button" class="chip" id="btnTimerReset">重置</button>
-          </div>
-        </div>
-      </div>
-
-      <div class="hint" style="margin-top:10px;">
-        小提醒：計時不擋說明／座位操作，隨時可用 ⌛️ 打開。
-      </div>
     </div>
   </div>
 
