@@ -12,6 +12,7 @@
 *{
   box-sizing:border-box;
   -webkit-tap-highlight-color: transparent;
+  touch-action: manipulation; /* 壓掉雙擊縮放（iOS 仍可能殘留，但會大幅改善） */
 }
 
 html,body{
@@ -19,7 +20,14 @@ html,body{
   background:var(--bg);
   font-family:-apple-system,BlinkMacSystemFont,"Noto Sans TC",sans-serif;
   color:var(--ink);
-  /* 防止 iOS 長按選字/選單 */
+
+  /* 禁止選取/長按選單 */
+  -webkit-user-select:none;
+  user-select:none;
+  -webkit-touch-callout:none;
+}
+
+button, .seat, .chip, .boardItem{
   -webkit-user-select:none;
   user-select:none;
   -webkit-touch-callout:none;
@@ -45,8 +53,14 @@ html,body{
   border-bottom:2px solid #e9c67a;
 }
 
-.uiPhase{ font-weight:800; letter-spacing:0.5px; }
-.uiBoard{ font-weight:700; color:var(--muted); margin-top:2px; }
+.uiPhase{ font-weight:900; letter-spacing:0.5px; }
+.uiBoard{ font-weight:800; color:var(--muted); margin-top:2px; }
+
+.topRight{
+  display:flex;
+  gap:8px;
+  align-items:center;
+}
 
 .iconBtn{
   border:none;
@@ -67,6 +81,11 @@ html,body{
 }
 
 .card.tight{ padding:10px 12px; }
+
+.subCard{
+  margin:10px 0 0;
+  box-shadow:none;
+}
 
 .cardTitle{
   margin:0 0 6px;
@@ -105,7 +124,7 @@ html,body{
   background:#fff;
   border-radius:999px;
   padding:8px 12px;
-  font-weight:800;
+  font-weight:900;
 }
 
 .chip.active{
@@ -138,14 +157,76 @@ html,body{
   color:var(--muted);
 }
 
+.boardItem .tags{
+  display:flex;
+  gap:8px;
+  flex-wrap:wrap;
+  margin-top:8px;
+}
+
+.tag{
+  border:2px solid var(--stroke);
+  border-radius:999px;
+  padding:4px 10px;
+  font-size:12px;
+  font-weight:900;
+  background:#fff6dc;
+}
+
 .boardItem.active{
   background:var(--gold2);
   border-color:#f0a500;
 }
 
-.seatsHeader{
-  margin-bottom:0;
+.formGrid{
+  display:grid;
+  grid-template-columns:1fr 1fr;
+  gap:10px;
+  margin-top:10px;
 }
+
+.formRow{
+  display:flex;
+  align-items:center;
+  justify-content:space-between;
+  gap:10px;
+  background:#fff;
+  border:2px solid var(--stroke);
+  border-radius:14px;
+  padding:10px 12px;
+  font-weight:900;
+}
+
+.formRow input, .formRow select{
+  width:110px;
+  font-size:16px;
+  padding:6px 8px;
+  border-radius:10px;
+  border:2px solid #efd6b3;
+  outline:none;
+}
+
+.colSpan{ grid-column:1 / -1; }
+
+.checkGrid{
+  display:grid;
+  grid-template-columns:repeat(2,1fr);
+  gap:8px;
+}
+
+.checkItem{
+  display:flex;
+  align-items:center;
+  justify-content:space-between;
+  gap:10px;
+  background:#fff;
+  border:2px solid var(--stroke);
+  border-radius:14px;
+  padding:8px 10px;
+  font-weight:900;
+}
+
+.seatsHeader{ margin-bottom:0; }
 
 .seats{
   display:grid;
@@ -176,7 +257,8 @@ html,body{
   font-size:12px;
   margin-top:4px;
   color:var(--muted);
-  min-height:16px;
+  min-height:18px;
+  white-space:pre-line;
 }
 
 .actionBar{
@@ -212,10 +294,9 @@ button.ghost{
   color:var(--ink);
 }
 
-button:disabled{
-  opacity:0.45;
-}
+button:disabled{ opacity:0.45; }
 
+/* Modal */
 .modal{
   position:fixed;
   inset:0;
@@ -256,3 +337,124 @@ button:disabled{
   margin-top:12px;
 }
 .modalActions button{ flex:1; }
+
+/* Drawer */
+.backdrop{
+  position:fixed;
+  inset:0;
+  background:rgba(0,0,0,0.35);
+  z-index:88;
+}
+
+.drawer{
+  position:fixed;
+  left:50%;
+  transform:translateX(-50%);
+  bottom:0;
+  width:min(480px,100vw);
+  max-height:78vh;
+  background:var(--card);
+  border-top-left-radius:18px;
+  border-top-right-radius:18px;
+  border:2px solid var(--stroke);
+  box-shadow:0 -10px 24px rgba(0,0,0,0.18);
+  z-index:89;
+  overflow:hidden;
+}
+
+.drawerTop{
+  display:flex;
+  justify-content:space-between;
+  align-items:center;
+  padding:10px 12px;
+  background:#fff1c9;
+  border-bottom:2px solid #efd6b3;
+}
+
+.drawerTitle{
+  font-weight:900;
+  font-size:16px;
+}
+
+.drawerBody{
+  padding:12px;
+  overflow:auto;
+}
+
+.timerBig{
+  font-size:40px;
+  font-weight:900;
+  text-align:center;
+  padding:10px 0 8px;
+}
+
+.drawerActions{
+  display:flex;
+  gap:10px;
+  margin-top:10px;
+}
+
+.toggle{
+  display:flex;
+  align-items:center;
+  gap:10px;
+  font-weight:900;
+}
+
+.toggle input{
+  width:18px;
+  height:18px;
+}
+
+/* Announce list */
+.announceList{
+  display:flex;
+  flex-direction:column;
+  gap:10px;
+}
+
+.announceItem{
+  background:#fff;
+  border:2px solid var(--stroke);
+  border-radius:14px;
+  padding:10px 12px;
+}
+
+.announceItem .t{
+  font-weight:900;
+  margin-bottom:6px;
+}
+
+.announceItem .b{
+  font-size:13px;
+  color:var(--ink);
+  line-height:1.45;
+  white-space:pre-line;
+}
+
+/* Admin */
+.adminBox{
+  background:#fff;
+  border:2px solid var(--stroke);
+  border-radius:14px;
+  padding:12px;
+}
+
+.markRow{
+  display:flex;
+  flex-wrap:wrap;
+  gap:8px;
+}
+
+.markBtn{
+  border:2px solid var(--stroke);
+  border-radius:999px;
+  padding:6px 10px;
+  font-weight:900;
+  background:#fff6dc;
+}
+
+.markBtn.active{
+  background:var(--gold2);
+  border-color:#f0a500;
+}
