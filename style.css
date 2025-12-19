@@ -406,3 +406,52 @@ body{
   .timerBig{ font-size:34px; }
   .scrollBox{ max-height: 140px; }
 }
+/* =========================
+   Seat 基本
+   ========================= */
+.seat {
+  background: #fff7e6;
+  border: 2px solid #f5d3a6;
+  border-radius: 14px;
+  padding: 10px 8px;
+  transition: 
+    background-color .15s ease,
+    transform .12s ease,
+    box-shadow .12s ease,
+    border-color .12s ease;
+  user-select: none;
+}
+
+/* =========================
+   可點擊時的 hover（桌機）
+   ========================= */
+.seat:not(.dead):hover {
+  background: #fff1cf;
+}
+
+/* =========================
+   ✅ 已選取座位（重點）
+   ========================= */
+.seat.selected {
+  background: #ffe0a8;                 /* 明顯但不刺眼 */
+  border-color: #f4a63a;
+  transform: scale(1.05);
+  box-shadow: 0 6px 14px rgba(244,166,58,0.45);
+  z-index: 2;
+}
+
+/* =========================
+   死亡座位
+   ========================= */
+.seat.dead {
+  opacity: 0.45;
+  filter: grayscale(0.6);
+}
+
+/* 死亡不可被誤選 */
+.seat.dead.selected {
+  background: #eee;
+  border-color: #ccc;
+  transform: none;
+  box-shadow: none;
+}
