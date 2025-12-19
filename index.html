@@ -15,43 +15,65 @@
     <!-- Top Bar -->
     <header class="topBar">
       <div class="topLeft">
-        <div id="uiPhase">DEAL</div>
-        <div id="uiBoard">official-12</div>
+        <div id="uiPhase" class="uiPhase">SETUP</div>
+        <div id="uiBoard" class="uiBoard">—</div>
       </div>
       <div class="topRight">
-        <button id="btnGodEye" class="iconBtn">👁️</button>
+        <button id="btnGodEye" class="iconBtn" aria-label="上帝視角">👁️</button>
       </div>
     </header>
 
-    <!-- Prompt -->
-    <section class="card">
-      <h2 id="promptTitle">抽身分</h2>
-      <p id="promptText">
-        請將手機交給玩家，長按座位 0.3 秒查看身分。
-        全部看完後再按「下一步」。
-      </p>
+    <!-- SETUP CARD -->
+    <section id="setupCard" class="card">
+      <h2 class="cardTitle">設定：人數與板子</h2>
+
+      <div class="hint">① 先選人數</div>
+      <div class="chipRow" id="countChips"></div>
+
+      <div class="hint" style="margin-top:10px;">② 再選板子</div>
+      <div id="boardList" class="boardList"></div>
+
+      <div class="hint" style="margin-top:10px;">
+        選好後按下方「開始抽身分」進入抽身分流程。
+      </div>
     </section>
 
-    <!-- Seats -->
-    <section class="seats" id="seatsGrid"></section>
+    <!-- PROMPT CARD -->
+    <section id="promptCard" class="card hidden">
+      <h2 id="promptTitle" class="cardTitle">—</h2>
+      <p id="promptText" class="cardText">—</p>
+    </section>
 
-    <!-- Bottom Bar -->
+    <!-- SEATS -->
+    <section id="seatsWrap" class="hidden">
+      <div class="seatsHeader card tight">
+        <div class="row">
+          <div class="cardTitle">座位</div>
+          <div class="hint">點一下選取（再點一次取消）｜長按 0.3 秒看身分</div>
+        </div>
+      </div>
+      <section class="seats" id="seatsGrid"></section>
+    </section>
+
+    <!-- Bottom Bar: 3 buttons -->
     <footer class="actionBar">
       <button id="btnBack" class="ghost">上一步</button>
-      <button id="btnToggle" class="primary">進入遊戲</button>
+      <button id="btnToggle" class="primary">開始抽身分</button>
       <button id="btnNext" class="ghost">下一步</button>
     </footer>
+
   </div>
 
   <!-- Role Modal -->
-  <div id="roleModal" class="modal hidden">
+  <div id="roleModal" class="modal hidden" aria-hidden="true">
     <div class="modalCard">
-      <h3 id="roleTitle"></h3>
-      <p id="roleBody"></p>
+      <h3 id="roleTitle" class="modalTitle">—</h3>
+      <div id="roleBody" class="modalBody">—</div>
       <div class="modalActions">
         <button id="btnRoleDone" class="primary">我看完了</button>
         <button id="btnRoleClose" class="ghost">關閉</button>
       </div>
+      <div class="hint" style="margin-top:10px;">看完請把手機交回上帝</div>
     </div>
   </div>
 
