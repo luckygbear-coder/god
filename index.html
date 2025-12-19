@@ -23,59 +23,76 @@
       </div>
     </div>
 
-    <!-- Main scroll content -->
-    <div class="content">
-      <div class="card">
-        <div class="cardTitle" id="promptTitle">—</div>
-        <pre class="cardText" id="promptText">—</pre>
-
-        <!-- 這裡放小工具列（投票公告按鈕會出現在需要的步驟） -->
-        <div class="toolRow" id="toolRow">
-          <button id="btnVoteDrawer" class="btn ghost small hidden">投票公告</button>
-        </div>
-
-        <div class="cardFoot" id="promptFoot"></div>
-      </div>
-
-      <div class="card">
-        <div class="row">
-          <div class="cardTitle">上帝資訊</div>
-          <label class="toggle">
-            <input id="toggleGodView" type="checkbox" />
-            <span>👁 展開</span>
-          </label>
-        </div>
-        <pre class="cardText" id="godText"></pre>
-      </div>
-
-      <!-- 板子選擇區（SETUP 才會顯示） -->
-      <div class="card" id="boardPickerCard">
-        <div class="cardTitle">可選板子</div>
-        <div class="hint" id="boardPickerHint"></div>
-        <div id="boardPicker" class="boardPicker"></div>
-      </div>
-
-      <!-- seats -->
-      <div id="seatsGrid" class="seatsGrid"></div>
-
-      <div class="spacerBottom"></div>
+    <!-- Tabs (no page scroll) -->
+    <div class="tabs">
+      <button id="tabFlow" class="tab active">流程</button>
+      <button id="tabSeats" class="tab">座位</button>
+      <button id="tabGod" class="tab">上帝</button>
     </div>
 
-    <!-- Bottom fixed: Timer strip + action bar -->
+    <!-- Panels (no full-page scrolling) -->
+    <div class="panels">
+      <!-- FLOW PANEL -->
+      <section id="panelFlow" class="panel active">
+        <div class="card">
+          <div class="cardTitle" id="promptTitle">—</div>
+
+          <!-- ✅ prompt text: allow internal scroll if needed, but page itself won't scroll -->
+          <pre class="cardText scrollBox" id="promptText">—</pre>
+
+          <div class="toolRow" id="toolRow">
+            <button id="btnVoteDrawer" class="btn ghost small hidden">投票公告</button>
+          </div>
+
+          <div class="cardFoot" id="promptFoot"></div>
+        </div>
+
+        <!-- board picker only shown in setup -->
+        <div class="card" id="boardPickerCard">
+          <div class="cardTitle">可選板子</div>
+          <div class="hint" id="boardPickerHint"></div>
+          <div id="boardPicker" class="boardPicker"></div>
+        </div>
+      </section>
+
+      <!-- SEATS PANEL -->
+      <section id="panelSeats" class="panel">
+        <div class="card tight">
+          <div class="row">
+            <div class="cardTitle">座位</div>
+            <div class="hint">點座位操作（依流程）</div>
+          </div>
+        </div>
+        <div id="seatsGrid" class="seatsGrid"></div>
+      </section>
+
+      <!-- GOD PANEL -->
+      <section id="panelGod" class="panel">
+        <div class="card">
+          <div class="row">
+            <div class="cardTitle">上帝資訊</div>
+            <label class="toggle">
+              <input id="toggleGodView" type="checkbox" />
+              <span>👁 展開</span>
+            </label>
+          </div>
+          <pre class="cardText scrollBox" id="godText"></pre>
+        </div>
+      </section>
+    </div>
+
+    <!-- Bottom fixed: slim timer strip + action bar -->
     <div class="bottomDock">
-      <!-- ✅ Timer strip (thin) -->
+      <!-- ✅ Timer strip slimmer -->
       <div class="timerStrip card">
         <div class="timerStripLeft">
           <div class="timerStripTitle">⏱ 倒數</div>
-          <div id="timerBig" class="timerStripTime">02:00</div>
-          <div id="timerHint" class="timerStripHint">點選時間或按「開始」。</div>
+          <div id="timerBig" class="timerStripTime">01:30</div>
         </div>
 
         <div class="timerStripRight" id="timerPresets">
-          <button class="chip" data-sec="60">1分</button>
-          <button class="chip" data-sec="120">2分</button>
-          <button class="chip" data-sec="180">3分</button>
-          <button class="chip" data-sec="300">5分</button>
+          <button class="chip" data-sec="30">30秒</button>
+          <button class="chip" data-sec="60">1分鐘</button>
 
           <button class="chip primary" id="btnTimerStart">開始</button>
           <button class="chip" id="btnTimerPause">暫停</button>
@@ -112,7 +129,7 @@
     </div>
   </div>
 
-  <!-- Vote announce drawer (NEW) -->
+  <!-- Vote announce drawer -->
   <div id="voteDrawerBackdrop" class="backdrop hidden"></div>
   <div id="voteDrawer" class="drawer hidden" aria-hidden="true">
     <div class="drawerTop">
@@ -140,7 +157,7 @@
     </div>
   </div>
 
-  <!-- Dice popup (NEW) -->
+  <!-- Dice modal -->
   <div id="diceModal" class="modal hidden" aria-hidden="true">
     <div class="modalCard">
       <div class="modalTitle">🎲 今日發言順序</div>
