@@ -6,7 +6,19 @@
 
 const STORAGE_KEY = "werewolf_state_v33";
 const LONGPRESS_MS = 300;
+// ✅ 狼人陣營判斷（不綁特定座位、不綁特定狼人）
+function getPlayerCamp(p){
+  // 你專案可能用 camp/team/從 ROLES 查
+  if (p?.camp) return p.camp;
+  if (p?.team) return p.team;
+  if (window.ROLES && p?.roleId && ROLES[p.roleId]?.camp) return ROLES[p.roleId].camp;
+  if (window.ROLES && p?.role && ROLES[p.role]?.camp) return ROLES[p.role].camp;
+  return "unknown";
+}
 
+function getAliveWolves(state){
+  return (state.players || []).filter(p => p.alive && getPlayerCamp(p) === "wolf");
+}
 /* ====== iOS anti-gesture ====== */
 document.addEventListener("gesturestart", (e) => e.preventDefault());
 document.addEventListener("dblclick", (e) => e.preventDefault(), { passive: false });
