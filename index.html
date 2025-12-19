@@ -2,7 +2,7 @@
 <html lang="zh-Hant">
 <head>
   <meta charset="utf-8" />
-  <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover" />
+  <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover,maximum-scale=1,user-scalable=no" />
   <meta name="theme-color" content="#f4a63a" />
   <link rel="manifest" href="./manifest.webmanifest" />
   <link rel="stylesheet" href="./style.css" />
@@ -18,16 +18,16 @@
       </div>
 
       <div class="topRight">
-        <button id="btnDice" class="iconBtn" aria-label="發言骰子">🎲</button>
-        <button id="btnSettings" class="iconBtn" aria-label="設定">⚙️</button>
+        <button type="button" id="btnDice" class="iconBtn" aria-label="發言骰子">🎲</button>
+        <button type="button" id="btnSettings" class="iconBtn" aria-label="設定">⚙️</button>
       </div>
     </div>
 
     <!-- Tabs (no page scroll) -->
     <div class="tabs">
-      <button id="tabFlow" class="tab active">流程</button>
-      <button id="tabSeats" class="tab">座位</button>
-      <button id="tabGod" class="tab">上帝</button>
+      <button type="button" id="tabFlow" class="tab active">流程</button>
+      <button type="button" id="tabSeats" class="tab">座位</button>
+      <button type="button" id="tabGod" class="tab">上帝</button>
     </div>
 
     <!-- Panels (no full-page scrolling) -->
@@ -41,7 +41,7 @@
           <pre class="cardText scrollBox" id="promptText">—</pre>
 
           <div class="toolRow" id="toolRow">
-            <button id="btnVoteDrawer" class="btn ghost small hidden">投票公告</button>
+            <button type="button" id="btnVoteDrawer" class="btn ghost small hidden">投票公告</button>
           </div>
 
           <div class="cardFoot" id="promptFoot"></div>
@@ -91,50 +91,50 @@
         </div>
 
         <div class="timerStripRight" id="timerPresets">
-          <button class="chip" data-sec="30">30秒</button>
-          <button class="chip" data-sec="60">1分鐘</button>
+          <button type="button" class="chip" data-sec="30">30秒</button>
+          <button type="button" class="chip" data-sec="60">1分鐘</button>
 
-          <button class="chip primary" id="btnTimerStart">開始</button>
-          <button class="chip" id="btnTimerPause">暫停</button>
-          <button class="chip" id="btnTimerReset">重置</button>
+          <button type="button" class="chip primary" id="btnTimerStart">開始</button>
+          <button type="button" class="chip" id="btnTimerPause">暫停</button>
+          <button type="button" class="chip" id="btnTimerReset">重置</button>
         </div>
       </div>
 
       <!-- action bar -->
       <div class="actionBar">
-        <button id="btnBack" class="btn ghost">上一步</button>
-        <button id="btnPrimary" class="btn">下一步</button>
-        <button id="btnCancel" class="btn ghost">取消</button>
+        <button type="button" id="btnBack" class="btn ghost">上一步</button>
+        <button type="button" id="btnPrimary" class="btn">下一步</button>
+        <button type="button" id="btnCancel" class="btn ghost">取消</button>
       </div>
     </div>
   </div>
 
   <!-- Settings drawer -->
   <div id="drawerBackdrop" class="backdrop hidden"></div>
-  <div id="drawer" class="drawer hidden" aria-hidden="true">
+  <div id="drawer" class="drawer hidden" role="dialog" aria-modal="true" aria-hidden="true">
     <div class="drawerTop">
       <div class="drawerTitle">設定</div>
-      <button id="btnCloseDrawer" class="iconBtn">✕</button>
+      <button type="button" id="btnCloseDrawer" class="iconBtn" aria-label="關閉">✕</button>
     </div>
     <div class="drawerBody">
       <div class="seg">
-        <button id="segEdge" class="segBtn">屠邊</button>
-        <button id="segCity" class="segBtn">屠城</button>
+        <button type="button" id="segEdge" class="segBtn">屠邊</button>
+        <button type="button" id="segCity" class="segBtn">屠城</button>
       </div>
       <label class="row">
         <span>上警</span>
         <input id="togglePolice" type="checkbox" />
       </label>
-      <button id="btnReset" class="btn ghost" style="width:100%;">重置本局</button>
+      <button type="button" id="btnReset" class="btn ghost" style="width:100%;">重置本局</button>
     </div>
   </div>
 
   <!-- Vote announce drawer -->
   <div id="voteDrawerBackdrop" class="backdrop hidden"></div>
-  <div id="voteDrawer" class="drawer hidden" aria-hidden="true">
+  <div id="voteDrawer" class="drawer hidden" role="dialog" aria-modal="true" aria-hidden="true">
     <div class="drawerTop">
       <div class="drawerTitle">投票公告</div>
-      <button id="btnCloseVoteDrawer" class="iconBtn">✕</button>
+      <button type="button" id="btnCloseVoteDrawer" class="iconBtn" aria-label="關閉">✕</button>
     </div>
     <div class="drawerBody">
       <pre id="voteAnnounceText" class="cardText" style="white-space:pre-wrap; margin:0;"></pre>
@@ -142,7 +142,7 @@
   </div>
 
   <!-- Role modal -->
-  <div id="roleModal" class="modal hidden" aria-hidden="true">
+  <div id="roleModal" class="modal hidden" role="dialog" aria-modal="true" aria-hidden="true">
     <div class="modalCard">
       <div class="modalTitle" id="roleModalTitle">—</div>
       <div class="modalBody">
@@ -151,14 +151,14 @@
         <div class="hint" style="margin-top:10px;">看完請把手機交回上帝 🐺</div>
       </div>
       <div class="modalActions">
-        <button id="btnRoleDone" class="btn">我看完了</button>
-        <button id="btnRoleClose" class="btn ghost">關閉</button>
+        <button type="button" id="btnRoleDone" class="btn">我看完了</button>
+        <button type="button" id="btnRoleClose" class="btn ghost">關閉</button>
       </div>
     </div>
   </div>
 
   <!-- Dice modal -->
-  <div id="diceModal" class="modal hidden" aria-hidden="true">
+  <div id="diceModal" class="modal hidden" role="dialog" aria-modal="true" aria-hidden="true">
     <div class="modalCard">
       <div class="modalTitle">🎲 今日發言順序</div>
       <div class="modalBody">
@@ -166,8 +166,8 @@
         <div class="hint" style="margin-top:10px;">（只會從「存活座位」隨機抽）</div>
       </div>
       <div class="modalActions">
-        <button id="btnDiceAgain" class="btn">再擲一次</button>
-        <button id="btnDiceClose" class="btn ghost">關閉</button>
+        <button type="button" id="btnDiceAgain" class="btn">再擲一次</button>
+        <button type="button" id="btnDiceClose" class="btn ghost">關閉</button>
       </div>
     </div>
   </div>
