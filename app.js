@@ -1,579 +1,658 @@
 /* =========================
-   狀態 & 存檔
+   狼人殺上帝輔助（MVP）
+   ✅ SETUP 不顯示座位
+   ✅ 板子點選變色
+   ✅ 進入 DEAL 才顯示座位
+   ✅ 長按 0.3s 翻牌
+   ✅ 👁️ 上帝視角：座位顯示陣營/角色/標記 + 抽屜
+   ✅ 底部按鈕固定
+   ✅ 禁止 iOS 長按選取/放大（搭配 CSS + 事件）
 ========================= */
-const LS_KEY = "wwg_state_v1";
 
-const defaultState = () => ({
-  phase: "SETUP", // SETUP | DEAL | NIGHT | DAY | END
-  step: "SETUP_BOARD",
-  n: 12,
+const $ = (s) => document.querySelector(s);
+const $$ = (s) => Array.from(document.querySelectorAll(s));
+
+/* ========== iOS 防選字/長按選單/雙擊放大 ========== */
+document.addEventListener("contextmenu", (e) => e.preventDefault(), { passive:false });
+
+let lastTouchEnd = 0;
+document.addEventListener("touchend", (e) => {
+  const now = Date.now();
+  if (now - lastTouchEnd <= 300) e.preventDefault();
+  lastTouchEnd = now;
+}, { passive:false });
+
+/* ========== DOM ========== */
+const uiStatus = $("#uiStatus");
+const uiBoard  = $("#uiBoard");
+
+const promptTitle = $("#promptTitle");
+const promptText  = $("#promptText");
+const promptFoot  = $("#promptFoot");
+
+const setupArea = $("#setupArea");
+const seatsArea = $("#seatsArea");
+const seatsGrid = $("#seatsGrid");
+const seatHint  = $("#seatHint");
+
+const boardPicker = $("#boardPicker");
+const peopleChips = $("#peopleChips");
+
+const btnBack = $("#btnBack");
+const btnPrimary = $("#btnPrimary");
+const btnCancel = $("#btnCancel");
+
+const backdrop = $("#backdrop");
+
+/* drawers */
+const btnHourglass = $("#btnHourglass");
+const drawerTimer = $("#drawerTimer");
+const btnCloseTimer = $("#btnCloseTimer");
+const timerBig = $("#timerBig");
+const btnTimerStart = $("#btnTimerStart");
+const btnTimerPause = $("#btnTimerPause");
+const btnTimerReset = $("#btnTimerReset");
+
+const btnGodEye = $("#btnGodEye");
+const drawerGod = $("#drawerGod");
+const btnCloseGod = $("#btnCloseGod");
+const toggleGodEye = $("#toggleGodEye");
+const godText = $("#godText");
+const godSummary = $("#godSummary");
+
+const btnSettings = $("#btnSettings");
+const drawerSettings = $("#drawerSettings");
+const btnCloseSettings = $("#btnCloseSettings");
+const btnGoSetup = $("#btnGoSetup");
+const btnEndGame = $("#btnEndGame");
+
+/* role modal */
+const roleModal = $("#roleModal");
+const roleModalTitle = $("#roleModalTitle");
+const roleModalRole = $("#roleModalRole");
+const roleModalCamp = $("#roleModalCamp");
+const btnRoleDone = $("#btnRoleDone");
+const btnRoleClose = $("#btnRoleClose");
+
+/* ========== Boards (可自行擴充) ========== */
+const BOARDS = {
+  "official-12": {
+    id:"official-12",
+    title:"12 人官方標準局",
+    subtitle:"4狼 + 預言家/女巫/守衛/獵人 + 4民",
+    tags:["官方","穩","含白癡"],
+    people:12,
+    roles:["狼","狼","狼","狼","預言家","女巫","守衛","獵人","白癡","民","民","民"]
+  },
+  "12-city": {
+    id:"12-city",
+    title:"12 人（標準角色・屠城）",
+    subtitle:"同標準角色，但勝負改屠城",
+    tags:["測試","屠城"],
+    people:12,
+    roles:["狼","狼","狼","狼","預言家","女巫","守衛","獵人","白癡","民","民","民"],
+    winMode:"city"
+  },
+  "12-edge-nopolice": {
+    id:"12-edge-nopolice",
+    title:"12 人（屠邊・無上警）",
+    subtitle:"同標準角色，但關閉上警",
+    tags:["測試","無上警"],
+    people:12,
+    roles:["狼","狼","狼","狼","預言家","女巫","守衛","獵人","白癡","民","民","民"],
+    hasPolice:false
+  }
+};
+
+/* ========== State ========== */
+const STORAGE_KEY = "werewolf_god_mvp_v1";
+
+const State = {
+  phase: "SETUP",      // SETUP | DEAL | PLAY
+  people: 12,
   boardId: "official-12",
-  boards: [],
-
-  // seat data
-  seats: [], // {no, alive, role, camp, marks:{death,by,rescued}, selected}
   godEye: false,
+  selectedSeat: null,
+  seats: [],           // {no, alive, role, camp, revealed, marks: {death,rescue,healUse,poisonUse}}
+  timer: {sec:90, running:false, endAt:null, left:90, tick:null}
+};
 
-  // settings
-  winMode: "edge",
-  hasPolice: true,
+function save(){ localStorage.setItem(STORAGE_KEY, JSON.stringify(State)); }
+function load(){
+  try{
+    const raw = localStorage.getItem(STORAGE_KEY);
+    if(!raw) return;
+    const obj = JSON.parse(raw);
+    Object.assign(State, obj);
+  }catch(e){}
+}
 
-  // timer
-  timer: { sec: 90, running: false, endAt: 0 },
-
-  // vote announce (string)
-  voteAnnounce: ""
-});
-
-function loadState() {
-  try {
-    const raw = localStorage.getItem(LS_KEY);
-    if (!raw) return defaultState();
-    const s = JSON.parse(raw);
-    return Object.assign(defaultState(), s);
-  } catch {
-    return defaultState();
+/* ========== Utils ========== */
+function campOf(role){
+  if(["狼","白狼王","黑狼王"].includes(role)) return "狼";
+  if(["民"].includes(role)) return "民";
+  return "神";
+}
+function shuffle(arr){
+  const a = arr.slice();
+  for(let i=a.length-1;i>0;i--){
+    const j = Math.floor(Math.random()*(i+1));
+    [a[i],a[j]]=[a[j],a[i]];
   }
+  return a;
 }
-function saveState() {
-  localStorage.setItem(LS_KEY, JSON.stringify(state));
+function fmtTime(sec){
+  sec = Math.max(0, Math.floor(sec));
+  const m = String(Math.floor(sec/60)).padStart(2,"0");
+  const s = String(sec%60).padStart(2,"0");
+  return `${m}:${s}`;
 }
-function hardResetToSetup() {
-  state = defaultState();
-  saveState();
-  renderAll();
-}
-function endGameClearAll() {
-  localStorage.removeItem(LS_KEY);
-  location.reload();
+function vibrate(ms){
+  try{ if(navigator.vibrate) navigator.vibrate(ms); }catch(e){}
 }
 
-let state = loadState();
-
-/* =========================
-   板子資料（內建 fallback）
-   你可以之後換成 fetch JSON
-========================= */
-const BOARD_FALLBACK = [
-  {
-    id: "official-12",
-    title: "12人官方標準局",
-    desc: "4狼 + 預言家/女巫/守衛/獵人 + 4民",
-    tags: ["官方", "穩", "含白癡"],
-    n: 12,
-    roles: {
-      wolves: 4,
-      gods: ["seer", "witch", "guard", "hunter"],
-      villagers: 4,
-      extras: ["idiot"] // 先給欄位：之後你要「可切換白癡/首位」就放這裡做 UI
-    }
-  },
-  {
-    id: "12-city",
-    title: "12人（標準角色・屠城）",
-    desc: "同標準角色，勝負改屠城",
-    tags: ["測試", "屠城"],
-    n: 12,
-    roles: {
-      wolves: 4,
-      gods: ["seer", "witch", "guard", "hunter"],
-      villagers: 4
-    },
-    preset: { winMode: "city" }
-  },
-  {
-    id: "12-edge-nopolice",
-    title: "12人（屠邊・無上警）",
-    desc: "同標準角色，但關閉上警",
-    tags: ["測試", "無上警"],
-    n: 12,
-    roles: {
-      wolves: 4,
-      gods: ["seer", "witch", "guard", "hunter"],
-      villagers: 4
-    },
-    preset: { winMode: "edge", hasPolice: false }
-  }
-];
-
-function ensureBoards() {
-  if (!Array.isArray(state.boards) || state.boards.length === 0) {
-    state.boards = BOARD_FALLBACK;
-  }
-}
-
-/* =========================
-   DOM
-========================= */
-const $ = (id) => document.getElementById(id);
-
-const uiStatus = $("uiStatus");
-const uiBoard = $("uiBoard");
-
-const setupArea = $("setupArea");
-const boardPicker = $("boardPicker");
-
-const promptTitle = $("promptTitle");
-const promptText = $("promptText");
-const promptFoot = $("promptFoot");
-
-const seatsGrid = $("seatsGrid");
-
-const btnBack = $("btnBack");
-const btnPrimary = $("btnPrimary");
-const btnCancel = $("btnCancel");
-
-const backdrop = $("backdrop");
-const drawerSettings = $("drawerSettings");
-const drawerGod = $("drawerGod");
-const drawerTimer = $("drawerTimer");
-const drawerVote = $("drawerVote");
-
-const btnSettings = $("btnSettings");
-const btnCloseSettings = $("btnCloseSettings");
-
-const btnGodEye = $("btnGodEye");
-const btnCloseGod = $("btnCloseGod");
-
-const btnHourglass = $("btnHourglass");
-const btnCloseTimer = $("btnCloseTimer");
-
-const btnVoteDrawer = $("btnVoteDrawer");
-const btnCloseVote = $("btnCloseVote");
-const voteAnnounceText = $("voteAnnounceText");
-
-const segEdge = $("segEdge");
-const segCity = $("segCity");
-const togglePolice = $("togglePolice");
-const btnGoSetup = $("btnGoSetup");
-const btnEndGame = $("btnEndGame");
-
-const godText = $("godText");
-
-const timerBig = $("timerBig");
-const btnTimerStart = $("btnTimerStart");
-const btnTimerPause = $("btnTimerPause");
-const btnTimerReset = $("btnTimerReset");
-
-/* =========================
-   Drawer helpers
-========================= */
-function openDrawer(drawerEl) {
-  backdrop.classList.remove("hidden");
-  drawerEl.classList.remove("hidden");
-  drawerEl.setAttribute("aria-hidden", "false");
-}
-function closeDrawer(drawerEl) {
-  drawerEl.classList.add("hidden");
-  drawerEl.setAttribute("aria-hidden", "true");
-  // 若沒有其他抽屜開著才關 backdrop
-  const anyOpen = [drawerSettings, drawerGod, drawerTimer, drawerVote].some(d => !d.classList.contains("hidden"));
-  if (!anyOpen) backdrop.classList.add("hidden");
-}
-function closeAllDrawers() {
-  [drawerSettings, drawerGod, drawerTimer, drawerVote].forEach(d => {
-    d.classList.add("hidden");
-    d.setAttribute("aria-hidden", "true");
+/* ========== Render Setup ========== */
+function renderSetup(){
+  boardPicker.innerHTML = "";
+  const list = Object.values(BOARDS).filter(b => b.people === State.people);
+  list.forEach(b=>{
+    const el = document.createElement("button");
+    el.type="button";
+    el.className = "boardCard" + (State.boardId===b.id ? " selected" : "");
+    el.innerHTML = `
+      <div class="boardTitle">${b.title}</div>
+      <div class="boardSub">${b.id} ・ ${b.subtitle}</div>
+      <div class="tagRow">${(b.tags||[]).map(t=>`<span class="tag">${t}</span>`).join("")}</div>
+    `;
+    el.addEventListener("click", ()=>{
+      State.boardId = b.id;
+      // ✅ 選中立刻變色
+      renderSetup();
+      updateTop();
+      save();
+    });
+    boardPicker.appendChild(el);
   });
+
+  // chips selected
+  $$("#peopleChips .chip").forEach(ch=>{
+    const n = Number(ch.dataset.n);
+    ch.classList.toggle("selected", n===State.people);
+  });
+}
+
+/* ========== Seats ========== */
+function buildSeats(){
+  const b = BOARDS[State.boardId];
+  const roles = shuffle(b.roles);
+
+  State.seats = [];
+  for(let i=1;i<=State.people;i++){
+    const role = roles[i-1];
+    State.seats.push({
+      no:i,
+      alive:true,
+      role,
+      camp: campOf(role),
+      revealed:false,
+      marks:{
+        death:null,      // wolf/poison/gun/black/white
+        rescue:false,
+        healUse:false,
+        poisonUse:false
+      }
+    });
+  }
+}
+
+function seatMetaText(seat){
+  const m = seat.marks;
+  const parts = [];
+  if(State.godEye){
+    parts.push(`${seat.camp}｜${seat.role}`);
+  }
+  if(m.death){
+    const map = {wolf:"狼刀", poison:"毒死", gun:"槍殺", black:"黑狼槍", white:"白狼爪"};
+    parts.push(`☠️${map[m.death]||m.death}`);
+  }
+  if(m.rescue) parts.push("💊被救");
+  if(m.healUse) parts.push("💊解藥");
+  if(m.poisonUse) parts.push("🧪毒藥");
+  return parts.join(" · ");
+}
+
+function renderSeats(){
+  seatsGrid.innerHTML = "";
+  for(const seat of State.seats){
+    const btn = document.createElement("button");
+    btn.type="button";
+    btn.className = "seat"
+      + (seat.no===State.selectedSeat ? " selected" : "")
+      + (!seat.alive ? " dead" : "");
+
+    btn.innerHTML = `
+      <div class="seatNum">${seat.no}號</div>
+      <div class="seatState">${seat.alive ? "存活" : "死亡"}</div>
+      <div class="seatMeta">${seatMetaText(seat)}</div>
+    `;
+
+    // tap select (顏色要變明顯)
+    btn.addEventListener("click", ()=>{
+      State.selectedSeat = seat.no;
+      renderSeats();
+      save();
+    });
+
+    // long press 0.3s (only in DEAL)
+    attachLongPress(btn, 300, ()=>{
+      if(State.phase !== "DEAL") return;
+      openRoleModal(seat.no);
+    });
+
+    seatsGrid.appendChild(btn);
+  }
+
+  renderGodText();
+}
+
+/* ========== Long press helper ========== */
+function attachLongPress(el, ms, onFire){
+  let t = null;
+  let moved = false;
+
+  const clear = ()=>{
+    if(t) clearTimeout(t);
+    t = null;
+    moved = false;
+  };
+
+  el.addEventListener("pointerdown", (e)=>{
+    moved = false;
+    t = setTimeout(()=>{ if(!moved) onFire(); }, ms);
+  });
+
+  el.addEventListener("pointermove", ()=>{ moved = true; clear(); });
+  el.addEventListener("pointerup", clear);
+  el.addEventListener("pointercancel", clear);
+  el.addEventListener("pointerleave", clear);
+}
+
+/* ========== Role modal ========== */
+function openRoleModal(no){
+  const seat = State.seats.find(s=>s.no===no);
+  if(!seat) return;
+
+  seat.revealed = true; // 已查看（可用於你的「全部看完才能下一步」邏輯）
+  roleModalTitle.textContent = `${no}號 身分`;
+  roleModalRole.textContent  = seat.role;
+  roleModalCamp.textContent  = `陣營：${seat.camp}`;
+  roleModal.classList.remove("hidden");
+  roleModal.setAttribute("aria-hidden","false");
+  save();
+}
+
+function closeRoleModal(){
+  roleModal.classList.add("hidden");
+  roleModal.setAttribute("aria-hidden","true");
+}
+
+/* ========== God drawer / godEye ========== */
+function renderGodText(){
+  const b = BOARDS[State.boardId];
+  const aliveWolf = State.seats.filter(s=>s.alive && s.camp==="狼").length;
+  const aliveGood = State.seats.filter(s=>s.alive && s.camp!=="狼").length;
+
+  const healUsed = State.seats.some(s=>s.marks.healUse);
+  const poisonUsed = State.seats.some(s=>s.marks.poisonUse);
+
+  const lines = [];
+  lines.push(`人數：${State.people}`);
+  lines.push(`板子：${b?.id || State.boardId}`);
+  lines.push(`階段：${State.phase}`);
+  lines.push(`存活：狼 ${aliveWolf} / 好 ${aliveGood}`);
+  lines.push(`女巫：解藥${healUsed?"已用":"可用"} / 毒藥${poisonUsed?"已用":"可用"}`);
+  lines.push("");
+  lines.push("座位摘要（👁️ 開啟時座位會直接顯示角色/標記）：");
+  for(const s of State.seats){
+    const meta = seatMetaText(s);
+    lines.push(`${s.no}：${s.alive?"存活":"死亡"}${meta?`｜${meta}`:""}`);
+  }
+
+  godText.textContent = lines.join("\n");
+  godSummary.textContent = lines.slice(0, 6).join("\n") + "\n（按 👁️ 查看全部）";
+}
+
+function setGodEye(on){
+  State.godEye = !!on;
+  toggleGodEye.checked = State.godEye;
+  renderSeats();
+  save();
+}
+
+/* mark buttons */
+function applyMark(mark){
+  const no = State.selectedSeat;
+  if(!no){
+    alert("先點一個座位再標記");
+    return;
+  }
+  const s = State.seats.find(x=>x.no===no);
+  if(!s) return;
+
+  if(mark==="clear"){
+    s.marks.death = null;
+    s.marks.rescue = false;
+    s.marks.healUse = false;
+    s.marks.poisonUse = false;
+  }else if(mark==="rescue"){
+    s.marks.rescue = true;
+  }else if(mark==="healUse"){
+    // 解藥只能放一個：先清掉其它人的 healUse
+    State.seats.forEach(x=>x.marks.healUse=false);
+    s.marks.healUse = true;
+  }else if(mark==="poisonUse"){
+    // 毒藥只能放一個：先清掉其它人的 poisonUse
+    State.seats.forEach(x=>x.marks.poisonUse=false);
+    s.marks.poisonUse = true;
+  }else{
+    s.marks.death = mark;
+    s.alive = false; // 你也可以改成「只標記不改生死」，先給直覺版
+  }
+
+  renderSeats();
+  save();
+}
+
+/* ========== Timer drawer ========== */
+function openDrawer(drawer){
+  backdrop.classList.remove("hidden");
+  drawer.classList.remove("hidden");
+  drawer.setAttribute("aria-hidden","false");
+}
+function closeDrawer(drawer){
+  drawer.classList.add("hidden");
+  drawer.setAttribute("aria-hidden","true");
   backdrop.classList.add("hidden");
 }
 
-/* =========================
-   Setup / Seats init
-========================= */
-function initSeatsIfNeeded() {
-  if (!Array.isArray(state.seats) || state.seats.length !== state.n) {
-    state.seats = Array.from({ length: state.n }, (_, i) => ({
-      no: i + 1,
-      alive: true,
-      role: null,       // e.g. "witch"
-      camp: null,       // "wolf" | "good"
-      marks: {
-        death: null,    // "狼刀"|"毒死"|"槍殺"|"黑狼槍"|"白狼爪"
-        by: null,       // attacker seat no etc (optional)
-        rescued: false  // 被女巫救
-      },
-      selected: false
-    }));
-  }
+/* timer */
+function timerRender(){
+  timerBig.textContent = fmtTime(State.timer.left);
 }
-
-function setPeople(n) {
-  state.n = n;
-  initSeatsIfNeeded();
-  // 如果當前 board 不匹配人數，切換到同人數第一個
-  const list = state.boards.filter(b => b.n === n);
-  if (list.length > 0) state.boardId = list[0].id;
-  saveState();
-  renderAll();
+function timerSet(sec){
+  State.timer.sec = sec;
+  State.timer.left = sec;
+  State.timer.running = false;
+  State.timer.endAt = null;
+  if(State.timer.tick) clearInterval(State.timer.tick);
+  State.timer.tick = null;
+  timerRender();
+  save();
 }
-
-function applyBoard(boardId) {
-  const b = state.boards.find(x => x.id === boardId);
-  if (!b) return;
-  state.boardId = b.id;
-
-  // 套用 preset
-  if (b.preset?.winMode) state.winMode = b.preset.winMode;
-  if (typeof b.preset?.hasPolice === "boolean") state.hasPolice = b.preset.hasPolice;
-
-  // 板子人數若不同
-  if (b.n && b.n !== state.n) {
-    state.n = b.n;
-    initSeatsIfNeeded();
-  }
-
-  saveState();
-  renderAll();
-}
-
-/* =========================
-   UI render
-========================= */
-function getBoard() {
-  return state.boards.find(b => b.id === state.boardId) || state.boards[0];
-}
-
-function renderHeader() {
-  uiStatus.textContent = `${state.phase} / ${state.step}`;
-  uiBoard.textContent = state.boardId || "—";
-}
-
-function renderSetupArea() {
-  // ✅ 只有 SETUP 才顯示，進入遊戲後完全不佔位
-  const isSetup = state.phase === "SETUP";
-  setupArea.classList.toggle("hidden", !isSetup);
-
-  // 綁定人數 chips
-  document.querySelectorAll(".setupChips .chip[data-n]").forEach(btn => {
-    const n = Number(btn.dataset.n);
-    btn.classList.toggle("primary", n === state.n);
-    btn.onclick = () => setPeople(n);
-  });
-
-  // render boards
-  renderBoardPicker();
-}
-
-function renderBoardPicker() {
-  const list = state.boards.filter(b => b.n === state.n);
-  boardPicker.innerHTML = "";
-  list.forEach(b => {
-    const el = document.createElement("div");
-    el.className = "boardCard" + (b.id === state.boardId ? " active" : "");
-    el.innerHTML = `
-      <div class="boardTitle">${b.title}</div>
-      <div class="boardSub">${b.id} ・ ${b.desc}</div>
-      <div class="badges">
-        ${(b.tags || []).map(t => `<span class="badge">${t}</span>`).join("")}
-      </div>
-    `;
-    el.onclick = () => applyBoard(b.id);
-    boardPicker.appendChild(el);
-  });
-}
-
-function renderPrompt() {
-  const b = getBoard();
-
-  if (state.phase === "SETUP") {
-    promptTitle.textContent = "設定：選板子";
-    promptText.textContent =
-`目前人數：${state.n}
-請在下方選擇板子套用。
-套用後按「下一步」進入抽身分。
-
-提示：
-- 板子選中會變色
-- 要換板子/人數：之後到 ⚙️ 設定 →「更換人數/板子」`;
-    promptFoot.textContent = "";
-    btnVoteDrawer.classList.add("hidden");
-    return;
-  }
-
-  // 其他 phase：你可以接回你原本完整流程
-  promptTitle.textContent = (state.phase === "NIGHT") ? "夜晚" : "流程";
-  promptText.textContent =
-`（示意）
-目前板子：${b.title}
-
-✅ 流程與座位同頁常駐
-✅ 👁️ 可開上帝抽屜 + 格子顯示角色陣營與死亡原因/救人`;
-  promptFoot.textContent = "按「下一步」繼續。";
-}
-
-function seatDisplayLines(seat) {
-  const lines = [];
-  if (!seat.alive) lines.push("死亡");
-
-  // 👁️ 上帝視角：顯示角色/陣營
-  if (state.godEye) {
-    if (seat.camp) lines.push(seat.camp === "wolf" ? "🐺狼" : "🧑‍🌾好");
-    if (seat.role) lines.push(seat.role);
-  } else {
-    lines.push(seat.alive ? "存活" : "死亡");
-  }
-
-  return lines;
-}
-
-function renderSeats() {
-  initSeatsIfNeeded();
-  seatsGrid.innerHTML = "";
-
-  state.seats.forEach(seat => {
-    const el = document.createElement("div");
-    el.className = "seat" +
-      (seat.selected ? " selected" : "") +
-      (!seat.alive ? " dead" : "");
-
-    const stateLines = seatDisplayLines(seat);
-    const meta = [];
-
-    if (state.godEye) {
-      // 死亡原因 / 被救
-      if (seat.marks?.rescued) meta.push("💊 被救");
-      if (!seat.alive && seat.marks?.death) meta.push(`☠️ ${seat.marks.death}`);
+function timerStart(){
+  if(State.timer.running) return;
+  State.timer.running = true;
+  State.timer.endAt = Date.now() + State.timer.left*1000;
+  State.timer.tick = setInterval(()=>{
+    const left = Math.max(0, Math.ceil((State.timer.endAt - Date.now())/1000));
+    State.timer.left = left;
+    timerRender();
+    if(left<=0){
+      timerPause();
+      vibrate([200,120,200,120,200]);
     }
-
-    el.innerHTML = `
-      <div class="seatNum">${seat.no}號</div>
-      <div class="seatState">${stateLines.join("・")}</div>
-      ${meta.length ? `<div class="seatMeta">${meta.join(" / ")}</div>` : ``}
-    `;
-
-    el.onclick = () => onSeatTap(seat.no);
-    seatsGrid.appendChild(el);
-  });
-}
-
-function renderSettingsUI() {
-  segEdge.classList.toggle("active", state.winMode === "edge");
-  segCity.classList.toggle("active", state.winMode === "city");
-  togglePolice.checked = !!state.hasPolice;
-}
-
-function renderGodText() {
-  const aliveW = state.seats.filter(s => s.alive && s.camp === "wolf").length;
-  const aliveG = state.seats.filter(s => s.alive && s.camp === "good").length;
-
-  godText.textContent =
-`人數：${state.n}
-板子：${state.boardId}
-勝負：${state.winMode === "edge" ? "屠邊" : "屠城"}
-上警：${state.hasPolice ? "開" : "關"}
-上帝視角：${state.godEye ? "開（格子顯示角色陣營）" : "關"}
-
-存活：狼 ${aliveW} / 好 ${aliveG}
-
-提示：
-- 👁️ 開啟後，座位格會顯示角色/陣營/死亡原因/救人
-- 要更換板子/人數：⚙️ 設定 → 更換人數/板子`;
-}
-
-/* =========================
-   interactions
-========================= */
-function onSeatTap(no) {
-  // ✅ 點選要變色（明顯）
-  state.seats.forEach(s => s.selected = (s.no === no));
-  saveState();
-  renderSeats();
-}
-
-/* =========================
-   Flow buttons
-========================= */
-function goNext() {
-  // ✅ SETUP -> 進入 DEAL 後，把 setupArea 隱藏（phase 變更）
-  if (state.phase === "SETUP") {
-    state.phase = "DEAL";
-    state.step = "DEAL_START";
-    saveState();
-    renderAll();
-    return;
-  }
-
-  // demo flow
-  if (state.phase === "DEAL") {
-    state.phase = "NIGHT";
-    state.step = "NIGHT_START";
-  } else if (state.phase === "NIGHT") {
-    state.phase = "DAY";
-    state.step = "DAY_START";
-  } else {
-    state.phase = "NIGHT";
-    state.step = "NIGHT_START";
-  }
-
-  saveState();
-  renderAll();
-}
-
-function goBack() {
-  // 簡化：讓你可以退回 SETUP（你也可限制只允許從設定回去）
-  if (state.phase !== "SETUP") {
-    state.phase = "SETUP";
-    state.step = "SETUP_BOARD";
-    saveState();
-    renderAll();
-  }
-}
-
-function cancelAction() {
-  // 先做：清選取
-  state.seats.forEach(s => s.selected = false);
-  saveState();
-  renderSeats();
-}
-
-/* =========================
-   Timer
-========================= */
-let timerTick = null;
-
-function fmt(sec) {
-  const m = Math.floor(sec / 60);
-  const s = sec % 60;
-  return `${String(m).padStart(2,"0")}:${String(s).padStart(2,"0")}`;
-}
-
-function renderTimer() {
-  timerBig.textContent = fmt(state.timer.sec);
-}
-
-function timerStart() {
-  if (state.timer.running) return;
-  state.timer.running = true;
-  state.timer.endAt = Date.now() + state.timer.sec * 1000;
-  saveState();
-  startTimerLoop();
-}
-
-function timerPause() {
-  if (!state.timer.running) return;
-  state.timer.running = false;
-  // 計算剩餘
-  const left = Math.max(0, Math.round((state.timer.endAt - Date.now()) / 1000));
-  state.timer.sec = left;
-  saveState();
-  stopTimerLoop();
-  renderTimer();
-}
-
-function timerReset() {
-  state.timer.running = false;
-  state.timer.sec = 90;
-  state.timer.endAt = 0;
-  saveState();
-  stopTimerLoop();
-  renderTimer();
-}
-
-function startTimerLoop() {
-  stopTimerLoop();
-  timerTick = setInterval(() => {
-    if (!state.timer.running) return;
-    const left = Math.max(0, Math.round((state.timer.endAt - Date.now()) / 1000));
-    state.timer.sec = left;
-    renderTimer();
-    if (left <= 0) {
-      state.timer.running = false;
-      saveState();
-      stopTimerLoop();
-      // 震動（可用就震動）
-      if (navigator.vibrate) navigator.vibrate([120,80,120]);
-    }
+    save();
   }, 250);
+  save();
+}
+function timerPause(){
+  if(!State.timer.running) return;
+  State.timer.running = false;
+  if(State.timer.tick) clearInterval(State.timer.tick);
+  State.timer.tick = null;
+  State.timer.endAt = null;
+  save();
+}
+function timerReset(){
+  timerSet(State.timer.sec);
 }
 
-function stopTimerLoop() {
-  if (timerTick) clearInterval(timerTick);
-  timerTick = null;
+/* ========== Flow / Phase ========== */
+function updateTop(){
+  uiStatus.textContent = State.phase;
+  uiBoard.textContent  = State.boardId || "—";
 }
 
-/* =========================
-   bind events
-========================= */
-function bindEvents() {
-  backdrop.onclick = closeAllDrawers;
+function renderFlow(){
+  updateTop();
 
-  btnSettings.onclick = () => { renderSettingsUI(); openDrawer(drawerSettings); };
-  btnCloseSettings.onclick = () => closeDrawer(drawerSettings);
+  if(State.phase === "SETUP"){
+    promptTitle.textContent = "設定：選人數與板子";
+    promptText.textContent =
+`1) 先選人數（9/10/12）
+2) 選一個板子（會變色）
+3) 按「下一步」進入抽身分（DEAL）
 
-  btnGodEye.onclick = () => { renderGodText(); openDrawer(drawerGod); };
-  btnCloseGod.onclick = () => closeDrawer(drawerGod);
+提示：SETUP 期間不顯示座位，避免擠畫面。`;
+    promptFoot.textContent = "要改人數/板子：⚙️ 設定 → 回到選板子";
+    setupArea.classList.remove("hidden");
+    seatsArea.classList.add("hidden");
+    btnBack.disabled = true;
+    btnPrimary.textContent = "下一步";
+    seatHint.textContent = "—";
+    return;
+  }
 
-  btnHourglass.onclick = () => { renderTimer(); openDrawer(drawerTimer); };
-  btnCloseTimer.onclick = () => closeDrawer(drawerTimer);
+  if(State.phase === "DEAL"){
+    promptTitle.textContent = "抽身分";
+    promptText.textContent =
+`請把手機交給玩家：
+- 長按座位 0.3 秒翻牌
+- 玩家看完按「我看完了」
+- 全部都看完後再按「下一步」進入遊戲`;
+    promptFoot.textContent = "✅ 已看完的人會記錄在系統裡";
+    setupArea.classList.add("hidden");
+    seatsArea.classList.remove("hidden");
+    btnBack.disabled = false;
+    btnPrimary.textContent = "進入遊戲";
+    seatHint.textContent = "長按 0.3 秒翻牌（抽身分階段）";
+    return;
+  }
 
-  btnVoteDrawer.onclick = () => { voteAnnounceText.textContent = state.voteAnnounce || "—"; openDrawer(drawerVote); };
-  btnCloseVote.onclick = () => closeDrawer(drawerVote);
-
-  segEdge.onclick = () => { state.winMode = "edge"; saveState(); renderSettingsUI(); renderGodText(); };
-  segCity.onclick = () => { state.winMode = "city"; saveState(); renderSettingsUI(); renderGodText(); };
-
-  togglePolice.onchange = (e) => { state.hasPolice = !!e.target.checked; saveState(); renderGodText(); };
-
-  btnGoSetup.onclick = () => {
-    closeAllDrawers();
-    state.phase = "SETUP";
-    state.step = "SETUP_BOARD";
-    saveState();
-    renderAll();
-  };
-
-  btnEndGame.onclick = () => {
-    // 結束本局：清存檔回到初始
-    endGameClearAll();
-  };
-
-  btnBack.onclick = goBack;
-  btnPrimary.onclick = goNext;
-  btnCancel.onclick = cancelAction;
-
-  // timer preset chips
-  document.querySelectorAll("#drawerTimer .chip[data-sec]").forEach(btn => {
-    btn.onclick = () => {
-      const sec = Number(btn.dataset.sec);
-      state.timer.sec = sec;
-      state.timer.running = false;
-      state.timer.endAt = 0;
-      saveState();
-      stopTimerLoop();
-      renderTimer();
-    };
-  });
-
-  btnTimerStart.onclick = timerStart;
-  btnTimerPause.onclick = timerPause;
-  btnTimerReset.onclick = timerReset;
+  if(State.phase === "PLAY"){
+    promptTitle.textContent = "進行中";
+    promptText.textContent =
+`流程卡 + 座位卡會同時常駐，操作更直覺。
+- 點座位：選取（會變色）
+- 👁️：開上帝抽屜 + 可開啟上帝視角顯示角色/陣營/標記`;
+    promptFoot.textContent = "要結束本局：⚙️ 設定 → 結束本局";
+    setupArea.classList.add("hidden");
+    seatsArea.classList.remove("hidden");
+    btnBack.disabled = false;
+    btnPrimary.textContent = "下一步";
+    seatHint.textContent = "點座位可選取（變色）";
+  }
 }
 
-/* =========================
-   main render
-========================= */
-function renderAll() {
-  ensureBoards();
-  initSeatsIfNeeded();
-  renderHeader();
-  renderSetupArea();
-  renderPrompt();
+/* ========== Phase transitions ========== */
+function canLeaveDeal(){
+  return State.seats.length>0 && State.seats.every(s=>s.revealed);
+}
+
+/* ========== Events ========== */
+peopleChips.addEventListener("click", (e)=>{
+  const btn = e.target.closest(".chip");
+  if(!btn) return;
+  const n = Number(btn.dataset.n);
+  if(!n) return;
+  State.people = n;
+
+  // 若目前板子人數不符，改成該人數的第一個板子
+  const list = Object.values(BOARDS).filter(b=>b.people===n);
+  State.boardId = list[0]?.id || State.boardId;
+
+  renderSetup();
+  updateTop();
+  save();
+});
+
+btnPrimary.addEventListener("click", ()=>{
+  if(State.phase === "SETUP"){
+    // 進 DEAL：建立座位與身分
+    buildSeats();
+    State.phase = "DEAL";
+    State.selectedSeat = null;
+    renderSeats();
+    renderFlow();
+    save();
+    return;
+  }
+
+  if(State.phase === "DEAL"){
+    if(!canLeaveDeal()){
+      alert("還有人尚未翻牌看身分（每個座位都要長按翻牌）");
+      return;
+    }
+    State.phase = "PLAY";
+    renderFlow();
+    save();
+    return;
+  }
+
+  if(State.phase === "PLAY"){
+    alert("（此 MVP 版先把核心操作修好：下一步流程可再接你原本 Day0~Day2 的狀態機）");
+  }
+});
+
+btnBack.addEventListener("click", ()=>{
+  if(State.phase === "DEAL"){
+    // 回 SETUP：不保留座位
+    State.phase = "SETUP";
+    State.seats = [];
+    State.selectedSeat = null;
+    renderFlow();
+    renderSetup();
+    save();
+    return;
+  }
+  if(State.phase === "PLAY"){
+    // 回 DEAL（保留座位）
+    State.phase = "DEAL";
+    renderFlow();
+    save();
+  }
+});
+
+btnCancel.addEventListener("click", ()=>{
+  State.selectedSeat = null;
   renderSeats();
-  renderGodText();
-  renderTimer();
+  save();
+});
 
-  // ✅ 進入遊戲後：setupArea 自動隱藏（renderSetupArea 已處理）
-  // ✅ 上帝視角開關：這裡不直接切換，由你之後要加「抽屜內 switch」也可以
-}
+/* drawers open/close */
+btnHourglass.addEventListener("click", ()=> openDrawer(drawerTimer));
+btnCloseTimer.addEventListener("click", ()=> closeDrawer(drawerTimer));
 
-(function boot(){
-  ensureBoards();
-  initSeatsIfNeeded();
+btnGodEye.addEventListener("click", ()=> openDrawer(drawerGod));
+btnCloseGod.addEventListener("click", ()=> closeDrawer(drawerGod));
 
-  bindEvents();
+btnSettings.addEventListener("click", ()=> openDrawer(drawerSettings));
+btnCloseSettings.addEventListener("click", ()=> closeDrawer(drawerSettings));
 
-  // restore timer loop if running
-  if (state.timer.running) startTimerLoop();
-  renderAll();
+backdrop.addEventListener("click", ()=>{
+  [drawerTimer, drawerGod, drawerSettings].forEach(d=>{
+    if(!d.classList.contains("hidden")) closeDrawer(d);
+  });
+});
+
+/* timer presets */
+drawerTimer.addEventListener("click", (e)=>{
+  const b = e.target.closest(".chip[data-sec]");
+  if(!b) return;
+  const sec = Number(b.dataset.sec);
+  if(!sec) return;
+  timerSet(sec);
+});
+btnTimerStart.addEventListener("click", timerStart);
+btnTimerPause.addEventListener("click", timerPause);
+btnTimerReset.addEventListener("click", timerReset);
+
+/* god eye toggle */
+toggleGodEye.addEventListener("change", (e)=>{
+  setGodEye(e.target.checked);
+});
+
+/* marks */
+drawerGod.addEventListener("click", (e)=>{
+  const b = e.target.closest(".chip[data-mark]");
+  if(!b) return;
+  applyMark(b.dataset.mark);
+});
+
+/* settings actions */
+btnGoSetup.addEventListener("click", ()=>{
+  closeDrawer(drawerSettings);
+  State.phase = "SETUP";
+  State.seats = [];
+  State.selectedSeat = null;
+  renderFlow();
+  renderSetup();
+  save();
+});
+btnEndGame.addEventListener("click", ()=>{
+  if(confirm("確定要結束本局並清除存檔嗎？")){
+    localStorage.removeItem(STORAGE_KEY);
+    location.reload();
+  }
+});
+
+/* role modal actions */
+btnRoleDone.addEventListener("click", ()=>{
+  closeRoleModal();
+  renderSeats();
+  renderFlow();
+});
+btnRoleClose.addEventListener("click", ()=>{
+  closeRoleModal();
+});
+
+/* dice */
+$("#btnDice").addEventListener("click", ()=>{
+  if(State.phase === "SETUP"){
+    alert("先進入遊戲後才會從存活座位擲骰。");
+    return;
+  }
+  const alive = State.seats.filter(s=>s.alive).map(s=>s.no);
+  if(alive.length===0){ alert("沒有存活座位"); return; }
+  const pick = alive[Math.floor(Math.random()*alive.length)];
+  alert(`🎲 抽到：${pick}號`);
+});
+
+/* ========== Init ========== */
+load();
+
+(function init(){
+  // 若有存檔且在 DEAL/PLAY，確保 seatsArea 顯示
+  renderSetup();
+  if(State.phase !== "SETUP" && (!State.seats || State.seats.length===0)){
+    // 存檔壞掉時保護
+    State.phase = "SETUP";
+  }
+  // timer restore
+  if(!State.timer) State.timer = {sec:90, running:false, endAt:null, left:90, tick:null};
+  timerRender();
+
+  // render seats if needed
+  if(State.phase !== "SETUP"){
+    seatsArea.classList.remove("hidden");
+    setupArea.classList.add("hidden");
+    renderSeats();
+  }else{
+    seatsArea.classList.add("hidden");
+    setupArea.classList.remove("hidden");
+  }
+
+  setGodEye(!!State.godEye);
+  renderFlow();
+  save();
 })();
