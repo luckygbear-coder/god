@@ -2019,6 +2019,36 @@ function pickCount(n){
     saveAndRender();
   });
 }
+// ==================== Timer Drawer (⌛️) ====================
+(() => {
+  const btnTimer = document.getElementById("btnTimer");
+  const timerDrawer = document.getElementById("timerDrawer");
+  const timerDrawerBackdrop = document.getElementById("timerDrawerBackdrop");
+  const btnCloseTimerDrawer = document.getElementById("btnCloseTimerDrawer");
+
+  if (!btnTimer || !timerDrawer || !timerDrawerBackdrop || !btnCloseTimerDrawer) return;
+
+  const openTimerDrawer = () => {
+    timerDrawer.classList.remove("hidden");
+    timerDrawerBackdrop.classList.remove("hidden");
+    timerDrawer.setAttribute("aria-hidden", "false");
+  };
+
+  const closeTimerDrawer = () => {
+    timerDrawer.classList.add("hidden");
+    timerDrawerBackdrop.classList.add("hidden");
+    timerDrawer.setAttribute("aria-hidden", "true");
+  };
+
+  btnTimer.addEventListener("click", openTimerDrawer);
+  btnCloseTimerDrawer.addEventListener("click", closeTimerDrawer);
+  timerDrawerBackdrop.addEventListener("click", closeTimerDrawer);
+
+  // ESC close (desktop)
+  window.addEventListener("keydown", (e) => {
+    if (e.key === "Escape" && !timerDrawer.classList.contains("hidden")) closeTimerDrawer();
+  });
+})();
 
 /* ================================
    Boot
