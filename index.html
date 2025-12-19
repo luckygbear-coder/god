@@ -8,9 +8,10 @@
   <link rel="stylesheet" href="./style.css" />
   <title>狼人殺上帝輔助</title>
 </head>
+
 <body>
   <div class="app">
-    <!-- Top fixed -->
+    <!-- ===== Top fixed ===== -->
     <div class="top">
       <div class="topLeft">
         <div id="uiStatus" class="uiStatus">—</div>
@@ -18,74 +19,70 @@
       </div>
 
       <div class="topRight">
-        <!-- 👁 放在 ⌛️ 旁邊 -->
-        <button type="button" id="btnGodQuick" class="iconBtn" aria-label="上帝資訊顯示切換">👁️</button>
-        <button type="button" id="btnTimer" class="iconBtn" aria-label="倒數計時器">⌛️</button>
-
+        <!-- ✅ Timer drawer -->
+        <button type="button" id="btnHourglass" class="iconBtn" aria-label="計時器">⌛️</button>
         <button type="button" id="btnDice" class="iconBtn" aria-label="發言骰子">🎲</button>
+
+        <!-- ✅ God eye on top -->
+        <button type="button" id="btnGodEye" class="iconBtn" aria-label="上帝資訊">👁</button>
+
         <button type="button" id="btnSettings" class="iconBtn" aria-label="設定">⚙️</button>
       </div>
     </div>
 
-    <!-- Tabs (從上面切換) -->
-    <div class="tabs" role="tablist" aria-label="主分頁">
-      <button type="button" id="tabFlow" class="tab active" role="tab" aria-selected="true" aria-controls="panelFlow">流程</button>
-      <button type="button" id="tabSeats" class="tab" role="tab" aria-selected="false" aria-controls="panelSeats">座位</button>
-      <button type="button" id="tabGod" class="tab" role="tab" aria-selected="false" aria-controls="panelGod">上帝</button>
-    </div>
+    <!-- ===== Main scroll area (combine flow + seats + god) ===== -->
+    <main class="content" id="mainContent">
+      <!-- FLOW / PROMPT -->
+      <section class="card">
+        <div class="cardTitle" id="promptTitle">—</div>
+        <pre class="cardText scrollBox" id="promptText">—</pre>
 
-    <!-- Main area (高度/捲動由 style.css 控制) -->
-    <div class="panels">
-      <!-- FLOW PANEL -->
-      <section id="panelFlow" class="panel active" role="tabpanel" aria-labelledby="tabFlow">
-        <div class="card">
-          <div class="cardTitle" id="promptTitle">—</div>
-
-          <!-- prompt text: allow internal scroll if needed -->
-          <pre class="cardText scrollBox" id="promptText">—</pre>
-
-          <div class="toolRow" id="toolRow">
-            <button type="button" id="btnVoteDrawer" class="btn ghost small hidden">投票公告</button>
-          </div>
-
-          <div class="cardFoot" id="promptFoot"></div>
+        <div class="toolRow" id="toolRow">
+          <button type="button" id="btnVoteDrawer" class="btn ghost small hidden">投票公告</button>
         </div>
 
-        <!-- board picker only shown in setup -->
-        <div class="card" id="boardPickerCard">
+        <div class="cardFoot" id="promptFoot"></div>
+      </section>
+
+      <!-- Board picker -->
+      <section class="card" id="boardPickerCard">
+        <div class="row">
           <div class="cardTitle">可選板子</div>
-          <div class="hint" id="boardPickerHint"></div>
-          <div id="boardPicker" class="boardPicker"></div>
+          <div class="hint">點一下套用（選中會變色）</div>
         </div>
+
+        <div class="hint" id="boardPickerHint"></div>
+        <div id="boardPicker" class="boardPicker"></div>
       </section>
 
-      <!-- SEATS PANEL -->
-      <section id="panelSeats" class="panel" role="tabpanel" aria-labelledby="tabSeats">
-        <div class="card tight">
-          <div class="row">
-            <div class="cardTitle">座位</div>
-            <div class="hint">點座位操作（依流程）</div>
-          </div>
+      <!-- SEATS -->
+      <section class="card tight">
+        <div class="row">
+          <div class="cardTitle">座位</div>
+          <div class="hint">點座位操作（依流程提示）</div>
         </div>
-        <div id="seatsGrid" class="seatsGrid"></div>
       </section>
+      <section id="seatsGrid" class="seatsGrid"></section>
 
-      <!-- GOD PANEL -->
-      <section id="panelGod" class="panel" role="tabpanel" aria-labelledby="tabGod">
-        <div class="card">
-          <div class="row">
-            <div class="cardTitle">上帝資訊</div>
-            <label class="toggle" title="展開/收合上帝資訊">
-              <input id="toggleGodView" type="checkbox" />
-              <span>👁 展開</span>
-            </label>
-          </div>
+      <!-- GOD -->
+      <section class="card" id="godCard">
+        <div class="row">
+          <div class="cardTitle">上帝資訊</div>
+
+          <!-- ✅ checkbox controls collapse via CSS sibling -->
+          <label class="toggle">
+            <input id="toggleGodView" type="checkbox" />
+            <span>👁 展開</span>
+          </label>
+        </div>
+
+        <div class="godBody">
           <pre class="cardText scrollBox" id="godText"></pre>
         </div>
       </section>
-    </div>
+    </main>
 
-    <!-- Bottom fixed: action bar only -->
+    <!-- ===== Bottom fixed action bar ===== -->
     <div class="bottomDock">
       <div class="actionBar">
         <button type="button" id="btnBack" class="btn ghost">上一步</button>
@@ -95,7 +92,44 @@
     </div>
   </div>
 
-  <!-- Settings drawer -->
+  <!-- ===================== Timer Drawer (⌛️) ===================== -->
+  <div id="timerDrawerBackdrop" class="backdrop hidden"></div>
+  <div id="timerDrawer" class="drawer hidden" role="dialog" aria-modal="true" aria-hidden="true">
+    <div class="drawerTop">
+      <div class="drawerTitle">⌛️ 計時器</div>
+      <button type="button" id="btnCloseTimerDrawer" class="iconBtn" aria-label="關閉">✕</button>
+    </div>
+
+    <div class="drawerBody">
+      <div class="timerBigWrap">
+        <div class="timerBigLabel">倒數</div>
+        <div id="timerBig" class="timerBig">01:30</div>
+      </div>
+
+      <div class="divider"></div>
+
+      <div class="timerPresets" id="timerPresets">
+        <button type="button" class="chip" data-sec="30">30秒</button>
+        <button type="button" class="chip" data-sec="60">1分鐘</button>
+        <button type="button" class="chip" data-sec="90">1分半</button>
+        <button type="button" class="chip" data-sec="120">2分鐘</button>
+        <button type="button" class="chip" data-sec="180">3分鐘</button>
+        <button type="button" class="chip" data-sec="300">5分鐘</button>
+      </div>
+
+      <div class="timerActions">
+        <button type="button" class="chip primary" id="btnTimerStart">開始</button>
+        <button type="button" class="chip" id="btnTimerPause">暫停</button>
+        <button type="button" class="chip" id="btnTimerReset">重置</button>
+      </div>
+
+      <div class="hint" style="margin-top:10px;">
+        提醒：計時到 0 會震動（若手機允許）。
+      </div>
+    </div>
+  </div>
+
+  <!-- ===================== Settings Drawer ===================== -->
   <div id="drawerBackdrop" class="backdrop hidden"></div>
   <div id="drawer" class="drawer hidden" role="dialog" aria-modal="true" aria-hidden="true">
     <div class="drawerTop">
@@ -107,49 +141,17 @@
         <button type="button" id="segEdge" class="segBtn">屠邊</button>
         <button type="button" id="segCity" class="segBtn">屠城</button>
       </div>
-      <label class="row">
+
+      <label class="row settingRow">
         <span>上警</span>
         <input id="togglePolice" type="checkbox" />
       </label>
+
       <button type="button" id="btnReset" class="btn ghost" style="width:100%;">重置本局</button>
     </div>
   </div>
 
-  <!-- Timer drawer (⌛️) -->
-  <div id="timerDrawerBackdrop" class="backdrop hidden"></div>
-  <div id="timerDrawer" class="drawer hidden" role="dialog" aria-modal="true" aria-hidden="true">
-    <div class="drawerTop">
-      <div class="drawerTitle">⌛️ 倒數計時</div>
-      <button type="button" id="btnCloseTimerDrawer" class="iconBtn" aria-label="關閉">✕</button>
-    </div>
-    <div class="drawerBody">
-      <div class="card" style="margin:0 0 12px;">
-        <div class="row" style="align-items:flex-end;">
-          <div>
-            <div class="hint">目前倒數</div>
-            <div id="timerBig" class="timerBig">01:30</div>
-          </div>
-          <div class="hint" style="margin-left:auto;">（重整不中斷由 app.js 控制）</div>
-        </div>
-      </div>
-
-      <div class="hint" style="margin:8px 0 6px;">快速設定</div>
-      <div id="timerPresets" class="toolRow" style="gap:8px; flex-wrap:wrap;">
-        <button type="button" class="chip" data-sec="30">30秒</button>
-        <button type="button" class="chip" data-sec="60">1分鐘</button>
-        <button type="button" class="chip" data-sec="90">1分半</button>
-      </div>
-
-      <div class="hint" style="margin:10px 0 6px;">控制</div>
-      <div class="toolRow" style="gap:8px; flex-wrap:wrap;">
-        <button type="button" class="chip primary" id="btnTimerStart">開始</button>
-        <button type="button" class="chip" id="btnTimerPause">暫停</button>
-        <button type="button" class="chip" id="btnTimerReset">重置</button>
-      </div>
-    </div>
-  </div>
-
-  <!-- Vote announce drawer -->
+  <!-- ===================== Vote announce drawer ===================== -->
   <div id="voteDrawerBackdrop" class="backdrop hidden"></div>
   <div id="voteDrawer" class="drawer hidden" role="dialog" aria-modal="true" aria-hidden="true">
     <div class="drawerTop">
@@ -161,7 +163,7 @@
     </div>
   </div>
 
-  <!-- Role modal -->
+  <!-- ===================== Role modal ===================== -->
   <div id="roleModal" class="modal hidden" role="dialog" aria-modal="true" aria-hidden="true">
     <div class="modalCard">
       <div class="modalTitle" id="roleModalTitle">—</div>
@@ -177,7 +179,7 @@
     </div>
   </div>
 
-  <!-- Dice modal -->
+  <!-- ===================== Dice modal ===================== -->
   <div id="diceModal" class="modal hidden" role="dialog" aria-modal="true" aria-hidden="true">
     <div class="modalCard">
       <div class="modalTitle">🎲 今日發言順序</div>
@@ -191,6 +193,32 @@
       </div>
     </div>
   </div>
+
+  <!-- ✅ small glue: close timer drawer -->
+  <script>
+    (function(){
+      const $ = (s)=>document.querySelector(s);
+      const bd = $("#timerDrawerBackdrop");
+      const dr = $("#timerDrawer");
+      const close = $("#btnCloseTimerDrawer");
+
+      function hide(){
+        if(bd) bd.classList.add("hidden");
+        if(dr){
+          dr.classList.add("hidden");
+          dr.setAttribute("aria-hidden","true");
+        }
+      }
+      if(close) close.addEventListener("click", hide);
+      if(bd) bd.addEventListener("click", hide);
+
+      // checkbox collapse (default: collapsed)
+      const t = $("#toggleGodView");
+      if(t && !t.checked) {
+        // keep default collapsed for cleaner screen
+      }
+    })();
+  </script>
 
   <script src="./app.js"></script>
 </body>
