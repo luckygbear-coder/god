@@ -18,12 +18,13 @@
       </div>
 
       <div class="topRight">
+        <button type="button" id="btnTimer" class="iconBtn" aria-label="計時器">⌛️</button>
         <button type="button" id="btnDice" class="iconBtn" aria-label="發言骰子">🎲</button>
         <button type="button" id="btnSettings" class="iconBtn" aria-label="設定">⚙️</button>
       </div>
     </div>
 
-    <!-- Tabs：保留給 app.js 用，但 UI 隱藏（方案A不需要切） -->
+    <!-- Tabs：保留給 app.js 用，但 UI 隱藏（方案A同頁） -->
     <div class="tabs visuallyHidden" aria-hidden="true">
       <button type="button" id="tabFlow" class="tab active">流程</button>
       <button type="button" id="tabSeats" class="tab">座位</button>
@@ -32,12 +33,10 @@
 
     <!-- ✅ MAIN: single-page sections, internal scroll only -->
     <div class="mainScroll" id="mainScroll">
-      <!-- FLOW (keep ids) -->
+      <!-- FLOW -->
       <section id="panelFlow" class="panel alwaysOn">
         <div class="card">
           <div class="cardTitle" id="promptTitle">—</div>
-
-          <!-- prompt text internal scroll -->
           <pre class="cardText scrollBox" id="promptText">—</pre>
 
           <div class="toolRow" id="toolRow">
@@ -66,7 +65,7 @@
         <div id="seatsGrid" class="seatsGrid"></div>
       </section>
 
-      <!-- GOD (collapsible) -->
+      <!-- GOD -->
       <section id="panelGod" class="panel alwaysOn">
         <div class="card">
           <div class="row">
@@ -81,25 +80,8 @@
       </section>
     </div>
 
-    <!-- Bottom fixed: timer strip + action bar -->
+    <!-- Bottom fixed: action bar only -->
     <div class="bottomDock">
-      <div class="timerStrip card">
-        <div class="timerStripLeft">
-          <div class="timerStripTitle">⏱ 倒數</div>
-          <div id="timerBig" class="timerStripTime">01:30</div>
-        </div>
-
-        <div class="timerStripRight" id="timerPresets">
-          <button type="button" class="chip" data-sec="30">30秒</button>
-          <button type="button" class="chip" data-sec="60">1分鐘</button>
-          <button type="button" class="chip" data-sec="90">1分半</button>
-
-          <button type="button" class="chip primary" id="btnTimerStart">開始</button>
-          <button type="button" class="chip" id="btnTimerPause">暫停</button>
-          <button type="button" class="chip" id="btnTimerReset">重置</button>
-        </div>
-      </div>
-
       <div class="actionBar">
         <button type="button" id="btnBack" class="btn ghost">上一步</button>
         <button type="button" id="btnPrimary" class="btn">下一步</button>
@@ -137,6 +119,42 @@
     </div>
     <div class="drawerBody">
       <pre id="voteAnnounceText" class="cardText" style="white-space:pre-wrap; margin:0;"></pre>
+    </div>
+  </div>
+
+  <!-- ✅ Timer drawer (NEW) -->
+  <div id="timerDrawerBackdrop" class="backdrop hidden"></div>
+  <div id="timerDrawer" class="drawer hidden" role="dialog" aria-modal="true" aria-hidden="true">
+    <div class="drawerTop">
+      <div class="drawerTitle">⌛️ 計時器</div>
+      <button type="button" id="btnCloseTimerDrawer" class="iconBtn" aria-label="關閉">✕</button>
+    </div>
+
+    <div class="drawerBody">
+      <div class="timerCard">
+        <div class="timerBigWrap">
+          <div class="hint">倒數</div>
+          <div id="timerBig" class="timerBig">01:30</div>
+        </div>
+
+        <div class="timerBtns" id="timerPresets">
+          <button type="button" class="chip" data-sec="30">30秒</button>
+          <button type="button" class="chip" data-sec="60">1分鐘</button>
+          <button type="button" class="chip" data-sec="90">1分半</button>
+          <button type="button" class="chip" data-sec="120">2分鐘</button>
+          <button type="button" class="chip" data-sec="180">3分鐘</button>
+
+          <div class="timerCtrlRow">
+            <button type="button" class="chip primary" id="btnTimerStart">開始</button>
+            <button type="button" class="chip" id="btnTimerPause">暫停</button>
+            <button type="button" class="chip" id="btnTimerReset">重置</button>
+          </div>
+        </div>
+      </div>
+
+      <div class="hint" style="margin-top:10px;">
+        小提醒：計時不擋說明／座位操作，隨時可用 ⌛️ 打開。
+      </div>
     </div>
   </div>
 
