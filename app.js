@@ -1,24 +1,27 @@
 /* ================================
-   Werewolf God Helper - v33 (FULL)
-   - Adds Role Modal for identity reveal (SETUP:A3)
-   - Keeps v32 flow + hunter rules + timer embed
+   Werewolf God Helper - v34 (FULL)
+   - Fix: wolf action depends on wolf CAMP alive (not first wolf seat)
+   - Fix: commitNightStep logs rlog.wolf (for witch/resolve)
+   - Keeps v33: role modal + timer embed + hunter rules + winMode edge/city
    ================================ */
 
-const STORAGE_KEY = "werewolf_state_v33";
+const STORAGE_KEY = "werewolf_state_v34";
 const LONGPRESS_MS = 300;
-// ✅ 狼人陣營判斷（不綁特定座位、不綁特定狼人）
+
+/* ================================
+   Camp helpers (CAMP-based, NOT seat-based)
+   ================================ */
 function getPlayerCamp(p){
-  // 你專案可能用 camp/team/從 ROLES 查
   if (p?.camp) return p.camp;
   if (p?.team) return p.team;
   if (window.ROLES && p?.roleId && ROLES[p.roleId]?.camp) return ROLES[p.roleId].camp;
   if (window.ROLES && p?.role && ROLES[p.role]?.camp) return ROLES[p.role].camp;
   return "unknown";
 }
-
-function getAliveWolves(state){
-  return (state.players || []).filter(p => p.alive && getPlayerCamp(p) === "wolf");
+function getAliveWolves(st){
+  return (st.players || []).filter(p => p.alive && getPlayerCamp(p) === "wolf");
 }
+
 /* ====== iOS anti-gesture ====== */
 document.addEventListener("gesturestart", (e) => e.preventDefault());
 document.addEventListener("dblclick", (e) => e.preventDefault(), { passive: false });
@@ -64,7 +67,7 @@ const btnBack = $("btnBack");
 const btnPrimary = $("btnPrimary");
 const btnCancel = $("btnCancel");
 
-/* ====== Role Modal refs (NEW) ====== */
+/* ====== Role Modal refs ====== */
 const roleModal = $("roleModal");
 const roleModalTitle = $("roleModalTitle");
 const roleModalRole = $("roleModalRole");
@@ -72,7 +75,7 @@ const roleModalCamp = $("roleModalCamp");
 const btnRoleDone = $("btnRoleDone");
 const btnRoleClose = $("btnRoleClose");
 
-/* ====== Roles ====== */
+/* ====== Roles (local) ====== */
 const ROLE = {
   wolf:     { name: "狼人", camp: "wolf", isGod: false },
   seer:     { name: "預言家", camp: "good", isGod: true },
@@ -168,7 +171,7 @@ renderBoardPicker();
    ================================ */
 function makeInitialState(){
   return {
-    version: 33,
+    version: 34,
     config: {
       playersCount: null,
       boardId: null,
@@ -275,7 +278,6 @@ function wireUI(){
   btnTimerPause?.addEventListener("click", ()=> pauseTimer());
   btnTimerReset?.addEventListener("click", ()=> resetTimer());
 
-  /* Role modal close */
   btnRoleDone?.addEventListener("click", closeRoleModal);
   btnRoleClose?.addEventListener("click", closeRoleModal);
   roleModal?.addEventListener("click", (e)=>{
@@ -294,10 +296,10 @@ function toast(msg){
 }
 
 /* ================================
-   Role Modal (NEW)
+   Role Modal
    ================================ */
 function openRoleModal(seat){
-  if(!roleModal) return; // tolerate if user didn't add modal yet
+  if(!roleModal) return;
   const p = state.players.find(x=>x.seat===seat);
   if(!p || !p.roleId) return;
 
@@ -669,7 +671,6 @@ function onCancel(){
   const step = state.flow.stepId;
 
   if(phase==="SETUP" && step==="SETUP:A3"){
-    // 若彈窗開著就關彈窗；不然就是清除提示
     if(roleModal && !roleModal.classList.contains("hidden")){
       closeRoleModal();
       return;
@@ -739,9 +740,6 @@ function assignRoles(){
 function allSeen(){
   return state.players.every(p=> !!state.setup.seenSeats[String(p.seat)]);
 }
-function countSeen(){
-  return Object.keys(state.setup.seenSeats||{}).length;
-}
 function shuffle(a){
   for(let i=a.length-1;i>0;i--){
     const j = Math.floor(Math.random()*(i+1));
@@ -791,6 +789,18 @@ function clearNightPendingForCurrentStep(){
   state.ui.selectedSeat = null;
 }
 
+/* ====== actor logic (FIXED) ====== */
+function findFirstByRole(roleId){
+  return state.players.find(p=>p.roleId===roleId) || null;
+}
+function canStepAct(stepId){
+  if(stepId === "wolf"){
+    return getAliveWolves(state).length > 0; // ✅ wolf camp alive => can act
+  }
+  const a = findFirstByRole(stepId);
+  return !!(a && a.alive);
+}
+
 function commitNightStepAndNext(){
   const step = getCurrentNightStep();
   if(!step){
@@ -799,28 +809,22 @@ function commitNightStepAndNext(){
     return;
   }
 
-  const actor = findFirstByRole(step.id);
-  const actorAlive = actor ? actor.alive : false;
+  const actorAlive = canStepAct(step.id);
 
   const pending = state.night.pending[step.id] || {};
   const roundKey = String(state.night.round);
   const rlog = state.night.logByRound[roundKey] || (state.night.logByRound[roundKey] = {});
 
-const aliveWolves = getAliveWolves(state);
-const canWolfAct = aliveWolves.length > 0;
+  /* ✅ WOLF COMMIT (NEW / FIX) */
+  if(step.id === "wolf"){
+    if(actorAlive){
+      const seat = pending.target ?? null;   // allow none (空刀)
+      rlog.wolf = { target: seat };
+    }else{
+      rlog.wolf = { target: null, note: "狼人全滅（流程照唸）" };
+    }
+  }
 
-if (!canWolfAct) {
-  // ✅ 只有狼人全滅才鎖
-  setSeatMode?.("disabled");          // 你若有這種函式就留著
-  state.ui = state.ui || {};
-  state.ui.seatDisabled = true;       // 沒有就當旗標
-  promptFoot.textContent = "狼人已全滅（流程照唸，不能操作）";
-} else {
-  // ✅ 只要狼人陣營還有人活著，就要能刀
-  state.ui = state.ui || {};
-  state.ui.seatDisabled = false;
-  promptFoot.textContent = `狼人仍有存活（${aliveWolves.length}）→ 點座位選刀，或直接按「下一步」空刀`;
-}
   if(step.id === "seer"){
     if(actorAlive){
       const seat = pending.target ?? null;
@@ -881,6 +885,7 @@ function resolveNight(){
     }
   }
 
+  // Hunter night-dead can shoot ONLY if reason=wolf, and shot happens at DAY announcement stage
   let hunterMayShootSeat = null;
   if(!state.hunter.usedBullet){
     for(const d of deaths){
@@ -948,6 +953,7 @@ function confirmHunterShoot(forceNoShot){
     return;
   }
 
+  // ✅ Night-dead hunter returns to DAY:D2, exile hunter returns to EXILE_DONE
   const backStep = (hs.reason === "exiled") ? "DAY:EXILE_DONE" : "DAY:D2";
 
   if(!hs.allowed){
@@ -971,8 +977,6 @@ function confirmHunterShoot(forceNoShot){
   }
 
   applyDeaths([{ seat: tgt.seat, reason: "hunter" }]);
-
-  // only shooting consumes bullet
   state.hunter.usedBullet = true;
 
   state.day.hunterShoot = null;
@@ -1247,7 +1251,6 @@ function onSeatClick(seat){
   const step = state.flow.stepId;
 
   if(phase==="SETUP" && step==="SETUP:A3"){
-    // click also reveals (modal)
     revealRole(seat);
     return;
   }
@@ -1290,19 +1293,18 @@ function revealRole(seat){
   state.setup.seenSeats[String(seat)] = true;
   p.seen = true;
 
-  saveState();        // 防止當掉
+  saveState();
   openRoleModal(seat);
-  render();           // 立刻刷新（不關閉 modal）
+  render();
 }
 
 function handleNightSeatPick(seat){
   const step = getCurrentNightStep();
   if(!step) return;
 
-  const actor = findFirstByRole(step.id);
-  const actorAlive = actor ? actor.alive : false;
+  const actorAlive = canStepAct(step.id);
   if(!actorAlive){
-    toast(`${step.name}已死（流程照唸，不能操作）`);
+    toast(`${step.name}已死/不存在（流程照唸，不能操作）`);
     return;
   }
 
@@ -1364,10 +1366,6 @@ function handleNightSeatPick(seat){
     saveAndRender();
     return;
   }
-}
-
-function findFirstByRole(roleId){
-  return state.players.find(p=>p.roleId===roleId) || null;
 }
 
 /* ✅ Long press (more stable on iOS) */
@@ -1487,20 +1485,19 @@ function renderPrompt(){
         return;
       }
 
-      const actor = findFirstByRole(s.id);
-      const actorAlive = actor ? actor.alive : false;
-
       promptTitle.textContent = `${s.name}行動`;
       let text = "";
 
       if(s.id==="wolf"){
+        const canWolfAct = canStepAct("wolf");
         text += "狼人請睜眼，請選擇今晚要刀的座位。\n";
         text += "• 點座位＝刀\n";
         text += "• 可空刀：直接按「下一步」\n";
-        if(!actorAlive) text += "\n（狼人已死/不存在，本步照唸但無行動）";
+        if(!canWolfAct) text += "\n（狼人全滅，本步照唸但無行動）";
       }
 
       if(s.id==="seer"){
+        const actorAlive = canStepAct("seer");
         text += "預言家請睜眼，請選擇要查驗的座位。\n";
         text += "• 點座位＝查驗\n";
         text += "• 不查驗：直接按「下一步」\n";
@@ -1508,6 +1505,7 @@ function renderPrompt(){
       }
 
       if(s.id==="witch"){
+        const actorAlive = canStepAct("witch");
         const roundKey = String(state.night.round);
         const rlog = state.night.logByRound[roundKey] || {};
         const wolfTarget = rlog.wolf?.target ?? null;
@@ -1520,7 +1518,7 @@ function renderPrompt(){
           text += "  - 點刀口座位＝救\n";
         }
         text += state.witch.usedPoison ? "• 毒藥：已用過\n" : "• 毒藥：可用（點其他座位＝毒）\n";
-        text += "• 救/毒互斥；按「取消」可清除本步選擇；按「下一步」＝本晚不用\n";
+        text += "• 救/毒互斥；按「清除」可清除本步選擇；按「下一步」＝本晚不用\n";
         if(!actorAlive) text += "\n（女巫已死/不存在，本步照唸但無行動）";
       }
 
@@ -1597,7 +1595,7 @@ function renderPrompt(){
       promptText.textContent =
         `獵人（${from}號）可以開槍（子彈僅一次）。\n\n` +
         `• 點一位存活者作為目標\n` +
-        `• 不開槍：按「取消」\n` +
+        `• 不開槍：按「不開槍」\n` +
         `• 確認：按「下一步」\n\n` +
         `（投票照常繼續）`;
       promptFoot.textContent = state.ui.selectedSeat ? `已選目標：${state.ui.selectedSeat}號` : "尚未選目標（可不開槍）";
@@ -1772,7 +1770,6 @@ function renderSeats(){
 
     seat.addEventListener("click", ()=> onSeatClick(p.seat));
 
-    // SETUP:A3 long press reveal (modal)
     if(state.flow.phase==="SETUP" && state.flow.stepId==="SETUP:A3"){
       addLongPress(seat, ()=> revealRole(p.seat), LONGPRESS_MS);
     }
