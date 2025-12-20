@@ -11,69 +11,70 @@
 <body>
   <div class="app">
     <!-- Top fixed -->
-    <header class="top">
+    <div class="top">
       <div class="topLeft">
         <div id="uiStatus" class="uiStatus">—</div>
         <div id="uiBoard" class="uiBoard">—</div>
       </div>
 
       <div class="topRight">
-        <button type="button" id="btnTimer" class="iconBtn" aria-label="計時器">⌛️</button>
-        <button type="button" id="btnDice" class="iconBtn" aria-label="發言骰子">🎲</button>
-        <button type="button" id="btnEye" class="iconBtn" aria-label="上帝視角">👁️</button>
         <button type="button" id="btnAnn" class="iconBtn" aria-label="公告">📣</button>
+        <button type="button" id="btnTimer" class="iconBtn" aria-label="計時器">⌛️</button>
+        <button type="button" id="btnEye" class="iconBtn" aria-label="上帝視角">👁</button>
+        <button type="button" id="btnDice" class="iconBtn" aria-label="發言骰子">🎲</button>
         <button type="button" id="btnSettings" class="iconBtn" aria-label="設定">⚙️</button>
       </div>
-    </header>
+    </div>
 
-    <!-- Main scroll area (page itself no scroll; only this area) -->
-    <main class="main">
-      <!-- PROMPT / FLOW -->
-      <section class="card" id="promptCard">
+    <!-- Main content: Prompt + Seats -->
+    <div class="main">
+      <!-- Prompt card -->
+      <section class="card promptCard">
         <div class="cardTitle" id="promptTitle">—</div>
         <pre class="cardText scrollBox" id="promptText">—</pre>
         <div class="cardFoot" id="promptFoot"></div>
       </section>
 
-      <!-- SETUP (only visible in setup) -->
-      <section class="card" id="setupCard">
-        <div class="cardTitle">設定：人數與板子</div>
+      <!-- Setup card (only in setup) -->
+      <section id="setupCard" class="card setupCard">
+        <div class="cardTitle">開局設定</div>
 
-        <div class="row" style="margin-top:6px;">
-          <div class="hint">人數</div>
-          <div class="chips">
-            <button type="button" class="chip" data-n="9">9人</button>
-            <button type="button" class="chip" data-n="10">10人</button>
-            <button type="button" class="chip" data-n="12">12人</button>
-          </div>
+        <div class="hint" style="margin:8px 0 6px;">人數</div>
+        <div class="chips">
+          <button type="button" class="chip" data-n="9">9</button>
+          <button type="button" class="chip" data-n="10">10</button>
+          <button type="button" class="chip" data-n="12">12</button>
         </div>
 
-        <div class="hint" id="boardHint" style="margin-top:10px;">請點選一個板子套用（會變色）</div>
+        <div class="hint" id="boardHint" style="margin:10px 0 6px;">請選擇板子（點一下會變色）</div>
         <div id="boardList" class="boardList"></div>
+
+        <div class="hint" style="margin-top:10px;">
+          選完後按底部「下一步」進入抽身分。
+        </div>
       </section>
 
-      <!-- SEATS -->
-      <section class="card tight" id="seatsHeader">
+      <!-- Seats -->
+      <section id="seatsHeader" class="card tight seatsHeader">
         <div class="row">
           <div class="cardTitle">座位</div>
-          <div class="hint">點座位依流程操作（再點同一格可取消）</div>
+          <div class="hint">點一下選取；再點一次取消選取</div>
         </div>
       </section>
-
       <section id="seatsGrid" class="seatsGrid"></section>
-    </main>
+    </div>
 
     <!-- Bottom fixed action bar -->
-    <footer class="bottomBar">
+    <div class="bottomBar">
       <button type="button" id="btnBack" class="btn ghost">上一步</button>
-      <button type="button" id="btnMain" class="btn primary">天黑閉眼</button>
+      <button type="button" id="btnMain" class="btn main">天亮睜眼</button>
       <button type="button" id="btnNext" class="btn">下一步</button>
-    </footer>
+    </div>
   </div>
 
-  <!-- TIMER DRAWER -->
+  <!-- ======== Drawer: Timer ======== -->
   <div id="timerBackdrop" class="backdrop hidden"></div>
-  <aside id="timerDrawer" class="drawer hidden" role="dialog" aria-modal="true" aria-hidden="true">
+  <div id="timerDrawer" class="drawer hidden" role="dialog" aria-modal="true" aria-hidden="true">
     <div class="drawerTop">
       <div class="drawerTitle">⌛️ 計時器</div>
       <button type="button" id="btnCloseTimer" class="iconBtn" aria-label="關閉">✕</button>
@@ -81,40 +82,70 @@
     <div class="drawerBody">
       <div class="timerBig" id="timerBig">01:30</div>
 
-      <div class="chips wrap" id="timerPresets">
+      <div class="hint" style="margin:8px 0 6px;">快速設定</div>
+      <div id="timerPresets" class="chips" style="flex-wrap:wrap;">
         <button type="button" class="chip" data-sec="30">30秒</button>
         <button type="button" class="chip" data-sec="60">1分鐘</button>
         <button type="button" class="chip" data-sec="90">1分半</button>
         <button type="button" class="chip" data-sec="120">2分鐘</button>
+        <button type="button" class="chip" data-sec="180">3分鐘</button>
         <button type="button" class="chip" data-sec="300">5分鐘</button>
       </div>
 
-      <div class="row" style="margin-top:10px;">
-        <button type="button" class="btn primary" id="btnTimerStart">開始</button>
-        <button type="button" class="btn ghost" id="btnTimerPause">暫停</button>
-        <button type="button" class="btn ghost" id="btnTimerReset">重置</button>
+      <div class="seg" style="margin-top:10px;">
+        <button type="button" class="segBtn primary" id="btnTimerStart">開始</button>
+        <button type="button" class="segBtn" id="btnTimerPause">暫停</button>
+        <button type="button" class="segBtn" id="btnTimerReset">重置</button>
       </div>
-      <div class="hint" id="timerHint" style="margin-top:10px;">完成會震動（若裝置支援）。</div>
     </div>
-  </aside>
+  </div>
 
-  <!-- ANNOUNCEMENT DRAWER -->
+  <!-- ======== Drawer: Announce ======== -->
   <div id="annBackdrop" class="backdrop hidden"></div>
-  <aside id="annDrawer" class="drawer hidden" role="dialog" aria-modal="true" aria-hidden="true">
+  <div id="annDrawer" class="drawer hidden" role="dialog" aria-modal="true" aria-hidden="true">
     <div class="drawerTop">
-      <div class="drawerTitle">📣 公告回顧</div>
+      <div class="drawerTitle">📣 公告</div>
       <button type="button" id="btnCloseAnn" class="iconBtn" aria-label="關閉">✕</button>
     </div>
     <div class="drawerBody">
-      <label class="toggle" style="margin-bottom:10px;">
+      <label class="row" style="margin:0 0 10px;">
+        <span>顯示上帝詳細</span>
         <input id="toggleAnnGod" type="checkbox" />
-        <span>👁 顯示上帝細節</span>
       </label>
-      <pre id="annText" class="cardText scrollBox" style="white-space:pre-wrap; margin:0;"></pre>
+      <pre id="annText" class="cardText" style="white-space:pre-wrap; margin:0;"></pre>
     </div>
-  </aside>
+  </div>
 
-  <!-- ROLE MODAL (deal reveal) -->
+  <!-- ======== Drawer: Settings ======== -->
+  <div id="setBackdrop" class="backdrop hidden"></div>
+  <div id="setDrawer" class="drawer hidden" role="dialog" aria-modal="true" aria-hidden="true">
+    <div class="drawerTop">
+      <div class="drawerTitle">⚙️ 設定</div>
+      <button type="button" id="btnCloseSet" class="iconBtn" aria-label="關閉">✕</button>
+    </div>
+    <div class="drawerBody">
+      <div class="hint" style="margin-bottom:6px;">勝負模式</div>
+      <div class="seg">
+        <button type="button" id="segEdge" class="segBtn">屠邊</button>
+        <button type="button" id="segCity" class="segBtn">屠城</button>
+      </div>
+
+      <label class="row" style="margin-top:10px;">
+        <span>上警</span>
+        <input id="togglePolice" type="checkbox" />
+      </label>
+
+      <div class="hint" style="margin-top:12px;">開局/結束</div>
+      <button type="button" id="btnGotoSetup" class="btn ghost" style="width:100%; margin-top:6px;">
+        回到開局（重選人數/板子）
+      </button>
+      <button type="button" id="btnHardReset" class="btn ghost" style="width:100%; margin-top:8px;">
+        清空資料（硬重置）
+      </button>
+    </div>
+  </div>
+
+  <!-- ======== Modal: Role ======== -->
   <div id="roleModal" class="modal hidden" role="dialog" aria-modal="true" aria-hidden="true">
     <div class="modalCard">
       <div class="modalTitle" id="roleModalTitle">—</div>
@@ -124,67 +155,13 @@
         <div class="hint" style="margin-top:10px;">看完請把手機交回上帝</div>
       </div>
       <div class="modalActions">
-        <button type="button" id="btnRoleDone" class="btn primary">我看完了</button>
+        <button type="button" id="btnRoleDone" class="btn">我看完了</button>
         <button type="button" id="btnRoleClose" class="btn ghost">關閉</button>
       </div>
     </div>
   </div>
 
-  <!-- SETTINGS DRAWER -->
-  <div id="setBackdrop" class="backdrop hidden"></div>
-  <aside id="setDrawer" class="drawer hidden" role="dialog" aria-modal="true" aria-hidden="true">
-    <div class="drawerTop">
-      <div class="drawerTitle">⚙️ 設定</div>
-      <button type="button" id="btnCloseSet" class="iconBtn" aria-label="關閉">✕</button>
-    </div>
-
-    <div class="drawerBody">
-      <div class="card mini">
-        <div class="cardTitle">勝負</div>
-        <div class="seg">
-          <button type="button" id="segEdge" class="segBtn">屠邊</button>
-          <button type="button" id="segCity" class="segBtn">屠城</button>
-        </div>
-        <label class="row">
-          <span>上警</span>
-          <input id="togglePolice" type="checkbox" />
-        </label>
-      </div>
-
-      <div class="card mini">
-        <div class="cardTitle">自訂角色配置</div>
-        <div class="hint">用於「自訂板子」或你想手動改狼/民/神數。</div>
-
-        <div class="row2">
-          <div class="stepper">
-            <span>狼人</span>
-            <button type="button" class="stepBtn" data-step="wolves" data-d="-1">－</button>
-            <span id="numWolves" class="stepNum">4</span>
-            <button type="button" class="stepBtn" data-step="wolves" data-d="1">＋</button>
-          </div>
-          <div class="stepper">
-            <span>平民</span>
-            <button type="button" class="stepBtn" data-step="villagers" data-d="-1">－</button>
-            <span id="numVillagers" class="stepNum">4</span>
-            <button type="button" class="stepBtn" data-step="villagers" data-d="1">＋</button>
-          </div>
-        </div>
-
-        <div class="hint" style="margin-top:8px;">神職（勾選即納入板子）</div>
-        <div class="checks" id="godChecks"></div>
-
-        <button type="button" id="btnApplyCustom" class="btn primary" style="width:100%; margin-top:10px;">套用自訂配置（重抽身分）</button>
-      </div>
-
-      <div class="card mini">
-        <div class="cardTitle">遊戲</div>
-        <button type="button" id="btnGotoSetup" class="btn ghost" style="width:100%;">回到開局重新選人數/板子</button>
-        <button type="button" id="btnHardReset" class="btn ghost" style="width:100%; margin-top:8px;">清空資料（完全重置）</button>
-      </div>
-    </div>
-  </aside>
-
-  <!-- DICE MODAL -->
+  <!-- ======== Modal: Dice ======== -->
   <div id="diceModal" class="modal hidden" role="dialog" aria-modal="true" aria-hidden="true">
     <div class="modalCard">
       <div class="modalTitle">🎲 今日發言順序</div>
@@ -193,8 +170,33 @@
         <div class="hint" style="margin-top:10px;">（只會從「存活座位」隨機抽）</div>
       </div>
       <div class="modalActions">
-        <button type="button" id="btnDiceAgain" class="btn primary">再擲一次</button>
+        <button type="button" id="btnDiceAgain" class="btn">再擲一次</button>
         <button type="button" id="btnDiceClose" class="btn ghost">關閉</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ======== Modal: Thief choose ======== -->
+  <div id="thiefModal" class="modal hidden" role="dialog" aria-modal="true" aria-hidden="true">
+    <div class="modalCard">
+      <div class="modalTitle">🃏 盜賊選角</div>
+      <div class="modalBody">
+        <div class="hint" id="thiefHint" style="margin-bottom:10px;"></div>
+
+        <div class="card mini" style="margin:0;">
+          <div class="cardTitle" style="font-size:16px;">可選兩張牌（從「未被抽到」的角色）</div>
+          <div style="display:grid; grid-template-columns:1fr 1fr; gap:10px; margin-top:10px;">
+            <button type="button" id="btnThiefA" class="btn"></button>
+            <button type="button" id="btnThiefB" class="btn"></button>
+          </div>
+          <div class="hint" style="margin-top:10px;">
+            選完後會立刻成為該角色（另一張視為被捨棄）。
+          </div>
+        </div>
+      </div>
+
+      <div class="modalActions">
+        <button type="button" id="btnThiefClose" class="btn ghost">關閉</button>
       </div>
     </div>
   </div>
