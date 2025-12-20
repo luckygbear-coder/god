@@ -4,336 +4,378 @@
   --stroke:#f5d3a6;
   --ink:#4b3044;
   --muted:#7a5a6a;
-  --accent:#f4a63a;
-  --accent2:#ffcf6b;
-  --shadow:0 10px 24px rgba(0,0,0,.12);
+  --brand:#f4a63a;
+  --brand2:#ffcc6a;
+  --shadow:0 10px 22px rgba(0,0,0,.12);
+  --shadow2:0 14px 30px rgba(0,0,0,.14);
 
-  --ok:#7ad19f;
-  --bad:#f28b82;
-  --blue:#6aa8ff;
-  --selected:#ffd98a;
+  --good:#bfe9d1;
+  --wolf:#f3c1c1;
+  --sel:#ffd27a;
+  --sel2:#ffe7b8;
+  --line:#e7c79d;
 }
 
-*{ box-sizing:border-box; }
-html,body{ height:100%; margin:0; padding:0; }
+/* ===== iOS 防選取 / 防放大 / 防長按選單 ===== */
+*{
+  box-sizing:border-box;
+  -webkit-tap-highlight-color:transparent;
+  -webkit-touch-callout:none;
+  -webkit-user-select:none;
+  user-select:none;
+}
 
-body{
+html,body{
+  height:100%;
+  margin:0;
+  padding:0;
   background:var(--bg);
   font-family:"Noto Sans TC",-apple-system,BlinkMacSystemFont,sans-serif;
   color:var(--ink);
-  overflow:hidden;
-  -webkit-text-size-adjust:100%;
-  touch-action:manipulation;
+  overflow:hidden; /* ✅ 不要整頁滾動 */
 }
 
+/* 讓可滾動區域自己滾（不卡頁） */
+.scrollBox{
+  overflow:auto;
+  -webkit-overflow-scrolling:touch;
+}
+
+/* ===== layout ===== */
 .app{
-  max-width:480px;
-  margin:0 auto;
-  height:100vh;
+  height:100%;
   display:flex;
   flex-direction:column;
 }
 
-/* ===== ✅ Top：視覺上刪掉第一格，只留按鍵浮在第二格右上 ===== */
 .top{
-  position:fixed;              /* ✅ 不佔版面高度 */
+  position:sticky;
   top:0;
-  left:50%;
-  transform:translateX(-50%);
-  width:min(480px, 100%);
-  z-index:60;
-  padding:8px 10px 0;
-  background:transparent;
-  border:none;
+  z-index:50;
   display:flex;
-  align-items:flex-start;
-  justify-content:flex-end;
-  pointer-events:none;         /* ✅ 只有按鍵可點 */
+  align-items:center;
+  justify-content:space-between;
+  padding:10px 12px;
+  background:linear-gradient(#ffe8bb,#ffe1a7);
+  border-bottom:2px solid var(--line);
 }
 
-.topLeft{ display:none; }      /* ✅ 最上方第一格內容刪掉 */
+.topLeft{
+  min-width:0;
+}
+.uiStatus{
+  font-size:12px;
+  letter-spacing:.2px;
+  color:var(--muted);
+}
+.uiBoard{
+  font-size:22px;
+  font-weight:900;
+  line-height:1.1;
+  margin-top:2px;
+  white-space:nowrap;
+  overflow:hidden;
+  text-overflow:ellipsis;
+}
 
 .topRight{
   display:flex;
   gap:8px;
-  flex-wrap:nowrap;
-  pointer-events:auto;         /* ✅ 讓按鍵可以點 */
+  align-items:center;
 }
 
 .iconBtn{
-  width:40px;
-  height:40px;
+  width:44px;
+  height:44px;
   border-radius:14px;
   border:2px solid var(--stroke);
-  background:rgba(255,255,255,.65);
-  box-shadow:0 6px 12px rgba(0,0,0,.10);
-  font-size:18px;
-  display:grid;
-  place-items:center;
-  padding:0;
-  cursor:pointer;
-  user-select:none;
-  -webkit-user-select:none;
+  background:rgba(255,255,255,.55);
+  box-shadow:0 6px 14px rgba(0,0,0,.10);
+  font-size:20px;
+  display:flex;
+  align-items:center;
+  justify-content:center;
+  touch-action:manipulation;
 }
 
-/* ===== Main scroll area ===== */
+.iconBtn:active{
+  transform:translateY(1px);
+}
+
+/* 主畫面：固定高度，內容自行滾 */
 .main{
   flex:1;
   overflow:auto;
-  padding:56px 10px 96px;  /* ✅ 上方留給浮動按鍵列 */
   -webkit-overflow-scrolling:touch;
+  padding:12px 12px calc(92px + env(safe-area-inset-bottom));
 }
 
-/* ===== Card ===== */
 .card{
   background:var(--card);
   border:2px solid var(--stroke);
   border-radius:18px;
   box-shadow:var(--shadow);
   padding:12px 12px 12px;
-  margin-bottom:12px;
 }
 
-.card.tight{ padding:10px 12px; }
+.card + .card,
+.card + .seatsGrid,
+.seatsHeader + .seatsGrid{
+  margin-top:12px;
+}
 
 .cardTitle{
   font-weight:900;
-  font-size:18px;
-  margin-bottom:8px;
+  font-size:20px;
+}
+
+.cardText{
+  margin:10px 0 0;
+  white-space:pre-wrap;
+  font-size:14px;
+  line-height:1.6;
+  color:var(--ink);
+}
+
+.cardFoot{
+  margin-top:10px;
+  font-size:12px;
+  color:var(--muted);
 }
 
 .hint{
   font-size:12px;
   color:var(--muted);
-  line-height:1.45;
+  line-height:1.4;
 }
-
-.cardText{
-  font-size:13px;
-  line-height:1.6;
-  color:var(--ink);
-  margin:0;
-  white-space:pre-wrap;
-}
-
-/* ✅ 提示區更扁一點，讓座位露出更多 */
-.scrollBox{
-  max-height:150px;             /* 原本太高會擋座位 */
-  overflow:auto;
-  border-radius:14px;
-  background:rgba(255,255,255,.45);
-  border:1px dashed rgba(0,0,0,.12);
-  padding:10px;
-}
-
-/* ===== Prompt Card spacing tighter ===== */
-.promptCard .scrollBox{ max-height:140px; }
 
 .row{
   display:flex;
-  justify-content:space-between;
   align-items:center;
+  justify-content:space-between;
   gap:10px;
 }
 
-/* ===== Chips / Seg ===== */
-.chips{
-  display:flex;
-  gap:8px;
-  flex-wrap:wrap;
+.tight{
+  padding:10px 12px;
 }
 
+.promptCard .scrollBox{
+  max-height:160px; /* ✅ 讓座位可以露出更多 */
+  border-radius:14px;
+  border:1px dashed rgba(231,199,157,.8);
+  padding:10px;
+  background:rgba(255,255,255,.45);
+}
+
+/* ===== chips / seg ===== */
+.chips{
+  display:flex;
+  gap:10px;
+  flex-wrap:wrap;
+}
 .chip{
+  padding:10px 14px;
+  border-radius:999px;
   border:2px solid var(--stroke);
   background:#fff;
-  padding:8px 12px;
-  border-radius:999px;
   font-weight:800;
   color:var(--ink);
-  cursor:pointer;
-  user-select:none;
-  -webkit-user-select:none;
+  box-shadow:0 6px 14px rgba(0,0,0,.08);
+  touch-action:manipulation;
 }
 .chip.active{
-  background:linear-gradient(180deg, var(--accent2), var(--accent));
-  border-color:#e5a14a;
+  background:linear-gradient(#ffe8bb,#ffd27a);
+  border-color:#e0b66e;
 }
 
 .seg{
-  display:flex;
-  gap:8px;
+  display:grid;
+  grid-template-columns:1fr 1fr 1fr;
+  gap:10px;
 }
 .segBtn{
-  flex:1;
+  padding:12px 10px;
+  border-radius:16px;
   border:2px solid var(--stroke);
   background:#fff;
-  padding:10px 12px;
-  border-radius:14px;
   font-weight:900;
-  cursor:pointer;
-  user-select:none;
-  -webkit-user-select:none;
+  box-shadow:0 8px 18px rgba(0,0,0,.10);
+  touch-action:manipulation;
 }
 .segBtn.primary{
-  background:linear-gradient(180deg, var(--accent2), var(--accent));
-  border-color:#e5a14a;
+  background:linear-gradient(#ffe1a7,#ffcc6a);
+  border-color:#e0b66e;
 }
 
-/* ===== Board list ===== */
+/* ===== board list ===== */
 .boardList{
   display:grid;
   grid-template-columns:1fr;
   gap:10px;
 }
-
 .boardItem{
-  border:2px solid var(--stroke);
-  border-radius:18px;
   padding:12px;
-  background:rgba(255,255,255,.45);
-  box-shadow:0 8px 16px rgba(0,0,0,.10);
-  cursor:pointer;
-  user-select:none;
-  -webkit-user-select:none;
+  border-radius:18px;
+  border:2px solid var(--stroke);
+  background:#fff;
+  box-shadow:0 8px 18px rgba(0,0,0,.10);
+  touch-action:manipulation;
 }
 .boardItem.active{
-  outline:3px solid rgba(244,166,58,.45);
-  background:rgba(255,233,186,.85);
+  border-color:#e0b66e;
+  background:linear-gradient(#fff,#ffe6b5);
 }
 .boardName{
-  font-size:18px;
   font-weight:1000;
+  font-size:20px;
   margin-bottom:4px;
-  color:#0b66c3;
 }
-.boardSub{
-  font-size:13px;
+.boardId{
+  font-size:12px;
   color:var(--muted);
 }
+.boardDesc{
+  margin-top:6px;
+  font-size:13px;
+  color:var(--ink);
+}
+.tags{
+  margin-top:10px;
+  display:flex;
+  gap:8px;
+  flex-wrap:wrap;
+}
+.tag{
+  border:2px solid var(--stroke);
+  background:#fff;
+  padding:6px 10px;
+  border-radius:999px;
+  font-size:12px;
+  font-weight:800;
+  color:var(--ink);
+}
 
-/* ===== Seats ===== */
+/* ===== seats ===== */
 .seatsGrid{
   display:grid;
-  grid-template-columns:repeat(4, 1fr);
-  gap:10px;
-  margin-bottom:12px;
+  grid-template-columns:repeat(4,1fr);
+  gap:12px;
 }
 
 .seat{
-  border:2px solid var(--stroke);
-  background:#fff;
   border-radius:18px;
-  box-shadow:0 10px 18px rgba(0,0,0,.12);
-  padding:10px 8px;
-  height:78px;
-  display:flex;
-  flex-direction:column;
-  justify-content:center;
-  align-items:center;
-  gap:6px;
-  user-select:none;
-  -webkit-user-select:none;
-  -webkit-touch-callout:none;
+  border:2px solid var(--stroke);
+  background:rgba(255,255,255,.9);
+  box-shadow:0 10px 22px rgba(0,0,0,.12);
+  padding:10px 8px 10px;
+  text-align:center;
+  min-height:76px;
+  position:relative;
   touch-action:manipulation;
 }
 
-.seatNum{
+.seat .n{
   font-size:26px;
   font-weight:1000;
   line-height:1;
 }
 
-.seatLine{
+.seat .sub{
+  margin-top:6px;
   font-size:12px;
   color:var(--muted);
   font-weight:800;
-  text-align:center;
-  line-height:1.2;
 }
 
 .seat.selected{
-  background:var(--selected);
-  border-color:#e5a14a;
+  background:linear-gradient(#fff,#ffe7b8);
+  border-color:#e0b66e;
+  box-shadow:0 14px 30px rgba(0,0,0,.16);
+}
+
+.seat.goodHint{
+  outline:3px solid rgba(191,233,209,.55);
+}
+.seat.wolfHint{
+  outline:3px solid rgba(243,193,193,.55);
 }
 
 .seat.dead{
-  opacity:.62;
+  opacity:.55;
   filter:saturate(.6);
 }
 
-.seat.badgeGood{ outline:3px solid rgba(122,209,159,.35); }
-.seat.badgeWolf{ outline:3px solid rgba(242,139,130,.35); }
-
-.seatEvents{
-  display:flex;
-  gap:6px;
-  font-size:16px;
-  line-height:1;
+.seat .godline{
+  margin-top:6px;
+  font-size:12px;
+  font-weight:900;
+  color:var(--ink);
 }
 
-/* ===== Bottom bar fixed ===== */
+/* ===== bottom bar ===== */
 .bottomBar{
   position:fixed;
-  left:50%;
-  transform:translateX(-50%);
+  left:0;
+  right:0;
   bottom:0;
-  width:min(480px, 100%);
-  padding:12px 10px calc(12px + env(safe-area-inset-bottom));
-  background:linear-gradient(180deg, rgba(255,238,201,0), rgba(255,238,201,0.95) 35%, rgba(255,238,201,1));
-  z-index:70;
-  display:flex;
-  gap:10px;
+  z-index:60;
+  padding:10px 12px calc(10px + env(safe-area-inset-bottom));
+  background:linear-gradient(rgba(255,238,201,.0), rgba(255,238,201,.92) 20%, rgba(255,238,201,.98));
+  backdrop-filter: blur(8px);
+}
+
+.bottomBar{
+  display:grid;
+  grid-template-columns:1fr 1.2fr 1fr;
+  gap:12px;
 }
 
 .btn{
-  flex:1;
+  padding:14px 14px;
   border-radius:18px;
   border:2px solid var(--stroke);
-  background:linear-gradient(180deg, var(--accent2), var(--accent));
+  background:linear-gradient(#ffe1a7,#ffcc6a);
   font-weight:1000;
-  font-size:18px;
-  padding:14px 10px;
-  cursor:pointer;
-  box-shadow:0 10px 18px rgba(0,0,0,.14);
-  user-select:none;
-  -webkit-user-select:none;
+  color:var(--ink);
+  box-shadow:0 10px 22px rgba(0,0,0,.12);
   touch-action:manipulation;
 }
+.btn:active{ transform:translateY(1px); }
 
 .btn.ghost{
-  background:#fff;
-  color:var(--blue);
+  background:#fff7e6;
+  color:#2e86ff;
 }
 
 .btn.main{
-  background:linear-gradient(180deg, #2c2a3d, #1d1b2b);
+  background:linear-gradient(#2b2b3a,#1f1f2b);
   color:#fff;
-  border-color:#3e3b57;
+  border-color:rgba(255,255,255,.25);
 }
 
-/* ===== Backdrop / Drawer / Modal ===== */
+/* ===== modal / drawer ===== */
 .hidden{ display:none !important; }
 
 .backdrop{
   position:fixed;
   inset:0;
-  background:rgba(0,0,0,.35);
-  z-index:80;
+  background:rgba(0,0,0,.25);
+  z-index:90;
 }
 
 .drawer{
   position:fixed;
-  left:50%;
-  transform:translateX(-50%);
+  left:0;
+  right:0;
   bottom:0;
-  width:min(480px, 100%);
+  z-index:100;
   background:var(--card);
+  border-top-left-radius:22px;
+  border-top-right-radius:22px;
   border:2px solid var(--stroke);
-  border-bottom:none;
-  border-radius:18px 18px 0 0;
-  box-shadow:0 -14px 28px rgba(0,0,0,.18);
-  z-index:90;
-  max-height:78vh;
+  box-shadow:var(--shadow2);
+  max-height:70vh;
   overflow:hidden;
 }
 
@@ -341,8 +383,8 @@ body{
   display:flex;
   justify-content:space-between;
   align-items:center;
-  padding:12px 12px 8px;
-  border-bottom:1px solid rgba(0,0,0,.06);
+  padding:12px 12px 10px;
+  border-bottom:2px solid var(--line);
 }
 
 .drawerTitle{
@@ -353,74 +395,85 @@ body{
 .drawerBody{
   padding:12px;
   overflow:auto;
-  max-height:calc(78vh - 56px);
   -webkit-overflow-scrolling:touch;
+  max-height:calc(70vh - 56px);
 }
 
 .timerBig{
-  font-size:40px;
+  font-size:44px;
   font-weight:1000;
   text-align:center;
-  padding:10px 0 6px;
+  padding:10px 0 4px;
 }
 
 .modal{
   position:fixed;
   inset:0;
-  z-index:100;
+  z-index:110;
   display:flex;
   align-items:center;
   justify-content:center;
   padding:18px;
-  background:rgba(0,0,0,.35);
+  background:rgba(0,0,0,.28);
 }
 
 .modalCard{
-  width:min(480px, 100%);
+  width:100%;
+  max-width:520px;
   background:var(--card);
   border:2px solid var(--stroke);
-  border-radius:18px;
-  box-shadow:0 18px 34px rgba(0,0,0,.22);
+  border-radius:22px;
+  box-shadow:var(--shadow2);
   overflow:hidden;
 }
 
 .modalTitle{
+  padding:14px 14px 10px;
   font-weight:1000;
   font-size:20px;
-  padding:14px 14px 10px;
-  border-bottom:1px solid rgba(0,0,0,.06);
+  border-bottom:2px solid var(--line);
 }
 
-.modalBody{ padding:14px; }
-
-.modalActions{
-  display:flex;
-  gap:10px;
-  padding:12px 14px 14px;
-  border-top:1px solid rgba(0,0,0,.06);
+.modalBody{
+  padding:14px;
 }
 
 .roleLine{
-  font-size:26px;
+  font-size:24px;
   font-weight:1000;
+  margin-top:6px;
 }
 .roleLine.small{
   font-size:14px;
   font-weight:900;
   color:var(--muted);
-  margin-top:6px;
+}
+
+.modalActions{
+  padding:12px 14px 14px;
+  display:grid;
+  grid-template-columns:1fr 1fr;
+  gap:12px;
+  border-top:2px solid var(--line);
 }
 
 .diceResult{
   font-size:44px;
   font-weight:1000;
   text-align:center;
-  padding:10px 0;
+  padding:8px 0 4px;
 }
 
-/* ✅ iOS 長按選取降低 */
-pre, .cardText, .seat, .btn, .chip, .boardItem, .iconBtn{
-  -webkit-user-select:none;
-  user-select:none;
-  -webkit-touch-callout:none;
+/* 小卡片 */
+.card.mini{
+  border-radius:18px;
+  padding:12px;
+}
+
+/* 小螢幕 */
+@media (max-width:380px){
+  .uiBoard{ font-size:20px; }
+  .promptCard .scrollBox{ max-height:140px; }
+  .seat{ min-height:72px; }
+  .seat .n{ font-size:24px; }
 }
