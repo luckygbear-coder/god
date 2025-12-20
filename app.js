@@ -1,204 +1,659 @@
-/* =========================
-   狼人殺上帝輔助 app.js
-========================= */
+/* ===============================
+   Werewolf God Helper (Single-file)
+   Works with your current index.html
+================================= */
 
-/* ---------- iOS: 防雙擊縮放 + 防長按選取/選單 ---------- */
-(function preventIOS(){
+/* ---------- iOS prevent zoom/select ---------- */
+(function antiIOS() {
+  document.addEventListener("gesturestart", (e) => e.preventDefault(), { passive:false });
+  document.addEventListener("dblclick", (e) => e.preventDefault(), { passive:false });
+  document.addEventListener("contextmenu", (e) => e.preventDefault(), { passive:false });
+
+  // stop double-tap zoom (some browsers)
   let lastTouchEnd = 0;
   document.addEventListener("touchend", (e) => {
     const now = Date.now();
-    if (now - lastTouchEnd <= 280) e.preventDefault();
+    if (now - lastTouchEnd <= 350) e.preventDefault();
     lastTouchEnd = now;
   }, { passive:false });
-
-  document.addEventListener("contextmenu", (e) => e.preventDefault());
 })();
 
-/* ---------- DOM ---------- */
+/* ---------- helpers ---------- */
 const $ = (id) => document.getElementById(id);
+const sleep = (ms) => new Promise(r => setTimeout(r, ms));
+const clamp = (n, a, b) => Math.max(a, Math.min(b, n));
 
+function hms(sec){
+  sec = Math.max(0, Math.floor(sec));
+  const m = String(Math.floor(sec/60)).padStart(2,"0");
+  const s = String(sec%60).padStart(2,"0");
+  return `${m}:${s}`;
+}
+
+function shuffle(arr){
+  const a = arr.slice();
+  for(let i=a.length-1;i>0;i--){
+    const j = Math.floor(Math.random()*(i+1));
+    [a[i],a[j]] = [a[j],a[i]];
+  }
+  return a;
+}
+
+function deepClone(x){ return JSON.parse(JSON.stringify(x)); }
+
+/* ---------- roles ---------- */
+const ROLE = {
+  VILLAGER:{ key:"villager", name:"平民", camp:"好人" },
+  WOLF:{ key:"wolf", name:"狼人", camp:"狼人" },
+  SEER:{ key:"seer", name:"預言家", camp:"好人" },
+  WITCH:{ key:"witch", name:"女巫", camp:"好人" },
+  HUNTER:{ key:"hunter", name:"獵人", camp:"好人" },
+  GUARD:{ key:"guard", name:"守衛", camp:"好人" },
+  IDIOT:{ key:"idiot", name:"白痴", camp:"好人" },
+  CUPID:{ key:"cupid", name:"邱比特", camp:"好人" },
+  THIEF:{ key:"thief", name:"盜賊", camp:"好人" },
+};
+
+const ROLE_ICON = {
+  witch: { pill:"💊", poison:"🧪" },
+  guard: "🛡️",
+  seer: "🔮",
+  hunter: "🔫",
+  cupid: "💘",
+  thief: "🃏",
+  wolf: "🐺",
+};
+
+function roleByKey(key){
+  return Object.values(ROLE).find(r=>r.key===key) || {key, name:key, camp:"—"};
+}
+
+/* ---------- boards (expandable) ---------- */
+const BOARDS = [
+  {
+    id:"official-12",
+    n:12,
+    title:"12 人官方標準局",
+    sub:"4狼 + 預言家/女巫/守衛/獵人 + 4民",
+    tags:["官方","穩","含白痴?否","含盜賊?否"],
+    deal:{
+      seats: [
+        "wolf","wolf","wolf","wolf",
+        "seer","witch","guard","hunter",
+        "villager","villager","villager","villager"
+      ],
+      extra: []
+    }
+  },
+  {
+    id:"12-city",
+    n:12,
+    title:"12 人（標準角色・屠城）",
+    sub:"同標準角色，但勝負改屠城（設定可切）",
+    tags:["測試","屠城"],
+    deal:{
+      seats: [
+        "wolf","wolf","wolf","wolf",
+        "seer","witch","guard","hunter",
+        "villager","villager","villager","villager"
+      ],
+      extra:[]
+    }
+  },
+  {
+    id:"12-edge-nopolice",
+    n:12,
+    title:"12 人（屠邊・無上警）",
+    sub:"同標準角色，但預設關閉上警",
+    tags:["測試","無上警"],
+    deal:{
+      seats: [
+        "wolf","wolf","wolf","wolf",
+        "seer","witch","guard","hunter",
+        "villager","villager","villager","villager"
+      ],
+      extra:[]
+    },
+    defaults:{ hasPolice:false }
+  },
+  {
+    id:"12-thief",
+    n:12,
+    title:"12 人含盜賊",
+    sub:"4狼 + 預/女/獵/守/白痴/盜賊 + 3民（另加 2 張額外牌供盜賊選）",
+    tags:["盜賊","含白痴"],
+    deal:{
+      // 12 seats get these 12 roles
+      seats:[
+        "wolf","wolf","wolf","wolf",
+        "seer","witch","guard","hunter",
+        "idiot","thief",
+        "villager","villager"
+      ],
+      // +2 extra roles (from the same pool idea)
+      // 你也可以改成隨機從「未出現的角色」抽兩張，這裡先給常用模板
+      extra:["villager","villager"]
+    }
+  },
+  {
+    id:"12-cupid",
+    n:12,
+    title:"12 人含邱比特",
+    sub:"4狼 + 邱比特 + 預/女/守/獵 + 2民",
+    tags:["邱比特"],
+    deal:{
+      seats:[
+        "wolf","wolf","wolf","wolf",
+        "cupid",
+        "seer","witch","guard","hunter",
+        "villager","villager","villager"
+      ],
+      extra:[]
+    }
+  },
+];
+
+/* ---------- state ---------- */
+const LS_KEY = "ww_god_v3";
+
+const DEFAULT_STATE = {
+  phase:"setup",   // setup | deal | game
+  n:12,
+  boardId:"official-12",
+  winMode:"edge", // edge | city
+  hasPolice:true,
+
+  eye:false,       // god view on seats
+  selected:null,   // selected seat for current step
+
+  // seats
+  seats:[],        // [{id, alive, roleKey, camp, events:[], seen:false}]
+  dealt:false,
+
+  // witch
+  witchPill:true,
+  witchPoison:true,
+  witchSavedSeat:null,
+  witchPoisonSeat:null,
+
+  // night/day counts
+  day:0,     // 0 before first night
+  night:0,
+
+  // current action memory per night
+  nightGuard:null,
+  nightWolf:null,
+  nightSeerCheck:null,
+
+  // announce logs
+  logs:[],   // {type, day, textPublic, textGod}
+
+  // votes
+  vote: { open:false, records:{} }, // records[voterSeat]=targetSeat|0(abstain)
+
+  // thief
+  thief: { pending:false, seat:null, optionA:null, optionB:null, chosen:null },
+
+  // ui
+  promptTitle:"—",
+  promptText:"—",
+  promptFoot:"",
+
+  // timer
+  timer:{ sec:90, running:false, lastTick:0 }
+};
+
+function loadState(){
+  try{
+    const raw = localStorage.getItem(LS_KEY);
+    if(!raw) return deepClone(DEFAULT_STATE);
+    const st = JSON.parse(raw);
+    return Object.assign(deepClone(DEFAULT_STATE), st);
+  }catch(e){
+    return deepClone(DEFAULT_STATE);
+  }
+}
+function saveState(){ localStorage.setItem(LS_KEY, JSON.stringify(state)); }
+
+let state = loadState();
+
+/* ---------- DOM refs ---------- */
 const uiStatus = $("uiStatus");
 const uiBoard  = $("uiBoard");
-
 const promptTitle = $("promptTitle");
 const promptText  = $("promptText");
 const promptFoot  = $("promptFoot");
 
-const seatsGrid   = $("seatsGrid");
 const setupCard   = $("setupCard");
 const boardList   = $("boardList");
-const boardHint   = $("boardHint");
+
+const seatsGrid   = $("seatsGrid");
 
 const btnBack = $("btnBack");
 const btnMain = $("btnMain");
 const btnNext = $("btnNext");
 
-const btnAnn      = $("btnAnn");
-const btnTimer    = $("btnTimer");
-const btnEye      = $("btnEye");
-const btnDice     = $("btnDice");
+const btnAnn = $("btnAnn");
+const btnTimer = $("btnTimer");
+const btnEye = $("btnEye");
+const btnDice = $("btnDice");
 const btnSettings = $("btnSettings");
 
-/* Drawers */
+/* drawers */
 const timerBackdrop = $("timerBackdrop");
 const timerDrawer   = $("timerDrawer");
 const btnCloseTimer = $("btnCloseTimer");
-const timerBigEl    = $("timerBig");
+const timerBig      = $("timerBig");
 const btnTimerStart = $("btnTimerStart");
 const btnTimerPause = $("btnTimerPause");
 const btnTimerReset = $("btnTimerReset");
 const timerPresets  = $("timerPresets");
 
-const annBackdrop   = $("annBackdrop");
-const annDrawer     = $("annDrawer");
-const btnCloseAnn   = $("btnCloseAnn");
-const annText       = $("annText");
-const toggleAnnGod  = $("toggleAnnGod");
+/* ann */
+const annBackdrop = $("annBackdrop");
+const annDrawer   = $("annDrawer");
+const btnCloseAnn = $("btnCloseAnn");
+const toggleAnnGod = $("toggleAnnGod");
+const annText     = $("annText");
 
-const setBackdrop   = $("setBackdrop");
-const setDrawer     = $("setDrawer");
-const btnCloseSet   = $("btnCloseSet");
-const segEdge       = $("segEdge");
-const segCity       = $("segCity");
-const togglePolice  = $("togglePolice");
-const btnGotoSetup  = $("btnGotoSetup");
-const btnHardReset  = $("btnHardReset");
+/* settings */
+const setBackdrop = $("setBackdrop");
+const setDrawer   = $("setDrawer");
+const btnCloseSet = $("btnCloseSet");
+const segEdge     = $("segEdge");
+const segCity     = $("segCity");
+const togglePolice= $("togglePolice");
+const btnGotoSetup= $("btnGotoSetup");
+const btnHardReset= $("btnHardReset");
 
-/* Modals */
-const roleModal       = $("roleModal");
-const roleModalTitle  = $("roleModalTitle");
-const roleModalRole   = $("roleModalRole");
-const roleModalCamp   = $("roleModalCamp");
-const btnRoleDone     = $("btnRoleDone");
-const btnRoleClose    = $("btnRoleClose");
+/* modals */
+const roleModal = $("roleModal");
+const roleModalTitle = $("roleModalTitle");
+const roleModalRole  = $("roleModalRole");
+const roleModalCamp  = $("roleModalCamp");
+const btnRoleDone = $("btnRoleDone");
+const btnRoleClose= $("btnRoleClose");
 
-const diceModal     = $("diceModal");
-const diceResult    = $("diceResult");
-const btnDiceAgain  = $("btnDiceAgain");
-const btnDiceClose  = $("btnDiceClose");
+const diceModal = $("diceModal");
+const diceResult= $("diceResult");
+const btnDiceAgain = $("btnDiceAgain");
+const btnDiceClose = $("btnDiceClose");
 
-const thiefModal   = $("thiefModal");
-const thiefHint    = $("thiefHint");
-const btnThiefA    = $("btnThiefA");
-const btnThiefB    = $("btnThiefB");
-const btnThiefClose= $("btnThiefClose");
+const thiefModal = $("thiefModal");
+const thiefHint  = $("thiefHint");
+const btnThiefA  = $("btnThiefA");
+const btnThiefB  = $("btnThiefB");
+const btnThiefClose = $("btnThiefClose");
 
-/* ---------- Data ---------- */
-const CAMP = { WOLF:"狼人", GOOD:"好人" };
-
-const ROLE = {
-  SEER:"預言家",
-  WITCH:"女巫",
-  HUNTER:"獵人",
-  GUARD:"守衛",
-  IDIOT:"白痴",
-  CUPID:"邱比特",
-  THIEF:"盜賊",
-  VILLAGER:"村民",
-  WOLF:"狼人"
-};
-
-function roleCamp(role){
-  return role === ROLE.WOLF ? CAMP.WOLF : CAMP.GOOD;
+/* ---------- UI render ---------- */
+function setBodyState(){
+  document.body.classList.toggle("state-setup", state.phase==="setup");
+  document.body.classList.toggle("state-deal", state.phase==="deal");
+  document.body.classList.toggle("state-game", state.phase==="game");
 }
 
-const BOARDS = [
-  { id:"B9-A", n:9,  name:"9人・經典", desc:"3狼｜3民｜預言家｜女巫｜獵人",
-    roles:[ROLE.WOLF,ROLE.WOLF,ROLE.WOLF, ROLE.VILLAGER,ROLE.VILLAGER,ROLE.VILLAGER, ROLE.SEER,ROLE.WITCH,ROLE.HUNTER] },
-  { id:"B9-B", n:9,  name:"9人・守衛版", desc:"3狼｜2民｜預言家｜女巫｜獵人｜守衛",
-    roles:[ROLE.WOLF,ROLE.WOLF,ROLE.WOLF, ROLE.VILLAGER,ROLE.VILLAGER, ROLE.SEER,ROLE.WITCH,ROLE.HUNTER,ROLE.GUARD] },
-
-  { id:"B10-A", n:10, name:"10人・經典", desc:"3狼｜4民｜預言家｜女巫｜獵人",
-    roles:[ROLE.WOLF,ROLE.WOLF,ROLE.WOLF, ROLE.VILLAGER,ROLE.VILLAGER,ROLE.VILLAGER,ROLE.VILLAGER, ROLE.SEER,ROLE.WITCH,ROLE.HUNTER] },
-  { id:"B10-B", n:10, name:"10人・白痴版", desc:"3狼｜3民｜預言家｜女巫｜獵人｜白痴",
-    roles:[ROLE.WOLF,ROLE.WOLF,ROLE.WOLF, ROLE.VILLAGER,ROLE.VILLAGER,ROLE.VILLAGER, ROLE.SEER,ROLE.WITCH,ROLE.HUNTER,ROLE.IDIOT] },
-
-  { id:"B12-CUPID", n:12, name:"12人・邱比特戀人", desc:"4狼｜4民｜預言家｜女巫｜獵人｜守衛｜邱比特",
-    roles:[ROLE.WOLF,ROLE.WOLF,ROLE.WOLF,ROLE.WOLF, ROLE.VILLAGER,ROLE.VILLAGER,ROLE.VILLAGER,ROLE.VILLAGER, ROLE.SEER,ROLE.WITCH,ROLE.HUNTER,ROLE.GUARD,ROLE.CUPID].slice(0,12) },
-
-  { id:"B12-THIEF", n:12, name:"12人・盜賊", desc:"4狼｜4民｜預言家｜女巫｜獵人｜守衛｜白痴｜盜賊",
-    roles:[ROLE.WOLF,ROLE.WOLF,ROLE.WOLF,ROLE.WOLF, ROLE.VILLAGER,ROLE.VILLAGER,ROLE.VILLAGER,ROLE.VILLAGER, ROLE.SEER,ROLE.WITCH,ROLE.HUNTER,ROLE.GUARD,ROLE.IDIOT,ROLE.THIEF].slice(0,12),
-    hasThief:true }
-];
-
-/* ---------- State ---------- */
-const LS_KEY = "wg_god_helper_v2";
-
-const defaultState = () => ({
-  stage:"setup", // setup|deal|night|day|vote
-  day:1,
-  night:0,
-
-  winMode:"edge",
-  hasPolice:false,
-
-  n:null,
-  boardId:null,
-
-  godView:false,
-
-  seats:[],
-  selected:new Set(),
-
-  dealt:0,
-
-  rolesPool:[],
-
-  thiefSeat:null,
-  thiefOptions:null,
-  thiefResolved:false,
-
-  cupidSeat:null,
-  lovers:[],
-
-  witchSeat:null,
-  witchHealUsed:false,
-  witchPoisonUsed:false,
-  wolfTarget:null,
-  witchPoisonTarget:null,
-  witchHealTarget:null,
-
-  guardSeat:null,
-  guardLast:null,
-
-  seerSeat:null,
-  seerChecked:[],
-
-  hunterSeat:null,
-
-  log:[],
-  voteMode:{ step:"pickCandidate", candidate:null, voters:[] },
-  votes:[],
-
-  _nightIdx:0
-});
-
-let S = loadState();
-
-/* ---------- Utils ---------- */
-function saveState(){
-  // Set 不能直接 JSON
-  const out = {...S, selected:[...S.selected]};
-  localStorage.setItem(LS_KEY, JSON.stringify(out));
+function currentBoard(){
+  return BOARDS.find(b=>b.id===state.boardId) || BOARDS.find(b=>b.id==="official-12");
 }
-function loadState(){
-  try{
-    const raw = localStorage.getItem(LS_KEY);
-    if(!raw) return defaultState();
-    const s = JSON.parse(raw);
-    const base = Object.assign(defaultState(), s);
-    base.selected = new Set(s.selected || []);
-    return base;
-  }catch(e){
-    return defaultState();
+
+function renderTop(){
+  const b = currentBoard();
+  uiBoard.textContent = state.phase==="setup" ? "狼人殺上帝輔助" : (b?.id || "—");
+  uiStatus.textContent = statusLine();
+}
+
+function statusLine(){
+  const b = currentBoard();
+  if(state.phase==="setup"){
+    return `SETUP｜人數 ${state.n}｜選板子`;
+  }
+  if(state.phase==="deal"){
+    const seen = state.seats.filter(s=>s.seen).length;
+    return `抽身分（${seen}/${state.n}）｜${b?.title || b?.id}`;
+  }
+  return `DAY ${state.day} / NIGHT ${state.night}｜${b?.id}｜${state.winMode==="edge"?"屠邊":"屠城"}${state.hasPolice?"｜上警":"｜無上警"}`;
+}
+
+function setPrompt(title, text, foot=""){
+  state.promptTitle = title;
+  state.promptText  = text;
+  state.promptFoot  = foot;
+  promptTitle.textContent = title;
+  promptText.textContent  = text;
+  promptFoot.textContent  = foot;
+}
+
+function renderSetup(){
+  // chips highlight
+  document.querySelectorAll(".chips .chip[data-n]").forEach(btn=>{
+    const n = Number(btn.dataset.n);
+    btn.classList.toggle("active", n===state.n);
+  });
+
+  // boards list by n
+  boardList.innerHTML = "";
+  const list = BOARDS.filter(b=>b.n===state.n);
+  list.forEach(b=>{
+    const div = document.createElement("div");
+    div.className = "boardItem" + (b.id===state.boardId ? " active":"");
+    div.dataset.board = b.id;
+
+    div.innerHTML = `
+      <div class="boardName">${b.title}</div>
+      <div class="boardSub">${b.id} ・ ${b.sub}</div>
+      <div class="badges">
+        ${(b.tags||[]).map(t=>`<span class="badge">${t}</span>`).join("")}
+      </div>
+    `;
+    boardList.appendChild(div);
+  });
+
+  setPrompt(
+    "開局設定",
+    "1) 先選人數 → 2) 選板子（點一下會變色）\n3) 按底部「下一步」進入抽身分。",
+    "提示：進入遊戲後不再佔版面；要重選請到 ⚙️ 設定 → 回到開局"
+  );
+
+  btnMain.textContent = "開始夜晚"; // in setup just placeholder
+}
+
+function renderSeats(){
+  seatsGrid.innerHTML = "";
+  const cols = state.n===9 ? 3 : 4;
+  seatsGrid.style.gridTemplateColumns = `repeat(${cols}, 1fr)`;
+
+  state.seats.forEach(s=>{
+    const div = document.createElement("div");
+    div.className = "seat";
+    div.dataset.seat = String(s.id);
+
+    if(state.selected===s.id) div.classList.add("selected");
+    if(!s.alive) div.classList.add("dead");
+
+    // god view colors
+    if(state.eye){
+      if(s.camp==="好人") div.classList.add("good");
+      if(s.camp==="狼人") div.classList.add("wolf");
+    }
+
+    const role = roleByKey(s.roleKey);
+
+    // line2 text
+    let sub = "";
+    if(state.phase==="deal"){
+      sub = s.seen ? `${role.name}` : "長按看身分";
+    }else{
+      if(!s.alive) sub = "死亡";
+      else sub = "存活";
+    }
+
+    // god view extra
+    let godLine = "";
+    if(state.eye){
+      const icons = [];
+
+      // witch marks move to seat
+      if(state.witchSavedSeat===s.id) icons.push(ROLE_ICON.witch.pill);
+      if(state.witchPoisonSeat===s.id) icons.push(ROLE_ICON.witch.poison);
+
+      // guard target this night
+      if(state.nightGuard===s.id) icons.push(ROLE_ICON.guard);
+
+      // events
+      if(Array.isArray(s.events) && s.events.length){
+        // show last 2 events as short icons
+        const map = {
+          "wolf":"🩸",
+          "poison":"🧪",
+          "pill":"💊",
+          "shot":"🔫",
+          "claw":"🖐️",
+          "blackshot":"💥",
+          "exile":"🗳️"
+        };
+        const last = s.events.slice(-2).map(e=>map[e]||"•");
+        icons.push(...last);
+      }
+
+      const roleText = `${role.name}・${s.camp}`;
+      godLine = icons.length ? `${icons.join("")}  ${roleText}` : roleText;
+    }
+
+    div.innerHTML = `
+      <div class="seatNum">${s.id}</div>
+      <div class="seatSub">${sub}</div>
+      ${state.eye ? `<div class="seatSub" style="color:var(--ink); font-weight:900;">${godLine}</div>` : ``}
+    `;
+
+    seatsGrid.appendChild(div);
+  });
+}
+
+function renderButtons(){
+  if(state.phase==="setup"){
+    btnBack.disabled = true;
+    btnNext.disabled = false;
+    btnMain.disabled = true;
+    btnMain.textContent = "開始夜晚";
+    return;
+  }
+  btnBack.disabled = false;
+  btnNext.disabled = false;
+
+  // main button meaning by phase
+  if(state.phase==="deal"){
+    btnMain.disabled = false;
+    btnMain.textContent = "開始夜晚";
+  }else{
+    btnMain.disabled = false;
+    // toggle day/night helper label
+    btnMain.textContent = state.night>state.day ? "天亮睜眼" : "天黑閉眼";
   }
 }
-function resetHard(){
-  localStorage.removeItem(LS_KEY);
-  S = defaultState();
+
+/* ---------- setup actions ---------- */
+function ensureSeats(){
+  state.seats = Array.from({length:state.n}, (_,i)=>({
+    id:i+1,
+    alive:true,
+    roleKey:"villager",
+    camp:"好人",
+    events:[],
+    seen:false,
+  }));
+}
+
+function applyBoardDefaults(){
+  const b = currentBoard();
+  if(b?.defaults){
+    if(typeof b.defaults.hasPolice==="boolean") state.hasPolice = b.defaults.hasPolice;
+  }
+}
+
+/* ---------- dealing ---------- */
+function buildDealPool(){
+  const b = currentBoard();
+  const poolSeats = b.deal.seats.slice();
+  const poolExtra = b.deal.extra.slice();
+  // if board seats count not equal n, fallback
+  if(poolSeats.length !== state.n){
+    // simple fallback: 4 wolf + seer/witch/guard/hunter + rest villager
+    const base = [];
+    const wolves = clamp(Math.floor(state.n/3), 3, 4);
+    for(let i=0;i<wolves;i++) base.push("wolf");
+    base.push("seer","witch","guard","hunter");
+    while(base.length<state.n) base.push("villager");
+    return { seats: base, extra: [] };
+  }
+  return { seats: poolSeats, extra: poolExtra };
+}
+
+function doDeal(){
+  ensureSeats();
+  applyBoardDefaults();
+
+  const deal = buildDealPool();
+  const shuffled = shuffle(deal.seats);
+
+  for(let i=0;i<state.seats.length;i++){
+    state.seats[i].roleKey = shuffled[i];
+    state.seats[i].camp = roleByKey(shuffled[i]).camp;
+    state.seats[i].seen = false;
+    state.seats[i].events = [];
+    state.seats[i].alive = true;
+  }
+
+  // reset consumables
+  state.witchPill = true;
+  state.witchPoison = true;
+  state.witchSavedSeat = null;
+  state.witchPoisonSeat = null;
+
+  state.day = 0;
+  state.night = 0;
+  state.nightGuard = null;
+  state.nightWolf = null;
+  state.nightSeerCheck = null;
+
+  state.logs = [];
+  state.vote = { open:false, records:{} };
+
+  // thief pending setup
+  state.thief = { pending:false, seat:null, optionA:null, optionB:null, chosen:null };
+
+  state.phase = "deal";
+  state.selected = null;
+
+  // if thief exists -> compute remaining 2 cards (extra) and set pending
+  const thiefSeat = state.seats.find(s=>s.roleKey==="thief")?.id || null;
+  if(thiefSeat){
+    // remaining from extra pool, OR if extra empty: take two random from roles not in seats
+    let opt = deal.extra.slice();
+    if(opt.length < 2){
+      const all = ["seer","witch","guard","hunter","idiot","cupid","villager","villager","villager","wolf"];
+      const used = new Set(state.seats.map(s=>s.roleKey));
+      const candidates = all.filter(k=>!used.has(k));
+      opt = shuffle(candidates).slice(0,2);
+      while(opt.length<2) opt.push("villager");
+    }
+    state.thief.pending = true;
+    state.thief.seat = thiefSeat;
+    state.thief.optionA = opt[0];
+    state.thief.optionB = opt[1];
+  }
+
+  setPrompt("抽身分", "請將手機交給玩家：\n— 上帝先點選座位（可取消選取）\n— 玩家長按 0.3 秒查看身分\n— 看完按「我看完了」\n全部看完後按「開始夜晚」。");
+}
+
+/* ---------- long press role reveal ---------- */
+let pressTimer = null;
+let pressSeat = null;
+
+function bindSeatLongPress(el){
+  el.addEventListener("pointerdown", (e)=>{
+    const seatId = Number(el.dataset.seat);
+    pressSeat = seatId;
+    clearTimeout(pressTimer);
+    pressTimer = setTimeout(()=>{
+      onSeatLongPress(seatId);
+    }, 300);
+  }, {passive:true});
+
+  const cancel = ()=>{
+    clearTimeout(pressTimer);
+    pressTimer = null;
+    pressSeat = null;
+  };
+  el.addEventListener("pointerup", cancel, {passive:true});
+  el.addEventListener("pointercancel", cancel, {passive:true});
+  el.addEventListener("pointerleave", cancel, {passive:true});
+}
+
+function onSeatLongPress(seatId){
+  if(state.phase!=="deal") return; // only reveal in deal for player
+  const s = state.seats.find(x=>x.id===seatId);
+  if(!s) return;
+
+  const r = roleByKey(s.roleKey);
+  roleModalTitle.textContent = `${seatId}號 身分`;
+  roleModalRole.textContent  = r.name;
+  roleModalCamp.textContent  = `陣營：${r.camp}`;
+  openModal(roleModal);
+
+  // mark seen when player clicks done
+  btnRoleDone.onclick = ()=>{
+    s.seen = true;
+    closeModal(roleModal);
+    saveState();
+    renderAll();
+  };
+  btnRoleClose.onclick = ()=> closeModal(roleModal);
+}
+
+/* ---------- click selection ---------- */
+function onSeatClick(seatId){
+  // toggle selection (click same again cancels)
+  state.selected = (state.selected===seatId) ? null : seatId;
+  saveState();
   renderAll();
 }
 
+/* ---------- eye toggle ---------- */
+function toggleEye(){
+  state.eye = !state.eye;
+  saveState();
+  renderAll();
+}
+
+/* ---------- timer ---------- */
+function timerTickLoop(){
+  if(!state.timer.running) return;
+  const now = Date.now();
+  const dt = (now - state.timer.lastTick) / 1000;
+  if(dt >= 1){
+    const step = Math.floor(dt);
+    state.timer.sec = Math.max(0, state.timer.sec - step);
+    state.timer.lastTick = now;
+    saveState();
+    renderTimer();
+    if(state.timer.sec <= 0){
+      state.timer.running = false;
+      try{ navigator.vibrate && navigator.vibrate([200,80,200]); }catch(e){}
+      saveState();
+      renderTimer();
+      return;
+    }
+  }
+  requestAnimationFrame(timerTickLoop);
+}
+
+function renderTimer(){
+  timerBig.textContent = hms(state.timer.sec);
+}
+
+function timerSet(sec){
+  state.timer.sec = sec;
+  state.timer.running = false;
+  state.timer.lastTick = Date.now();
+  saveState();
+  renderTimer();
+}
+
+/* ---------- dice ---------- */
+function openDice(){
+  const alive = state.seats.filter(s=>s.alive).map(s=>s.id);
+  if(!alive.length){
+    diceResult.textContent = "—";
+  }else{
+    const pick = alive[Math.floor(Math.random()*alive.length)];
+    diceResult.textContent = `${pick} 號`;
+  }
+  openModal(diceModal);
+}
+btnDiceAgain.onclick = ()=> openDice();
+btnDiceClose.onclick = ()=> closeModal(diceModal);
+
+/* ---------- drawers/modal helpers ---------- */
 function openDrawer(backdrop, drawer){
   backdrop.classList.remove("hidden");
   drawer.classList.remove("hidden");
@@ -218,931 +673,712 @@ function closeModal(modal){
   modal.setAttribute("aria-hidden","true");
 }
 
-function formatTime(sec){
-  sec = Math.max(0, Math.floor(sec));
-  const m = String(Math.floor(sec/60)).padStart(2,"0");
-  const s = String(sec%60).padStart(2,"0");
-  return `${m}:${s}`;
-}
-function shuffle(arr){
-  const a = arr.slice();
-  for(let i=a.length-1;i>0;i--){
-    const j = Math.floor(Math.random()*(i+1));
-    [a[i],a[j]]=[a[j],a[i]];
+/* ---------- ann render ---------- */
+function buildAnnText(showGod){
+  if(!state.logs.length) return "（目前沒有公告紀錄）";
+  const lines = [];
+  for(const L of state.logs){
+    lines.push(showGod ? L.textGod : L.textPublic);
+    lines.push("");
   }
-  return a;
-}
-function seatAlive(i){
-  const seat = S.seats[i];
-  return seat && !seat.dead;
+  return lines.join("\n").trim();
 }
 
-function clearSelection(){ S.selected = new Set(); }
-function toggleSelectSeat(i){
-  if(!seatAlive(i) && S.stage!=="deal") return;
-  if(S.selected.has(i)) S.selected.delete(i);
-  else{
-    if(S.stage!=="vote") S.selected = new Set([i]);
-    else{
-      if(S.voteMode.step==="pickVoters") S.selected.add(i);
-      else S.selected = new Set([i]);
+/* ---------- flow (minimal but usable) ---------- */
+function startNight1(){
+  state.night = 1;
+  state.day = 0;
+  state.phase = "game";
+  state.selected = null;
+
+  // if thief pending -> force choose before night
+  if(state.thief.pending){
+    openThiefChoose();
+    // prompt still shown, but thief modal must be handled first
+  }
+
+  setPrompt(
+    `夜晚 ${state.night}`,
+    [
+      "夜晚開始：",
+      "1) 守衛請睜眼（選擇守護）",
+      "2) 狼人請睜眼（選擇刀人）",
+      "3) 預言家請睜眼（查驗一人）",
+      "4) 女巫請睜眼（解藥 / 毒藥）",
+      "",
+      "👉 依序按「下一步」提示，並依提示點座位"
+    ].join("\n"),
+    "提示：點座位可取消再選；👁 可切上帝視角"
+  );
+
+  // log header
+  pushLog(`NIGHT ${state.night} 開始`, `NIGHT ${state.night} 開始`);
+}
+
+/* step machine for night/day */
+const STEP = {
+  NONE:0,
+  NIGHT_GUARD:1,
+  NIGHT_WOLF:2,
+  NIGHT_SEER:3,
+  NIGHT_WITCH:4,
+  DAY_REVEAL:5,
+  DAY_VOTE:6,
+  DAY_EXILE_DONE:7,
+};
+let step = STEP.NONE;
+
+function setStep(newStep){
+  step = newStep;
+  state.selected = null;
+  saveState();
+  renderAll();
+}
+
+function nextStep(){
+  if(state.phase==="setup"){
+    // setup -> deal
+    if(!state.n) state.n = 12;
+    if(!state.boardId) state.boardId = currentBoard().id;
+    doDeal();
+    saveState();
+    renderAll();
+    return;
+  }
+
+  if(state.phase==="deal"){
+    // must all seen before proceed
+    const seen = state.seats.filter(s=>s.seen).length;
+    if(seen < state.n){
+      setPrompt("抽身分", state.promptText, `還有 ${state.n - seen} 人未看身分`);
+      renderAll();
+      return;
+    }
+    // proceed to game
+    startNight1();
+    setStep(STEP.NIGHT_GUARD);
+    saveState();
+    renderAll();
+    return;
+  }
+
+  // game steps
+  if(step===STEP.NIGHT_GUARD){
+    setPrompt(`夜晚 ${state.night}｜守衛`, "守衛請睜眼：請點選要守護的座位（可空守：不選直接下一步）");
+    // record selection when leaving step
+    state.nightGuard = state.selected || null;
+    setStep(STEP.NIGHT_WOLF);
+    return;
+  }
+
+  if(step===STEP.NIGHT_WOLF){
+    setPrompt(`夜晚 ${state.night}｜狼人`, "狼人請睜眼：請點選要刀的座位（必選）");
+    if(!state.selected){
+      // require
+      return;
+    }
+    state.nightWolf = state.selected;
+    // mark event (not kill yet until day reveal)
+    setStep(STEP.NIGHT_SEER);
+    return;
+  }
+
+  if(step===STEP.NIGHT_SEER){
+    setPrompt(`夜晚 ${state.night}｜預言家`, "預言家請睜眼：請點選要查驗的座位（必選）");
+    if(!state.selected) return;
+    state.nightSeerCheck = state.selected;
+    const target = state.seats.find(s=>s.id===state.nightSeerCheck);
+    const camp = target?.camp || "—";
+    pushLog(
+      `預言家查驗：${state.nightSeerCheck} 號（結果由上帝口頭公布）`,
+      `預言家查驗：${state.nightSeerCheck} 號 → ${camp}`
+    );
+    setStep(STEP.NIGHT_WITCH);
+    return;
+  }
+
+  if(step===STEP.NIGHT_WITCH){
+    // witch: if pill available and wolf target exists
+    const wolf = state.nightWolf;
+    const lines = [];
+    lines.push("女巫請睜眼：");
+    if(wolf) lines.push(`— 今晚刀口：${wolf} 號`);
+    if(state.witchPill) lines.push("— 解藥可用：點「刀口座位」視為救");
+    else lines.push("— 解藥已用");
+    if(state.witchPoison) lines.push("— 毒藥可用：點「其他座位」視為毒");
+    else lines.push("— 毒藥已用");
+    lines.push("");
+    lines.push("（同一晚只能救或毒其一；再點同一座位可取消選取）");
+    setPrompt(`夜晚 ${state.night}｜女巫`, lines.join("\n"));
+
+    // interpretation:
+    // - selected == wolf -> try save (if pill)
+    // - selected != null && selected != wolf -> poison (if poison)
+    // - no selection -> do nothing
+    const sel = state.selected;
+
+    // apply decision on next
+    if(sel){
+      if(sel===wolf && state.witchPill){
+        // save
+        state.witchPill = false;
+        state.witchSavedSeat = wolf;
+        state.witchPoisonSeat = null;
+        state.witchPoison = state.witchPoison; // unchanged
+        pushLog(`女巫使用解藥（公開不揭露）`, `女巫救：${wolf} 號（💊）`);
+      }else if(sel!==wolf && state.witchPoison){
+        state.witchPoison = false;
+        state.witchPoisonSeat = sel;
+        state.witchSavedSeat = null;
+        pushLog(`女巫使用毒藥（公開不揭露）`, `女巫毒：${sel} 號（🧪）`);
+      }
+    }
+
+    // resolve night -> day reveal
+    setStep(STEP.DAY_REVEAL);
+    return;
+  }
+
+  if(step===STEP.DAY_REVEAL){
+    // resolve deaths
+    const wolf = state.nightWolf;
+    const saved = state.witchSavedSeat;
+    const poisoned = state.witchPoisonSeat;
+
+    const deaths = new Set();
+
+    if(wolf && wolf!==saved){
+      deaths.add(wolf);
+      addSeatEvent(wolf, "wolf");
+    }
+    if(poisoned){
+      deaths.add(poisoned);
+      addSeatEvent(poisoned, "poison");
+    }
+
+    // apply
+    for(const id of deaths){
+      const s = state.seats.find(x=>x.id===id);
+      if(s) s.alive = false;
+    }
+
+    state.day += 1;
+
+    // log daybreak
+    const publicLine = deaths.size
+      ? `天亮：昨晚死亡 ${Array.from(deaths).sort((a,b)=>a-b).join("、")} 號`
+      : "天亮：平安夜";
+    const godLine = [
+      publicLine,
+      state.nightGuard ? `守衛守：${state.nightGuard} 號（🛡️）` : "守衛空守",
+      state.nightWolf ? `狼人刀：${state.nightWolf} 號（🩸）` : "狼人未刀？",
+      saved ? `女巫救：${saved} 號（💊）` : "女巫未救",
+      poisoned ? `女巫毒：${poisoned} 號（🧪）` : "女巫未毒",
+      state.nightSeerCheck ? `預言家查：${state.nightSeerCheck} 號` : ""
+    ].filter(Boolean).join("\n");
+
+    pushLog(`DAY ${state.day}｜${publicLine}`, `DAY ${state.day}｜\n${godLine}`);
+
+    setPrompt(`白天 ${state.day}`, `${publicLine}\n\n按中間「開始投票」進入投票流程（📣 可回顧公告）`, "提示：要投票時，中間按鈕會變「開始投票」");
+    btnMain.textContent = "開始投票";
+    setStep(STEP.DAY_VOTE);
+    return;
+  }
+
+  if(step===STEP.DAY_VOTE){
+    // enter vote collection: we use selection to record vote quickly
+    // 简化：每次「下一步」會要求先選投誰，並自動把「目前選取者」視為被投
+    // 更完整要逐個投票者記錄；先提供可用版：在設定公告中可呈現票型
+    if(!state.vote.open){
+      state.vote.open = true;
+      state.vote.records = {};
+      pushLog(`開始投票`, `開始投票`);
+      setPrompt(`白天 ${state.day}｜投票`, "投票模式：\n1) 先點「投票者」座位（再點取消）\n2) 再點「被投」座位（或點空白代表棄票）\n\n👉 這版快速法：\n- 先點投票者（選取）\n- 再點被投者（會自動記錄）\n\n按「下一步」可結算投票。");
+      renderAll();
+      return;
+    }else{
+      // tally
+      const tally = tallyVotes();
+      const text = formatVoteAnnounce(tally);
+      pushLog(`投票結算`, `投票結算（上帝）\n${text}`);
+
+      // apply exile (highest vote)
+      const exile = tally.exiled;
+      if(exile){
+        const s = state.seats.find(x=>x.id===exile);
+        if(s){
+          s.alive = false;
+          addSeatEvent(exile, "exile");
+        }
+      }
+
+      setPrompt(`白天 ${state.day}｜投票結果`, text + `\n\n按「下一步」進入下一晚。`);
+      setStep(STEP.DAY_EXILE_DONE);
+      state.vote.open = false;
+      state.vote.records = {};
+      state.selected = null;
+      saveState();
+      renderAll();
+      return;
     }
   }
+
+  if(step===STEP.DAY_EXILE_DONE){
+    // next night
+    state.night += 1;
+    // reset night memory
+    state.nightGuard = null;
+    state.nightWolf = null;
+    state.nightSeerCheck = null;
+    state.witchSavedSeat = null;
+    state.witchPoisonSeat = null;
+
+    setPrompt(
+      `夜晚 ${state.night}`,
+      [
+        "夜晚開始：",
+        "1) 守衛請睜眼（選擇守護）",
+        "2) 狼人請睜眼（選擇刀人）",
+        "3) 預言家請睜眼（查驗一人）",
+        "4) 女巫請睜眼（解藥 / 毒藥）",
+        "",
+        "👉 依序按「下一步」提示"
+      ].join("\n")
+    );
+    pushLog(`NIGHT ${state.night} 開始`, `NIGHT ${state.night} 開始`);
+    setStep(STEP.NIGHT_GUARD);
+    return;
+  }
 }
 
-function addLogPublic(text, godText=""){
-  S.log.push({ day:S.day, phase:S.stage, text, godText, ts:Date.now() });
+function prevStep(){
+  // simple: in setup can't
+  if(state.phase==="setup") return;
+
+  // in deal: back to setup (soft)
+  if(state.phase==="deal"){
+    state.phase = "setup";
+    state.dealt = false;
+    state.selected = null;
+    saveState();
+    renderAll();
+    return;
+  }
+
+  // in game: we do minimal back: just show prompt message (not undo)
+  pushLog("（提示）此版本不做流程回溯復原", "（提示）此版本不做流程回溯復原");
+  setPrompt("提示", "此版本「上一步」不回溯已結算事件。\n若要重來請到 ⚙️ 設定 → 回到開局。");
+  renderAll();
 }
 
-function buildAnnText(){
-  const showGod = !!toggleAnnGod.checked;
+/* ---------- vote record (by click) ---------- */
+let voteVoter = null; // temporary voter selection
+
+function handleVoteClick(seatId){
+  // two-step: pick voter then target
+  if(voteVoter==null){
+    voteVoter = seatId;
+    state.selected = seatId;
+    saveState();
+    renderAll();
+    return;
+  }
+  // second click -> target
+  const voter = voteVoter;
+  const target = seatId;
+  state.vote.records[String(voter)] = target;
+  voteVoter = null;
+  state.selected = null;
+  saveState();
+  renderAll();
+}
+
+function tallyVotes(){
+  const records = state.vote.records || {};
+  const bucket = new Map(); // target -> voters[]
+  const abstain = [];
+
+  for(const [voter, target] of Object.entries(records)){
+    const v = Number(voter);
+    const t = Number(target);
+    if(!t || t===0){
+      abstain.push(v);
+      continue;
+    }
+    if(!bucket.has(t)) bucket.set(t, []);
+    bucket.get(t).push(v);
+  }
+
+  // determine highest
+  let exiled = null;
+  let best = -1;
+  for(const [t, voters] of bucket.entries()){
+    if(voters.length > best){
+      best = voters.length;
+      exiled = t;
+    }else if(voters.length === best){
+      exiled = null; // tie -> no exile (simple)
+    }
+  }
+
+  return {
+    bucket,
+    abstain: abstain.sort((a,b)=>a-b),
+    exiled,
+    best
+  };
+}
+
+function formatVoteAnnounce(tally){
   const lines = [];
-  S.log.forEach((e, idx)=>{
-    lines.push(`【Day ${e.day}】${e.text}`);
-    if(showGod && e.godText) lines.push(`  ${e.godText}`);
-    if(idx !== S.log.length-1) lines.push("");
-  });
+  const entries = Array.from(tally.bucket.entries()).sort((a,b)=>a[0]-b[0]);
+  for(const [t, voters] of entries){
+    const v = voters.slice().sort((a,b)=>a-b);
+    lines.push(`投給${t}號的有 ${v.join("、")}（${v.length}票）`);
+  }
+  if(tally.abstain.length){
+    lines.push(`棄票的有 ${tally.abstain.join("、")}（${tally.abstain.length}票）`);
+  }
+  if(entries.length===0 && !tally.abstain.length) lines.push("（尚未記錄任何投票）");
+
+  if(tally.exiled){
+    lines.push(`${tally.exiled}號得到最高票遭到放逐`);
+  }else{
+    lines.push(`最高票平票或無有效票：本輪不放逐`);
+  }
   return lines.join("\n");
 }
 
-/* ---------- Seats build ---------- */
-function buildSeats(n){
-  S.seats = Array(n+1).fill(null);
-  for(let i=1;i<=n;i++){
-    S.seats[i] = {
-      id:i,
-      role:null,
-      camp:null,
-      dead:false,
-      deadReason:null,
-      marks:[],
-      seen:false
-    };
-  }
+/* ---------- seat events ---------- */
+function addSeatEvent(seatId, code){
+  const s = state.seats.find(x=>x.id===seatId);
+  if(!s) return;
+  s.events = s.events || [];
+  s.events.push(code);
 }
 
-function findSeatByRole(role){
-  for(let i=1;i<=S.n;i++){
-    if(S.seats[i]?.role===role) return i;
-  }
-  return null;
-}
-
-/* ---------- Boards UI ---------- */
-function renderBoards(){
-  boardList.innerHTML = "";
-  const n = S.n;
-  if(!n){
-    boardHint.textContent = "請先選擇人數";
-    return;
-  }
-  const filtered = BOARDS.filter(b=>b.n===n);
-  if(!filtered.length){
-    boardHint.textContent = "此人數目前沒有板子";
-    return;
-  }
-  boardHint.textContent = "請選擇板子（點一下會變色）";
-
-  filtered.forEach(b=>{
-    const btn = document.createElement("button");
-    btn.type="button";
-    btn.className = "boardBtn" + (S.boardId===b.id ? " active":"");
-    btn.innerHTML = `<div class="bTitle">${b.name}</div><div class="bSub">${b.desc}</div>`;
-    btn.addEventListener("click", ()=>{
-      S.boardId = b.id;
-      saveState();
-      renderBoards();
-      renderTop();
-      renderPrompt();
-    });
-    boardList.appendChild(btn);
+/* ---------- logs ---------- */
+function pushLog(publicText, godText){
+  const d = state.day;
+  const n = state.night;
+  state.logs.push({
+    type:"log",
+    day:d,
+    textPublic: publicText,
+    textGod: godText
   });
 }
 
-/* ---------- Deal ---------- */
-function prepareDeal(){
-  const board = BOARDS.find(b=>b.id===S.boardId);
-  if(!board) return;
+/* ---------- thief ---------- */
+function openThiefChoose(){
+  const seat = state.thief.seat;
+  const a = state.thief.optionA;
+  const b = state.thief.optionB;
+  if(!seat || !a || !b) return;
 
-  S.stage="deal";
-  S.day=1;
-  S.night=0;
-  S.dealt=0;
-  S._nightIdx=0;
-  clearSelection();
+  const ra = roleByKey(a);
+  const rb = roleByKey(b);
 
-  buildSeats(board.n);
-
-  S.rolesPool = shuffle(board.roles);
-  for(let i=1;i<=board.n;i++){
-    const r = S.rolesPool[i-1];
-    S.seats[i].role = r;
-    S.seats[i].camp = roleCamp(r);
+  // rule: if one wolf one good -> must pick wolf
+  const aWolf = ra.camp==="狼人";
+  const bWolf = rb.camp==="狼人";
+  let forced = null;
+  if(aWolf !== bWolf){
+    forced = aWolf ? a : b;
   }
 
-  S.seerSeat   = findSeatByRole(ROLE.SEER);
-  S.witchSeat  = findSeatByRole(ROLE.WITCH);
-  S.hunterSeat = findSeatByRole(ROLE.HUNTER);
-  S.guardSeat  = findSeatByRole(ROLE.GUARD);
-  S.cupidSeat  = findSeatByRole(ROLE.CUPID);
-  S.thiefSeat  = findSeatByRole(ROLE.THIEF);
-  S.thiefResolved = !S.thiefSeat;
-  S.thiefOptions = null;
+  thiefHint.textContent = forced
+    ? `盜賊是 ${seat} 號。兩張牌一好一狼：只能選狼人陣營（已限制）。`
+    : `盜賊是 ${seat} 號。請在兩張牌中擇一成為你的角色。`;
 
-  S.witchHealUsed=false;
-  S.witchPoisonUsed=false;
-  S.wolfTarget=null;
-  S.witchHealTarget=null;
-  S.witchPoisonTarget=null;
+  btnThiefA.textContent = ra.name + (ra.camp==="狼人" ? "（狼人）" : "");
+  btnThiefB.textContent = rb.name + (rb.camp==="狼人" ? "（狼人）" : "");
 
-  S.guardLast=null;
-  S.lovers=[];
-  S.seerChecked=[];
+  btnThiefA.disabled = forced ? (forced!==a) : false;
+  btnThiefB.disabled = forced ? (forced!==b) : false;
 
-  S.log=[];
-  S.votes=[];
-  S.voteMode={ step:"pickCandidate", candidate:null, voters:[] };
+  const choose = (key)=>{
+    // apply role replacement
+    const s = state.seats.find(x=>x.id===seat);
+    if(!s) return;
+    s.roleKey = key;
+    s.camp = roleByKey(key).camp;
 
-  addLogPublic(`第 1 天開始。請依序抽身分。`, `【上帝】板子：${board.name} / ${board.desc}`);
-  saveState();
-  renderAll();
-}
+    state.thief.pending = false;
+    state.thief.chosen = key;
 
-function countSeen(){
-  let c=0;
-  for(let i=1;i<=S.n;i++) if(S.seats[i]?.seen) c++;
-  return c;
-}
-
-/* long press helper */
-function attachLongPress(el, ms, fn){
-  let t=null;
-  const start=(e)=>{
-    e.preventDefault?.();
-    t=setTimeout(()=>{ t=null; fn(); }, ms);
-  };
-  const cancel=()=>{ if(t){ clearTimeout(t); t=null; } };
-
-  el.addEventListener("touchstart", start, {passive:false});
-  el.addEventListener("touchend", cancel);
-  el.addEventListener("touchmove", cancel);
-  el.addEventListener("touchcancel", cancel);
-
-  el.addEventListener("mousedown", start);
-  el.addEventListener("mouseup", cancel);
-  el.addEventListener("mouseleave", cancel);
-}
-
-function openRoleModal(i){
-  const seat = S.seats[i];
-  roleModalTitle.textContent = `玩家 ${i} 號身分`;
-  roleModalRole.textContent  = seat.role || "—";
-  roleModalCamp.textContent  = seat.camp ? `陣營：${seat.camp}` : "—";
-  openModal(roleModal);
-}
-
-btnRoleClose.onclick = ()=> closeModal(roleModal);
-btnRoleDone.onclick = ()=>{
-  const selected = [...S.selected][0];
-  if(S.stage==="deal" && selected){
-    S.seats[selected].seen = true;
-    S.dealt = countSeen();
-  }
-  closeModal(roleModal);
-  saveState();
-  renderAll();
-
-  // 盜賊：他看完後再跳選角
-  if(S.stage==="deal" && selected===S.thiefSeat && !S.thiefResolved){
-    setTimeout(openThiefChoice, 120);
-  }
-};
-
-/* ---------- Thief ---------- */
-function openThiefChoice(){
-  if(!S.thiefSeat || S.thiefResolved) return;
-
-  // 從「尚未被看過」的座位中抽 2 個角色（符合你說的“未被抽選/確認”概念）
-  let pool = [];
-  for(let i=1;i<=S.n;i++){
-    if(i===S.thiefSeat) continue;
-    if(S.seats[i] && !S.seats[i].seen) pool.push(i);
-  }
-  if(pool.length<2){
-    pool = [...Array(S.n).keys()].slice(1).filter(x=>x!==S.thiefSeat);
-  }
-  pool = shuffle(pool);
-
-  const aSeat = pool[0], bSeat = pool[1];
-  const aRole = S.seats[aSeat].role;
-  const bRole = S.seats[bSeat].role;
-
-  const mustWolf = (aRole===ROLE.WOLF || bRole===ROLE.WOLF);
-  S.thiefOptions = { a:{seat:aSeat, role:aRole}, b:{seat:bSeat, role:bRole}, mustWolf };
-
-  thiefHint.textContent = mustWolf
-    ? "抽到含狼人牌：你必須選擇狼人陣營。"
-    : "抽到兩張好人牌：你可以自由選擇其一。";
-
-  btnThiefA.textContent = aRole;
-  btnThiefB.textContent = bRole;
-
-  openModal(thiefModal);
-
-  const choose = (pick) => {
-    if(S.thiefOptions.mustWolf && pick.role!==ROLE.WOLF){
-      thiefHint.textContent = "⚠️ 必須選狼人牌";
-      setTimeout(()=> thiefHint.textContent = "抽到含狼人牌：你必須選擇狼人陣營。", 650);
-      return;
-    }
-
-    const seat = S.thiefSeat;
-    S.seats[seat].role = pick.role;
-    S.seats[seat].camp = roleCamp(pick.role);
-
-    // 重新定位關鍵角色位
-    S.seerSeat   = findSeatByRole(ROLE.SEER);
-    S.witchSeat  = findSeatByRole(ROLE.WITCH);
-    S.hunterSeat = findSeatByRole(ROLE.HUNTER);
-    S.guardSeat  = findSeatByRole(ROLE.GUARD);
-
-    addLogPublic(
-      `盜賊已完成選角。`,
-      `【上帝】盜賊(${seat}號)選擇：${pick.role}；捨棄：${pick===S.thiefOptions.a ? S.thiefOptions.b.role : S.thiefOptions.a.role}`
-    );
-
-    S.thiefResolved = true;
+    pushLog("（盜賊已完成選角）", `盜賊（${seat}號）選擇：${roleByKey(key).name}；另一張捨棄`);
     closeModal(thiefModal);
     saveState();
     renderAll();
   };
 
-  btnThiefA.onclick = ()=> choose(S.thiefOptions.a);
-  btnThiefB.onclick = ()=> choose(S.thiefOptions.b);
-}
-btnThiefClose.onclick = ()=> closeModal(thiefModal);
+  btnThiefA.onclick = ()=> choose(a);
+  btnThiefB.onclick = ()=> choose(b);
+  btnThiefClose.onclick = ()=> closeModal(thiefModal);
 
-/* ---------- Night flow ---------- */
-function countNightStepsTotal(){
-  let c=0;
-  if(S.night===1 && S.cupidSeat) c++;
-  if(S.guardSeat) c++;
-  c++; // wolf
-  if(S.seerSeat) c++;
-  if(S.witchSeat) c++;
-  return c;
+  openModal(thiefModal);
 }
 
-function getNightStep(){
-  const steps = [];
-  if(S.night===1 && S.cupidSeat){
-    steps.push({ key:"cupid",
-      text:`邱比特請睜眼（第 1 夜限定）\n請選擇兩位戀人（點兩位，按下一步）`,
-      foot:"點兩個號碼即可；也可空過。"
+/* ---------- events binding ---------- */
+function bindSetupEvents(){
+  document.querySelectorAll(".chips .chip[data-n]").forEach(btn=>{
+    btn.addEventListener("click", ()=>{
+      state.n = Number(btn.dataset.n);
+      // auto pick first board of this n
+      const first = BOARDS.find(b=>b.n===state.n);
+      if(first) state.boardId = first.id;
+      saveState();
+      renderAll();
     });
-  }
-  if(S.guardSeat){
-    steps.push({ key:"guard",
-      text:`守衛請睜眼（選擇守護）\n點一位要守護的玩家，按下一步`,
-      foot:"可空守（不選直接下一步）。"
-    });
-  }
-  steps.push({ key:"wolf",
-    text:`狼人請睜眼（選擇刀人）\n點一位要刀的玩家，按下一步`,
-    foot:"只記錄目標，不會立刻公開。"
   });
-  if(S.seerSeat){
-    steps.push({ key:"seer",
-      text:`預言家請睜眼（查驗一人）\n點一位要查驗的玩家，按下一步`,
-      foot:"查驗結果會寫入📣公告（上帝可看）。"
-    });
-  }
-  if(S.witchSeat){
-    steps.push({ key:"witch",
-      text:`女巫請睜眼（解藥/毒藥）\n- 救：點狼刀目標（若有）\n- 毒：點其他玩家\n同一晚救/毒只能擇一`,
-      foot:"不操作可直接下一步。"
-    });
-  }
 
-  return steps[Math.min(S._nightIdx||0, steps.length-1)];
-}
-
-function advanceNightStep(){
-  const step = getNightStep();
-  const sel = [...S.selected];
-
-  switch(step.key){
-    case "cupid":{
-      if(sel.length===2){
-        S.lovers = sel.slice(0,2);
-        addLogPublic(`邱比特完成連結戀人。`, `【上帝】戀人：${S.lovers[0]}號 & ${S.lovers[1]}號`);
-      }else{
-        addLogPublic(`邱比特未選擇戀人。`, `【上帝】戀人未設定`);
-      }
-      clearSelection();
-      S._nightIdx++;
-      break;
-    }
-    case "guard":{
-      const target = sel[0]||null;
-      if(target){
-        if(S.guardLast && target===S.guardLast){
-          addLogPublic(`守衛連守同一人（已忽略）`, `【上帝】連守限制：${target}號`);
-        }else{
-          S.seats[target].marks.push("🛡 守護");
-          S.guardLast = target;
-          addLogPublic(`守衛已守護。`, `【上帝】守護：${target}號`);
-        }
-      }else{
-        addLogPublic(`守衛空守。`, `【上帝】空盾`);
-      }
-      clearSelection();
-      S._nightIdx++;
-      break;
-    }
-    case "wolf":{
-      const target = sel[0]||null;
-      S.wolfTarget = target;
-      addLogPublic(`狼人已選擇刀人。`, `【上帝】狼刀：${target ? target+"號":"無"}`);
-      clearSelection();
-      S._nightIdx++;
-      break;
-    }
-    case "seer":{
-      const target = sel[0]||null;
-      if(target){
-        const camp = S.seats[target].camp;
-        S.seerChecked.push({ day:S.day, seat:target, camp });
-        addLogPublic(`預言家完成查驗。`, `【上帝】查驗：${target}號 → ${camp}`);
-      }else{
-        addLogPublic(`預言家未查驗。`, `【上帝】查驗：無`);
-      }
-      clearSelection();
-      S._nightIdx++;
-      break;
-    }
-    case "witch":{
-      const target = sel[0]||null;
-      if(!target){
-        addLogPublic(`女巫未用藥。`, `【上帝】女巫：未操作`);
-        clearSelection();
-        S._nightIdx++;
-        break;
-      }
-
-      if(S.wolfTarget && target===S.wolfTarget && !S.witchHealUsed){
-        S.witchHealUsed = true;
-        S.witchHealTarget = target;
-        S.seats[target].marks.push("💊 解救");
-        addLogPublic(`女巫使用解藥。`, `【上帝】解藥救：${target}號`);
-        S.witchPoisonTarget = null;
-      }else if(!S.witchPoisonUsed){
-        S.witchPoisonUsed = true;
-        S.witchPoisonTarget = target;
-        S.seats[target].marks.push("🧪 中毒");
-        addLogPublic(`女巫使用毒藥。`, `【上帝】毒藥毒：${target}號`);
-        S.witchHealTarget = null;
-      }else{
-        addLogPublic(`女巫已無可用藥。`, `【上帝】藥已用完`);
-      }
-
-      clearSelection();
-      S._nightIdx++;
-      break;
-    }
-  }
-
-  if(S._nightIdx >= countNightStepsTotal()){
-    resolveNight();
-  }
-}
-
-function resolveNight(){
-  const deaths = [];
-
-  if(S.wolfTarget){
-    const t = S.wolfTarget;
-    const savedByHeal = (S.witchHealTarget===t);
-    const savedByGuard = S.seats[t].marks.includes("🛡 守護");
-    if(!savedByHeal && !savedByGuard){
-      deaths.push({seat:t, reason:"🐺 狼刀"});
-      S.seats[t].marks.push("🐺 狼刀");
-    }else{
-      if(savedByGuard) addLogPublic(`守衛守護成功。`, `【上帝】盾到：${t}號`);
-      if(savedByHeal) addLogPublic(`女巫解救成功。`, `【上帝】救到：${t}號`);
-    }
-  }
-
-  if(S.witchPoisonTarget){
-    deaths.push({seat:S.witchPoisonTarget, reason:"🧪 毒死"});
-  }
-
-  const uniq = new Map();
-  deaths.forEach(d=>uniq.set(d.seat, d.reason));
-  const finalDeaths = [...uniq.entries()].map(([seat,reason])=>({seat,reason}));
-
-  if(finalDeaths.length===0){
-    addLogPublic(`昨夜平安無事。`, `【上帝】平安夜`);
-  }else{
-    addLogPublic(`昨夜死亡：${finalDeaths.map(d=>`${d.seat}號`).join("、")}`,
-      `【上帝】原因：${finalDeaths.map(d=>`${d.seat}號 ${d.reason}`).join("；")}`);
-    finalDeaths.forEach(d=>{
-      S.seats[d.seat].dead = true;
-      S.seats[d.seat].deadReason = d.reason;
-    });
-  }
-
-  S.wolfTarget=null;
-  S.witchHealTarget=null;
-  S.witchPoisonTarget=null;
-
-  S.stage="day";
-  S.day += 1;
-  S._nightIdx=0;
-
-  saveState();
-  renderAll();
-}
-
-/* ---------- Vote ---------- */
-function startVote(){
-  S.stage="vote";
-  S.voteMode={ step:"pickCandidate", candidate:null, voters:[] };
-  clearSelection();
-  addLogPublic(`開始投票。`, `【上帝】投票開始`);
-  saveState();
-  renderAll();
-}
-function advanceVote(){
-  const vm = S.voteMode;
-  const sel = [...S.selected];
-
-  if(vm.step==="pickCandidate"){
-    const c = sel[0];
-    if(!c) return;
-    vm.candidate = c;
-    vm.step="pickVoters";
-    clearSelection();
+  boardList.addEventListener("click", (e)=>{
+    const item = e.target.closest(".boardItem");
+    if(!item) return;
+    state.boardId = item.dataset.board;
     saveState();
     renderAll();
-    return;
-  }
-
-  const voters = sel.slice().sort((a,b)=>a-b);
-  S.votes.push({ day:S.day-1, to:vm.candidate, from:voters });
-
-  addLogPublic(`投票：${voters.length? voters.join("、")+" 投給 ":"（無）投給 "}${vm.candidate}號`);
-  vm.step="pickCandidate";
-  vm.candidate=null;
-  clearSelection();
-  saveState();
-  renderAll();
-}
-function settleVote(){
-  const map = new Map();
-  S.votes.forEach(v=>{
-    if(!map.has(v.to)) map.set(v.to, []);
-    map.get(v.to).push(...v.from);
   });
+}
 
-  const alive = [];
-  for(let i=1;i<=S.n;i++) if(seatAlive(i)) alive.push(i);
+function bindTopButtons(){
+  btnEye.addEventListener("click", ()=> toggleEye());
 
-  const votedFrom = new Set();
-  S.votes.forEach(v=>v.from.forEach(x=>votedFrom.add(x)));
-  const abstain = alive.filter(x=>!votedFrom.has(x));
-
-  const lines = [];
-  const entries = [...map.entries()].sort((a,b)=>b[1].length-a[1].length);
-
-  entries.forEach(([to, from])=>{
-    const uniqueFrom = [...new Set(from)].sort((a,b)=>a-b);
-    lines.push(`投給${to}號的有${uniqueFrom.length? " "+uniqueFrom.join("、") : "（無）"}`);
-    lines.push(`→ ${to}號共 ${uniqueFrom.length} 票`);
-    lines.push("");
+  btnTimer.addEventListener("click", ()=>{
+    renderTimer();
+    openDrawer(timerBackdrop, timerDrawer);
   });
+  btnCloseTimer.addEventListener("click", ()=> closeDrawer(timerBackdrop, timerDrawer));
+  timerBackdrop.addEventListener("click", ()=> closeDrawer(timerBackdrop, timerDrawer));
 
-  lines.push(`棄票的有${abstain.length? " "+abstain.join("、") : "（無）"}`);
-
-  let exile=null;
-  if(entries.length){
-    exile = entries[0][0];
-    lines.push("");
-    lines.push(`${exile}號得到最高票遭到放逐`);
-  }else{
-    lines.push("");
-    lines.push(`沒有有效投票，無人放逐`);
-  }
-
-  addLogPublic(`投票結算完成。`);
-  addLogPublic(lines.join("\n"));
-
-  if(exile){
-    S.seats[exile].dead=true;
-    S.seats[exile].deadReason="🗳 放逐";
-  }
-
-  S.stage="night";
-  S.night += 1;
-  S._nightIdx=0;
-  S.votes=[];
-  S.voteMode={ step:"pickCandidate", candidate:null, voters:[] };
-  clearSelection();
-
-  saveState();
-  renderAll();
-}
-
-/* ---------- Render ---------- */
-function renderTop(){
-  let st="—";
-  if(S.stage==="setup") st="開局設定";
-  if(S.stage==="deal")  st=`抽身分（${countSeen()}/${S.n||0}）`;
-  if(S.stage==="night") st=`第 ${S.night} 夜`;
-  if(S.stage==="day")   st=`第 ${S.day} 天`;
-  if(S.stage==="vote")  st=`投票（第 ${S.day-1} 天）`;
-  uiStatus.textContent = st;
-
-  const b = BOARDS.find(x=>x.id===S.boardId);
-  uiBoard.textContent = S.stage==="setup"
-    ? (S.n ? `人數：${S.n}` : "請選人數")
-    : (b ? b.name : "—");
-
-  segEdge.classList.toggle("primary", S.winMode==="edge");
-  segCity.classList.toggle("primary", S.winMode==="city");
-  togglePolice.checked = !!S.hasPolice;
-}
-
-function renderPrompt(){
-  if(S.stage==="setup"){
-    promptTitle.textContent="請先設定人數與板子";
-    promptText.textContent =
-`1) 先選人數（9 / 10 / 12）
-2) 再選板子（格子按鈕會變色）
-3) 按底部「下一步」進入抽身分
-
-✅ 選完後：開局設定會自動收起，不再佔畫面。`;
-    promptFoot.textContent="抽身分：玩家長按 0.3 秒查看。";
-    return;
-  }
-
-  if(S.stage==="deal"){
-    promptTitle.textContent="抽身分";
-    promptText.textContent =
-`上帝點選座位 → 玩家長按 0.3 秒看身分 → 按「我看完了」
-全部看完後按「下一步」進入夜晚流程。`;
-    promptFoot.textContent="（再點一次同號碼可取消選取）";
-    return;
-  }
-
-  if(S.stage==="night"){
-    const step = getNightStep();
-    promptTitle.textContent = `🌙 夜晚流程（第 ${S.night} 夜）`;
-    promptText.textContent = step.text;
-    promptFoot.textContent = step.foot || "";
-    return;
-  }
-
-  if(S.stage==="day"){
-    promptTitle.textContent = `☀️ 白天流程（第 ${S.day-1} 天結束後）`;
-    promptText.textContent =
-`📣 公告可回顧每一天公開資訊
-按中間鍵「開始投票」進入投票流程`;
-    promptFoot.textContent = "你也可以先討論發言，再按開始投票。";
-    return;
-  }
-
-  if(S.stage==="vote"){
-    const vm=S.voteMode;
-    if(vm.step==="pickCandidate"){
-      promptTitle.textContent="🗳️ 投票：選擇被投票者";
-      promptText.textContent = `點選候選（被投票者） → 按「下一步」`;
-      promptFoot.textContent = "再點一次可取消。";
-    }else{
-      promptTitle.textContent = `🗳️ 投票：選擇投票者 → 投給 ${vm.candidate} 號`;
-      promptText.textContent = `可多選投票者 → 按「下一步」儲存此票型`;
-      promptFoot.textContent = "可多選；再點可取消。";
-    }
-  }
-}
-
-function buildSeatMeta(i){
-  const seat = S.seats[i];
-  if(S.stage==="deal" && !S.godView){
-    return seat.seen ? "✅已看" : "長按看身分";
-  }
-  if(!S.godView){
-    return seat.dead ? "已死亡" : "";
-  }
-
-  const lines=[];
-  if(seat.role) lines.push(`${seat.role}・${seat.camp}`);
-  if(seat.dead && seat.deadReason) lines.push(`☠️ ${seat.deadReason}`);
-  if(seat.marks?.length){
-    seat.marks.slice(-2).forEach(m=>lines.push(m));
-  }
-  return lines.join("<br/>");
-}
-
-function renderSeats(){
-  if(S.stage==="setup"){
-    seatsGrid.innerHTML="";
-    $("seatsHeader").style.display="none";
-    return;
-  }
-  $("seatsHeader").style.display="";
-
-  seatsGrid.innerHTML="";
-  const n=S.n || (S.seats.length-1);
-
-  for(let i=1;i<=n;i++){
-    const seat=S.seats[i];
-    const div=document.createElement("div");
-    div.className="seat";
-    if(S.selected.has(i)) div.classList.add("selected");
-    if(seat.dead) div.classList.add("dead");
-    if(S.godView){
-      if(seat.camp===CAMP.WOLF) div.classList.add("wolfGod");
-      else div.classList.add("goodGod");
-    }
-
-    const badges=[];
-    if(S.godView){
-      if(i===S.witchSeat){
-        if(!S.witchHealUsed) badges.push(`<span class="badge left">💊</span>`);
-        if(!S.witchPoisonUsed) badges.push(`<span class="badge">🧪</span>`);
-      }
-      const last = seat.marks?.[seat.marks.length-1] || "";
-      if(last.includes("🛡")) badges.push(`<span class="badge">🛡</span>`);
-      if(last.includes("💊")) badges.push(`<span class="badge">💊</span>`);
-      if(last.includes("🧪")) badges.push(`<span class="badge">🧪</span>`);
-      if(last.includes("🐺")) badges.push(`<span class="badge">🐺</span>`);
-      if(last.includes("🔫")) badges.push(`<span class="badge">🔫</span>`);
-    }
-
-    div.innerHTML = `
-      ${badges.join("")}
-      <div class="seatNum">${i}</div>
-      <div class="seatMeta">${buildSeatMeta(i)}</div>
-    `;
-
-    div.addEventListener("click", ()=>{
-      toggleSelectSeat(i);
-      saveState();
-      renderSeats();
-    });
-
-    attachLongPress(div, 300, ()=>{
-      if(S.stage!=="deal") return;
-      openRoleModal(i);
-    });
-
-    seatsGrid.appendChild(div);
-  }
-}
-
-function renderBottomButtons(){
-  if(S.stage==="setup"){ btnMain.textContent="—"; btnMain.disabled=true; return; }
-  btnMain.disabled=false;
-
-  if(S.stage==="deal"){ btnMain.textContent="開始夜晚"; return; }
-  if(S.stage==="night"){ btnMain.textContent="天亮睜眼"; return; }
-  if(S.stage==="day"){ btnMain.textContent="開始投票"; return; }
-  if(S.stage==="vote"){ btnMain.textContent="結算投票"; return; }
-}
-
-function renderAll(){
-  renderTop();
-  setupCard.style.display = (S.stage==="setup") ? "" : "none";
-  if(S.stage==="setup") renderBoards();
-  renderPrompt();
-  renderBottomButtons();
-  renderSeats();
-
-  if(!annDrawer.classList.contains("hidden")){
-    annText.textContent = buildAnnText();
-  }
-}
-
-/* ---------- Actions ---------- */
-function onNext(){
-  if(S.stage==="setup"){
-    if(!S.n || !S.boardId) return;
-    prepareDeal();
-    return;
-  }
-
-  if(S.stage==="deal"){
-    if(countSeen() < S.n){
-      addLogPublic(`尚有玩家未看身分。`, `【上帝】已看：${countSeen()}/${S.n}`);
-      saveState(); renderAll();
-      return;
-    }
-    S.stage="night";
-    S.night=1;
-    S._nightIdx=0;
-    clearSelection();
-    addLogPublic(`進入夜晚。`, `【上帝】第 1 夜開始`);
-    saveState(); renderAll();
-    return;
-  }
-
-  if(S.stage==="night"){
-    advanceNightStep();
-    saveState(); renderAll();
-    return;
-  }
-
-  if(S.stage==="vote"){
-    advanceVote();
-    return;
-  }
-}
-
-function onBack(){
-  if(S.stage==="vote" && S.voteMode.step==="pickVoters"){
-    S.voteMode.step="pickCandidate";
-    S.voteMode.candidate=null;
-    clearSelection();
-    saveState(); renderAll();
-    return;
-  }
-  if(S.stage==="night"){
-    if((S._nightIdx||0)>0){
-      S._nightIdx=Math.max(0,(S._nightIdx||0)-1);
-      clearSelection();
-      saveState(); renderAll();
-    }
-  }
-}
-
-function onMain(){
-  if(S.stage==="deal"){
-    if(countSeen() < S.n){
-      addLogPublic(`尚有玩家未看身分，無法開始夜晚。`, `【上帝】已看：${countSeen()}/${S.n}`);
-      saveState(); renderAll();
-      return;
-    }
-    S.stage="night";
-    S.night=1;
-    S._nightIdx=0;
-    clearSelection();
-    addLogPublic(`進入夜晚。`, `【上帝】第 1 夜開始`);
-    saveState(); renderAll();
-    return;
-  }
-
-  if(S.stage==="day"){
-    startVote(); return;
-  }
-
-  if(S.stage==="vote"){
-    settleVote(); return;
-  }
-
-  if(S.stage==="night"){
-    addLogPublic(`請用「下一步」依序走夜晚流程。`);
-    saveState(); renderAll();
-  }
-}
-
-/* ---------- Dice ---------- */
-function rollDice(){
-  const alive=[];
-  for(let i=1;i<=S.n;i++) if(seatAlive(i)) alive.push(i);
-  if(!alive.length){ diceResult.textContent="—"; return; }
-  const pick = alive[Math.floor(Math.random()*alive.length)];
-  diceResult.textContent = `${pick}`;
-}
-
-/* ---------- God view ---------- */
-function toggleGodView(){
-  S.godView = !S.godView;
-  addLogPublic(`上帝視角：${S.godView?"開":"關"}`, `【上帝】godView=${S.godView}`);
-  saveState();
-  renderAll();
-}
-
-/* ---------- Timer ---------- */
-let timer = { sec:90, running:false, t:null };
-
-function loadTimer(){
-  try{
-    const raw = localStorage.getItem("wg_timer_v1");
-    if(raw){
-      const o = JSON.parse(raw);
-      timer.sec = o.sec ?? 90;
-      timer.running = o.running ?? false;
-    }
-  }catch(e){}
-  updateTimerUI();
-  if(timer.running) startTimerTick();
-}
-function saveTimer(){
-  localStorage.setItem("wg_timer_v1", JSON.stringify({sec:timer.sec, running:timer.running}));
-}
-function updateTimerUI(){ timerBigEl.textContent = formatTime(timer.sec); }
-function startTimerTick(){
-  if(timer.t) clearInterval(timer.t);
-  timer.t = setInterval(()=>{
-    if(!timer.running) return;
-    timer.sec -= 1;
-    if(timer.sec<=0){
-      timer.sec=0;
-      timer.running=false;
-      if(navigator.vibrate) navigator.vibrate([200,120,200]);
-      addLogPublic(`⏱ 計時結束。`);
-      saveTimer();
-    }
-    updateTimerUI();
-    saveTimer();
-  }, 1000);
-}
-function setTimer(sec){
-  timer.sec=sec;
-  timer.running=false;
-  updateTimerUI();
-  saveTimer();
-}
-btnTimerStart.onclick = ()=>{ timer.running=true; saveTimer(); startTimerTick(); };
-btnTimerPause.onclick = ()=>{ timer.running=false; saveTimer(); };
-btnTimerReset.onclick = ()=>{ setTimer(90); };
-
-timerPresets.addEventListener("click",(e)=>{
-  const btn=e.target.closest(".chip");
-  if(!btn) return;
-  const sec=Number(btn.dataset.sec||"0");
-  if(sec>0) setTimer(sec);
-});
-
-/* ---------- Drawer/Modal binding ---------- */
-btnTimer.onclick = ()=> openDrawer(timerBackdrop, timerDrawer);
-btnCloseTimer.onclick = ()=> closeDrawer(timerBackdrop, timerDrawer);
-timerBackdrop.onclick = ()=> closeDrawer(timerBackdrop, timerDrawer);
-
-btnAnn.onclick = ()=>{
-  annText.textContent = buildAnnText();
-  openDrawer(annBackdrop, annDrawer);
-};
-btnCloseAnn.onclick = ()=> closeDrawer(annBackdrop, annDrawer);
-annBackdrop.onclick = ()=> closeDrawer(annBackdrop, annDrawer);
-toggleAnnGod.onchange = ()=>{ annText.textContent = buildAnnText(); };
-
-btnSettings.onclick = ()=> openDrawer(setBackdrop, setDrawer);
-btnCloseSet.onclick = ()=> closeDrawer(setBackdrop, setDrawer);
-setBackdrop.onclick = ()=> closeDrawer(setBackdrop, setDrawer);
-
-segEdge.onclick = ()=>{ S.winMode="edge"; saveState(); renderTop(); };
-segCity.onclick = ()=>{ S.winMode="city"; saveState(); renderTop(); };
-togglePolice.onchange = ()=>{ S.hasPolice=togglePolice.checked; saveState(); };
-
-btnGotoSetup.onclick = ()=>{
-  const keepWin=S.winMode, keepPolice=S.hasPolice;
-  S = defaultState();
-  S.winMode=keepWin;
-  S.hasPolice=keepPolice;
-  saveState();
-  renderAll();
-  closeDrawer(setBackdrop, setDrawer);
-};
-btnHardReset.onclick = ()=>{ resetHard(); closeDrawer(setBackdrop, setDrawer); };
-
-btnEye.onclick = toggleGodView;
-
-btnDice.onclick = ()=>{ rollDice(); openModal(diceModal); };
-btnDiceAgain.onclick = rollDice;
-btnDiceClose.onclick = ()=> closeModal(diceModal);
-
-/* ---------- Setup 人數 chip ---------- */
-document.querySelectorAll(".setupCard .chip[data-n]").forEach(btn=>{
-  btn.addEventListener("click", ()=>{
-    const n = Number(btn.dataset.n);
-    S.n=n;
-    S.boardId=null;
+  timerPresets.addEventListener("click", (e)=>{
+    const b = e.target.closest(".chip[data-sec]");
+    if(!b) return;
+    timerSet(Number(b.dataset.sec));
+  });
+  btnTimerStart.addEventListener("click", ()=>{
+    state.timer.running = true;
+    state.timer.lastTick = Date.now();
     saveState();
-
-    document.querySelectorAll(".setupCard .chip[data-n]").forEach(x=>{
-      x.classList.toggle("active", x.dataset.n===String(n));
-    });
-
-    renderBoards();
-    renderTop();
-    renderPrompt();
+    timerTickLoop();
   });
-});
+  btnTimerPause.addEventListener("click", ()=>{
+    state.timer.running = false;
+    saveState();
+  });
+  btnTimerReset.addEventListener("click", ()=>{
+    timerSet(90);
+  });
 
-/* ---------- Buttons ---------- */
-btnNext.onclick = onNext;
-btnBack.onclick = onBack;
-btnMain.onclick = onMain;
+  btnAnn.addEventListener("click", ()=>{
+    annText.textContent = buildAnnText(toggleAnnGod.checked);
+    openDrawer(annBackdrop, annDrawer);
+  });
+  btnCloseAnn.addEventListener("click", ()=> closeDrawer(annBackdrop, annDrawer));
+  annBackdrop.addEventListener("click", ()=> closeDrawer(annBackdrop, annDrawer));
+  toggleAnnGod.addEventListener("change", ()=>{
+    annText.textContent = buildAnnText(toggleAnnGod.checked);
+  });
 
-/* ---------- Boot ---------- */
-(function boot(){
-  if(S.stage==="setup" && S.n){
-    document.querySelectorAll(".setupCard .chip[data-n]").forEach(x=>{
-      x.classList.toggle("active", x.dataset.n===String(S.n));
-    });
+  btnDice.addEventListener("click", ()=>{
+    if(state.phase==="setup"){
+      openModal(diceModal);
+      diceResult.textContent = "（請先開局）";
+      return;
+    }
+    openDice();
+  });
+
+  btnSettings.addEventListener("click", ()=>{
+    // sync UI
+    segEdge.classList.toggle("primary", state.winMode==="edge");
+    segCity.classList.toggle("primary", state.winMode==="city");
+    togglePolice.checked = !!state.hasPolice;
+
+    openDrawer(setBackdrop, setDrawer);
+  });
+  btnCloseSet.addEventListener("click", ()=> closeDrawer(setBackdrop, setDrawer));
+  setBackdrop.addEventListener("click", ()=> closeDrawer(setBackdrop, setDrawer));
+
+  segEdge.addEventListener("click", ()=>{
+    state.winMode = "edge";
+    segEdge.classList.add("primary");
+    segCity.classList.remove("primary");
+    saveState();
+    renderTop();
+  });
+  segCity.addEventListener("click", ()=>{
+    state.winMode = "city";
+    segCity.classList.add("primary");
+    segEdge.classList.remove("primary");
+    saveState();
+    renderTop();
+  });
+
+  togglePolice.addEventListener("change", ()=>{
+    state.hasPolice = togglePolice.checked;
+    saveState();
+    renderTop();
+  });
+
+  btnGotoSetup.addEventListener("click", ()=>{
+    // back to setup but keep stored settings (winMode/police)
+    state.phase = "setup";
+    state.dealt = false;
+    state.eye = false;
+    state.selected = null;
+    state.seats = [];
+    state.logs = [];
+    state.vote = {open:false, records:{}};
+    saveState();
+    closeDrawer(setBackdrop, setDrawer);
+    renderAll();
+  });
+
+  btnHardReset.addEventListener("click", ()=>{
+    localStorage.removeItem(LS_KEY);
+    state = deepClone(DEFAULT_STATE);
+    saveState();
+    closeDrawer(setBackdrop, setDrawer);
+    renderAll();
+  });
+}
+
+function bindBottom(){
+  btnBack.addEventListener("click", ()=> prevStep());
+
+  btnNext.addEventListener("click", ()=>{
+    // if in vote collection, "下一步" means tally
+    nextStep();
+    saveState();
+    renderAll();
+  });
+
+  btnMain.addEventListener("click", ()=>{
+    if(state.phase==="deal"){
+      // behave same as next step -> start night
+      nextStep();
+      return;
+    }
+    if(state.phase==="game"){
+      if(step===STEP.DAY_REVEAL){
+        // not used
+        return;
+      }
+      if(step===STEP.DAY_VOTE){
+        // already in vote - main does nothing
+        return;
+      }
+      // toggle helper only (label changes handled in renderButtons)
+      // if currently at night flow, we let nextStep do the real progress
+      // main button can start vote when ready:
+      if(step===STEP.DAY_VOTE){
+        return;
+      }
+      if(step===STEP.DAY_EXILE_DONE){
+        return;
+      }
+      // in "day reveal finished" step, setStep DAY_VOTE is already done
+      if(btnMain.textContent.includes("投票") && step===STEP.DAY_VOTE){
+        return;
+      }
+    }
+  });
+}
+
+/* ---------- seat click delegation + long press binding ---------- */
+function bindSeats(){
+  seatsGrid.addEventListener("click", (e)=>{
+    const seatEl = e.target.closest(".seat");
+    if(!seatEl) return;
+    const seatId = Number(seatEl.dataset.seat);
+
+    if(state.phase==="game" && step===STEP.DAY_VOTE && state.vote.open){
+      // vote record mode
+      handleVoteClick(seatId);
+      return;
+    }
+
+    onSeatClick(seatId);
+  });
+
+  // long-press: bind after render (each seat)
+}
+
+/* ---------- main render ---------- */
+function renderAll(){
+  setBodyState();
+  renderTop();
+
+  // setup visibility
+  if(state.phase==="setup"){
+    renderSetup();
+    // clear seats content, but keep structure hidden
+  }else{
+    // prompt per phase persists
+    promptTitle.textContent = state.promptTitle || "—";
+    promptText.textContent  = state.promptText || "—";
+    promptFoot.textContent  = state.promptFoot || "";
   }
+
+  // seats render when not setup
+  if(state.phase!=="setup"){
+    if(!state.seats || state.seats.length!==state.n) ensureSeats();
+    renderSeats();
+
+    // bind long press on current seats
+    document.querySelectorAll(".seat").forEach(el=> bindSeatLongPress(el));
+  }
+
+  renderButtons();
+}
+
+/* ---------- init ---------- */
+function init(){
+  // if no phase -> setup
+  if(!state.phase) state.phase = "setup";
+
+  // if in deal/game but seats missing -> go setup
+  if((state.phase==="deal" || state.phase==="game") && (!state.seats || state.seats.length!==state.n)){
+    state.phase = "setup";
+    state.seats = [];
+  }
+
+  // step restore (simple)
+  if(state.phase!=="game") step = STEP.NONE;
+  if(state.phase==="game" && step===STEP.NONE) step = STEP.NIGHT_GUARD;
+
+  // initial prompt for setup
+  if(state.phase==="setup"){
+    setPrompt(
+      "開局設定",
+      "1) 選人數\n2) 選板子\n3) 按「下一步」進入抽身分"
+    );
+  }
+
+  bindSetupEvents();
+  bindTopButtons();
+  bindBottom();
+  bindSeats();
+
+  // close modals by backdrop click
+  roleModal.addEventListener("click", (e)=>{ if(e.target===roleModal) closeModal(roleModal); });
+  diceModal.addEventListener("click", (e)=>{ if(e.target===diceModal) closeModal(diceModal); });
+  thiefModal.addEventListener("click", (e)=>{ if(e.target===thiefModal) closeModal(thiefModal); });
+
+  renderTimer();
   renderAll();
-  loadTimer();
+  saveState();
+}
+
+/* ensure boardId matches n */
+(function normalize(){
+  const ok = BOARDS.find(b=>b.id===state.boardId && b.n===state.n);
+  if(!ok){
+    const first = BOARDS.find(b=>b.n===state.n) || BOARDS.find(b=>b.id==="official-12");
+    if(first) state.boardId = first.id;
+  }
 })();
+
+init();
