@@ -13,8 +13,11 @@
   --safeTop: env(safe-area-inset-top, 0px);
   --safeBot: env(safe-area-inset-bottom, 0px);
 
-  /* ✅ 避免誤觸 Safari 地址列（「複製網址」） */
+  /* ✅ 避免誤觸 Safari 地址列 */
   --topPad: calc(var(--safeTop) + 18px);
+
+  /* ✅ 底部 bar 估高（讓內容留空，不被擋） */
+  --barH: 86px;
 }
 
 *{ box-sizing:border-box; }
@@ -25,15 +28,14 @@ body{
   font-family: "Noto Sans TC",-apple-system,BlinkMacSystemFont,"PingFang TC","Heiti TC",sans-serif;
   color:var(--ink);
   -webkit-text-size-adjust:100%;
-  overflow:hidden; /* ✅ 不要整頁滑動 */
-  touch-action: manipulation; /* ✅ 減少雙擊放大 */
+  overflow:hidden;
+  touch-action: manipulation;
   -webkit-tap-highlight-color: transparent;
-  -webkit-touch-callout: none; /* ✅ 長按不跳選單 */
+  -webkit-touch-callout: none;
   -webkit-user-select: none;
   user-select: none;
 }
 
-/* 允許公告文字可捲動，但仍不選取（避免長按選字） */
 pre, .cardText{
   margin:0;
   white-space:pre-wrap;
@@ -51,6 +53,7 @@ pre, .cardText{
   display:flex;
   flex-direction:column;
   gap:10px;
+  min-height:0; /* ✅ 重要：讓子層可以正確拿到剩餘高度 */
 }
 
 /* ======= TOP ======= */
@@ -71,11 +74,9 @@ pre, .cardText{
   gap:4px;
   min-width:0;
 }
-
 .uiStatus{
   font-size:12px;
   color:var(--muted);
-  letter-spacing:0.2px;
   white-space:nowrap;
   overflow:hidden;
   text-overflow:ellipsis;
@@ -83,7 +84,6 @@ pre, .cardText{
 .uiBoard{
   font-size:20px;
   font-weight:900;
-  letter-spacing:0.2px;
   white-space:nowrap;
   overflow:hidden;
   text-overflow:ellipsis;
@@ -94,7 +94,6 @@ pre, .cardText{
   gap:8px;
   align-items:center;
 }
-
 .iconBtn{
   border:none;
   background: rgba(255,255,255,0.7);
@@ -111,15 +110,22 @@ pre, .cardText{
 }
 .iconBtn:active{ transform: translateY(1px); }
 
-/* ======= MAIN ======= */
+/* ======= MAIN =======
+   ✅ 這裡改成「可捲動容器」，讓 SETUP 時能滑看到所有板子
+*/
 .main{
   flex:1;
+  min-height:0;
   display:flex;
   flex-direction:column;
   gap:10px;
-  min-height:0; /* ✅ 允許內部 scroll */
+
+  overflow:auto;                /* ✅ 主區可滑 */
+  -webkit-overflow-scrolling:touch;
+  padding-bottom: calc(var(--barH) + 12px + var(--safeBot)); /* ✅ 不被底部 bar 擋住 */
 }
 
+/* 卡片 */
 .card{
   background: var(--card);
   border:2px solid var(--stroke);
@@ -127,13 +133,11 @@ pre, .cardText{
   box-shadow: var(--shadow);
   padding:12px 12px;
 }
-
 .card.tight{ padding:10px 12px; }
 
 .cardTitle{
   font-size:22px;
   font-weight:900;
-  letter-spacing:0.2px;
 }
 
 .cardFoot{
@@ -141,19 +145,16 @@ pre, .cardText{
   font-size:12px;
   color:var(--muted);
 }
-
 .hint{
   font-size:13px;
   color:var(--muted);
 }
-
 .row{
   display:flex;
   align-items:center;
   justify-content:space-between;
   gap:10px;
 }
-
 .scrollBox{
   max-height:160px;
   overflow:auto;
@@ -163,15 +164,34 @@ pre, .cardText{
   border-radius:14px;
 }
 
+/* ✅ 開局教學卡（promptCard）在 SETUP 時：變成「一行提示」 */
+.promptCard{
+  padding:10px 12px;
+}
+#promptTitle{
+  font-size:16px;
+  font-weight:1000;
+}
+#promptText{
+  /* ✅ 一行化：不再佔大塊 */
+  max-height:none;
+  overflow:visible;
+  white-space:nowrap;
+  text-overflow:ellipsis;
+  overflow:hidden;
+  padding:8px 10px;
+}
+#promptFoot{
+  display:none; /* ✅ SETUP 不需要 foot 佔空間 */
+}
+
 /* ======= Setup ======= */
 .setupCard .chips{ margin-top:6px; }
-
 .chips{
   display:flex;
   gap:10px;
   flex-wrap:wrap;
 }
-
 .chip{
   border:none;
   padding:10px 12px;
@@ -180,7 +200,6 @@ pre, .cardText{
   border:2px solid var(--stroke);
   color:var(--ink);
   font-weight:800;
-  letter-spacing:0.2px;
 }
 .chip:active{ transform: translateY(1px); }
 .chip.active{
@@ -189,10 +208,15 @@ pre, .cardText{
   color:#3b2436;
 }
 
+/* ✅ 板子清單可滑：避免被內容卡死 */
 .boardList{
   display:flex;
   flex-direction:column;
   gap:10px;
+  max-height: 48vh;             /* ✅ 給一個上限，確保整個 SETUP 還能舒服操作 */
+  overflow:auto;
+  -webkit-overflow-scrolling:touch;
+  padding-right:4px;            /* 捲軸空間 */
 }
 
 .boardItem{
@@ -232,14 +256,13 @@ pre, .cardText{
 
 /* ======= Seats ======= */
 .seatsHeader{ padding:10px 12px; }
+
 .seatsGrid{
-  flex:1;
-  min-height:0;
+  /* ✅ 座位區不再自己硬捲，改由 .main 主捲動統一處理 */
   background: rgba(255,255,255,0.18);
   border:2px solid rgba(245,211,166,0.75);
   border-radius: var(--radius);
   padding:10px;
-  overflow:auto;
 }
 
 .grid{
@@ -264,7 +287,6 @@ pre, .cardText{
 .seat .num{
   font-size:26px;
   font-weight:1000;
-  letter-spacing:0.4px;
 }
 .seat .sub{
   font-size:12px;
@@ -279,18 +301,23 @@ pre, .cardText{
   opacity:0.55;
   filter: grayscale(0.4);
 }
-.seat.godOn{
-  border-width:3px;
-}
+.seat.godOn{ border-width:3px; }
 .seat.good{ box-shadow: 0 8px 18px rgba(32, 170, 110, 0.18); }
 .seat.wolf{ box-shadow: 0 8px 18px rgba(220, 70, 70, 0.18); }
 
 /* ======= Bottom bar ======= */
 .bottomBar{
+  position:sticky; /* ✅ 讓它在 app 內固定效果 */
+  bottom:0;
+  z-index:20;
+
   display:grid;
   grid-template-columns: 1fr 1.3fr 1fr;
   gap:10px;
-  padding-bottom: calc(6px + var(--safeBot));
+
+  padding:10px 0 calc(6px + var(--safeBot));
+  background: linear-gradient(180deg, rgba(255,238,201,0.0) 0%, rgba(255,238,201,0.92) 35%, rgba(255,238,201,0.98) 100%);
+  border-radius: 18px;
 }
 
 .btn{
@@ -299,7 +326,6 @@ pre, .cardText{
   padding:16px 12px;
   font-weight:1000;
   font-size:18px;
-  letter-spacing:0.2px;
   background: linear-gradient(180deg, var(--brand2) 0%, var(--brand) 100%);
   border:2px solid rgba(224,149,38,0.95);
   color:#3b2436;
@@ -317,14 +343,13 @@ pre, .cardText{
   color:#fff;
 }
 
-/* ======= Drawer / Backdrop ======= */
+/* ======= Drawer / Modal ======= */
 .backdrop{
   position:fixed;
   inset:0;
   background: rgba(0,0,0,0.35);
   z-index:50;
 }
-
 .drawer{
   position:fixed;
   left:50%;
@@ -355,34 +380,9 @@ pre, .cardText{
   padding:12px 12px 14px;
   overflow:auto;
   max-height: calc(72vh - 56px);
+  -webkit-overflow-scrolling:touch;
 }
 
-.seg{
-  display:flex;
-  gap:10px;
-}
-.segBtn{
-  flex:1;
-  border:none;
-  border-radius:14px;
-  padding:12px 10px;
-  font-weight:1000;
-  border:2px solid var(--stroke);
-  background: rgba(255,255,255,0.75);
-}
-.segBtn.primary{
-  background: linear-gradient(180deg, var(--brand2) 0%, var(--brand) 100%);
-  border-color: rgba(224,149,38,0.95);
-}
-
-.timerBig{
-  font-size:44px;
-  font-weight:1100;
-  text-align:center;
-  padding:10px 0 6px;
-}
-
-/* ======= Modal ======= */
 .modal{
   position:fixed;
   inset:0;
@@ -408,9 +408,7 @@ pre, .cardText{
   border-bottom:2px solid rgba(245,211,166,0.8);
   background: rgba(255,255,255,0.45);
 }
-.modalBody{
-  padding:14px 14px;
-}
+.modalBody{ padding:14px 14px; }
 .modalActions{
   display:flex;
   gap:10px;
@@ -425,18 +423,4 @@ pre, .cardText{
   font-size:15px;
   color:var(--muted);
   margin-top:8px;
-}
-
-.diceResult{
-  font-size:38px;
-  font-weight:1100;
-  text-align:center;
-  padding:10px 0;
-}
-
-/* 小卡 */
-.card.mini{
-  padding:12px;
-  border-radius:16px;
-  box-shadow:none;
 }
