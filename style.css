@@ -1,85 +1,53 @@
 :root{
-  --bg1:#ffeec9;
-  --bg2:#f9d9a1;
-
+  --bg:#ffeec9;
   --card:#fff7e6;
-  --card2:#fff3dc;
-
-  --stroke:#f0cfa5;
-  --stroke2:#e7bb86;
-
-  --ink:#3f2a3a;
+  --stroke:#f5d3a6;
+  --ink:#4b3044;
   --muted:#7a5a6a;
 
-  --shadow:0 10px 24px rgba(0,0,0,.14);
+  --accent:#f4a63a;
+  --accent2:#ffd27a;
 
-  --primary:#f4a63a;
-  --primary2:#f7b456;
+  --shadow:0 8px 18px rgba(0,0,0,0.14);
 
-  --ghost:#fff4dc;
+  --good:#48a6ff;
+  --wolf:#ff5b5b;
 
-  /* 陣營色（上帝視角） */
-  --good:#2f8f5b;
-  --wolf:#c83b3b;
-  --third:#7b4bc6;
-
-  --sel:#ffd37a;            /* 點選座位/板子 */
-  --selStroke:#d79a2d;
-
-  --radius:18px;
-  --radius2:22px;
-
-  --topH:58px;
-  --bottomH:74px;
+  --barH:86px;
+  --topH:64px;
 }
 
-/* =====================
-   全域：避免 iOS 長按選取/雙擊縮放
-   ===================== */
-*{
-  box-sizing:border-box;
-  -webkit-tap-highlight-color:transparent;
-}
+*{ box-sizing:border-box; }
+
 html,body{
   height:100%;
   margin:0;
-}
-body{
-  font-family:"Noto Sans TC",-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
+  padding:0;
+  background:var(--bg);
+  font-family:"Noto Sans TC",-apple-system,BlinkMacSystemFont,sans-serif;
   color:var(--ink);
-  background:linear-gradient(180deg,var(--bg2),var(--bg1));
-  overflow:hidden; /* ✅不要整頁捲動，內容自己捲 */
-}
 
-/* 盡量壓掉長按選取/呼叫選單（仍可能被系統手勢觸發，但可大幅降低） */
-body, .app, .card, .seatsGrid, .seat{
+  /* ✅ iOS 禁止選字/長按彈出 */
   -webkit-user-select:none;
   user-select:none;
   -webkit-touch-callout:none;
-  touch-action:manipulation; /* ✅降低雙擊放大 */
+
+  /* ✅ 避免奇怪雙擊縮放 */
+  touch-action:manipulation;
 }
 
-/* 讓 <pre> 能選取/複製（公告、文字可複製） */
-pre, .cardText{
-  -webkit-user-select:text;
-  user-select:text;
-  -webkit-touch-callout:default;
-  touch-action:auto;
-}
+a{ color:inherit; text-decoration:none; }
 
-/* =====================
-   Layout
-   ===================== */
 .app{
-  height:100vh;
   max-width:480px;
   margin:0 auto;
-  padding-top:var(--topH);
-  padding-bottom:var(--bottomH);
+  min-height:100vh;
   position:relative;
+  padding-top: var(--topH);
+  padding-bottom: calc(var(--barH) + 12px);
 }
 
-/* Top bar 固定 */
+/* ===== Top Bar ===== */
 .top{
   position:fixed;
   top:0;
@@ -87,91 +55,94 @@ pre, .cardText{
   transform:translateX(-50%);
   width:min(480px,100%);
   height:var(--topH);
-  padding:10px 10px 8px;
   display:flex;
   align-items:center;
   justify-content:space-between;
+  padding:10px 10px 8px;
   z-index:50;
-  background:linear-gradient(180deg, rgba(255,238,201,.95), rgba(255,238,201,.70));
-  backdrop-filter: blur(10px);
-  border-bottom:1px solid rgba(0,0,0,.05);
+
+  background:linear-gradient(#ffe7b8,#ffe0a7);
+  border-bottom:2px solid rgba(245,211,166,0.75);
 }
 
 .topLeft{
   display:flex;
   flex-direction:column;
   gap:2px;
-  min-width: 140px;
+  min-width:140px;
 }
+
 .uiStatus{
   font-size:12px;
-  letter-spacing:.2px;
   color:var(--muted);
+  letter-spacing:.2px;
 }
 .uiBoard{
   font-size:18px;
-  font-weight:800;
+  font-weight:900;
 }
 
 .topRight{
   display:flex;
-  align-items:center;
   gap:8px;
+  align-items:center;
 }
 
 .iconBtn{
-  width:44px;
-  height:44px;
+  width:40px;
+  height:40px;
   border-radius:14px;
   border:2px solid var(--stroke);
-  background:rgba(255,247,230,.95);
-  box-shadow:0 8px 14px rgba(0,0,0,.10);
+  background:rgba(255,255,255,.55);
+  box-shadow:0 6px 14px rgba(0,0,0,.10);
   display:grid;
   place-items:center;
-  font-size:20px;
-  color:var(--ink);
+  font-size:18px;
+  line-height:1;
   cursor:pointer;
 }
-.iconBtn:active{
-  transform: translateY(1px);
-}
 
-/* Main content（可捲動） */
+.iconBtn:active{ transform:translateY(1px); }
+
+/* ===== Main ===== */
 .main{
-  height:calc(100vh - var(--topH) - var(--bottomH));
-  padding:10px;
-  overflow:auto; /* ✅主內容捲動 */
-  -webkit-overflow-scrolling:touch;
-  scrollbar-width:thin;
+  padding:10px 10px 0;
 }
 
-/* =====================
-   Card
-   ===================== */
 .card{
-  background:linear-gradient(180deg,var(--card),var(--card2));
+  background:var(--card);
   border:2px solid var(--stroke);
-  border-radius:var(--radius2);
+  border-radius:18px;
   box-shadow:var(--shadow);
   padding:12px 12px 12px;
 }
 
-.card + .card{ margin-top:10px; }
-
-.card.tight{
-  padding:10px 12px;
-}
+.card.tight{ padding:10px 12px; }
 
 .cardTitle{
   font-weight:900;
-  font-size:22px;
-  letter-spacing:.5px;
+  font-size:20px;
+  margin:0 0 6px;
 }
 
-.hint{
+.cardText{
+  margin:0;
+  white-space:pre-wrap;
+  font-size:14px;
+  line-height:1.6;
+  color:var(--ink);
+}
+
+.scrollBox{
+  max-height:150px;
+  overflow:auto;
+  padding-right:6px;
+}
+
+.cardFoot{
+  margin-top:8px;
   font-size:12px;
   color:var(--muted);
-  line-height:1.45;
 }
 
 .row{
@@ -181,287 +152,217 @@ pre, .cardText{
   gap:10px;
 }
 
-.cardText{
-  margin:10px 0 0;
-  padding:10px 12px;
-  border-radius:16px;
-  border:2px dashed rgba(231,187,134,.65);
-  background:rgba(255,255,255,.35);
-  color:var(--ink);
-  font-size:14px;
-  line-height:1.6;
-  white-space:pre-wrap;
-}
-
-.scrollBox{
-  max-height:200px;
-  overflow:auto;
-  -webkit-overflow-scrolling:touch;
-}
-
-.cardFoot{
-  margin-top:8px;
+.hint{
   font-size:12px;
   color:var(--muted);
 }
 
-/* =====================
-   Setup
-   ===================== */
-.setupCard .chips{ margin-top:6px; }
+/* ===== Setup ===== */
+.setupCard{ margin-top:10px; }
+.boardList{
+  display:flex;
+  flex-direction:column;
+  gap:10px;
+  max-height: 44vh;       /* ✅ 可滑動不會被底部擋死 */
+  overflow:auto;
+  padding-right:6px;
+}
+
+.boardItem{
+  background:rgba(255,255,255,.45);
+  border:2px solid var(--stroke);
+  border-radius:18px;
+  padding:12px 12px 10px;
+  box-shadow:0 6px 16px rgba(0,0,0,.08);
+  cursor:pointer;
+}
+
+.boardItem.selected{
+  border-color:#eaa12a;
+  box-shadow:0 0 0 3px rgba(244,166,58,.28), 0 8px 18px rgba(0,0,0,.12);
+  background:rgba(255,245,220,.95);
+}
+
+.boardName{
+  font-size:18px;
+  font-weight:900;
+  margin-bottom:2px;
+}
+.boardSub{
+  font-size:13px;
+  color:var(--muted);
+  line-height:1.35;
+}
+
 .chips{
   display:flex;
   gap:10px;
   flex-wrap:wrap;
 }
 .chip{
-  border:2px solid var(--stroke);
-  background:rgba(255,255,255,.65);
-  color:var(--ink);
+  padding:8px 14px;
   border-radius:999px;
-  padding:10px 14px;
-  font-weight:800;
-  cursor:pointer;
-}
-.chip.primary{
-  background:linear-gradient(180deg,var(--primary2),var(--primary));
-  border-color:var(--selStroke);
-}
-.chip.active{
-  background:linear-gradient(180deg,var(--primary2),var(--primary));
-  border-color:var(--selStroke);
-}
-
-/* 板子列表（可捲、點選變色） */
-.boardList{
-  display:flex;
-  flex-direction:column;
-  gap:10px;
-  max-height:360px;
-  overflow:auto;
-  -webkit-overflow-scrolling:touch;
-  padding-right:2px;
-}
-.boardItem{
-  border-radius:20px;
   border:2px solid var(--stroke);
   background:rgba(255,255,255,.55);
-  padding:12px 12px;
-  box-shadow:0 8px 16px rgba(0,0,0,.10);
+  box-shadow:0 4px 12px rgba(0,0,0,.10);
+  font-weight:800;
   cursor:pointer;
 }
-.boardItem .title{
-  font-weight:900;
-  font-size:20px;
-}
-.boardItem .sub{
-  margin-top:4px;
-  font-size:13px;
-  color:var(--muted);
-}
-.boardItem .tags{
-  margin-top:10px;
-  display:flex;
-  gap:8px;
-  flex-wrap:wrap;
-}
-.badge{
-  font-size:12px;
-  padding:6px 10px;
-  border-radius:999px;
-  border:2px solid rgba(240,207,165,.9);
-  background:rgba(255,247,230,.8);
-  font-weight:800;
-}
-.boardItem.selected{
-  border-color:var(--selStroke);
-  background:rgba(255,211,122,.35);
-  box-shadow:0 10px 22px rgba(215,154,45,.25);
+.chip.active{
+  background:linear-gradient(#ffd892,#f4a63a);
+  border-color:#eaa12a;
 }
 
-/* =====================
-   Seats grid（你喜歡的原本格子）
-   ===================== */
+/* ===== Seats ===== */
 .seatsHeader{ margin-top:10px; }
-
 .seatsGrid{
   margin-top:10px;
   display:grid;
-  grid-template-columns:repeat(4,1fr);
+  grid-template-columns:repeat(4, 1fr);
   gap:12px;
-  padding-bottom:8px;
 }
 
-/* 座位卡 */
 .seat{
-  border-radius:20px;
+  border-radius:16px;
   border:2px solid var(--stroke);
   background:rgba(255,255,255,.65);
-  box-shadow:0 8px 16px rgba(0,0,0,.10);
-  padding:10px 8px;
-  min-height:78px;
+  box-shadow:0 6px 14px rgba(0,0,0,.10);
+  padding:10px 8px 10px;
+  min-height:74px;
   display:flex;
   flex-direction:column;
-  justify-content:center;
   align-items:center;
+  justify-content:center;
   gap:6px;
   cursor:pointer;
+  position:relative;
 }
 
-.seat .num{
-  font-size:26px;
+.seatNum{
+  font-size:24px;
   font-weight:1000;
-  color:#1f88d8; /* 你現在習慣的藍色號碼 */
-  line-height:1;
+  color:#2d8cff; /* 藍色號碼 */
 }
-.seat .sub{
-  font-size:13px;
+.seatSub{
+  font-size:12px;
   color:var(--muted);
-  font-weight:700;
+  text-align:center;
 }
 
-/* 點一下選取（明顯） */
 .seat.selected{
-  background:rgba(255,211,122,.55);
-  border-color:var(--selStroke);
-  box-shadow:0 12px 24px rgba(215,154,45,.25);
-}
-.seat:active{
-  transform:translateY(1px);
+  background:linear-gradient(#ffe7b8,#ffd27a);
+  border-color:#eaa12a;
+  box-shadow:0 0 0 3px rgba(244,166,58,.25), 0 10px 18px rgba(0,0,0,.12);
 }
 
-/* 死亡/灰化（如果你 JS 有加 class） */
 .seat.dead{
   opacity:.55;
-  filter:grayscale(.35);
+  filter:saturate(.7);
 }
 
-/* =====================
-   上帝視角：依陣營外框顏色
-   - 你 JS 只要在 seat 上加 data-camp="good|wolf|third"
-     或加 class camp-good / camp-wolf / camp-third 都可
-   ===================== */
-
-/* data-camp 版本 */
-.seat[data-camp="good"]{ border-color:rgba(47,143,91,.35); }
-.seat[data-camp="wolf"]{ border-color:rgba(200,59,59,.35); }
-.seat[data-camp="third"]{ border-color:rgba(123,75,198,.35); }
-
-.seat.godOn[data-camp="good"]{ border-color:rgba(47,143,91,.9); box-shadow:0 12px 24px rgba(47,143,91,.18); }
-.seat.godOn[data-camp="wolf"]{ border-color:rgba(200,59,59,.9); box-shadow:0 12px 24px rgba(200,59,59,.18); }
-.seat.godOn[data-camp="third"]{ border-color:rgba(123,75,198,.9); box-shadow:0 12px 24px rgba(123,75,198,.18); }
-
-/* class 版本（備援） */
-.seat.camp-good{ border-color:rgba(47,143,91,.35); }
-.seat.camp-wolf{ border-color:rgba(200,59,59,.35); }
-.seat.camp-third{ border-color:rgba(123,75,198,.35); }
-.seat.godOn.camp-good{ border-color:rgba(47,143,91,.9); }
-.seat.godOn.camp-wolf{ border-color:rgba(200,59,59,.9); }
-.seat.godOn.camp-third{ border-color:rgba(123,75,198,.9); }
-
-/* 上帝視角文字（角色/陣營/事件） */
-.seat .meta{
-  font-size:12px;
-  line-height:1.25;
-  color:var(--ink);
-  text-align:center;
-  font-weight:800;
-  white-space:pre-line;
+.seat.goodOutline{
+  box-shadow:0 0 0 3px rgba(72,166,255,.18), 0 8px 16px rgba(0,0,0,.10);
+  border-color:rgba(72,166,255,.45);
 }
-.seat .icons{
+.seat.wolfOutline{
+  box-shadow:0 0 0 3px rgba(255,91,91,.16), 0 8px 16px rgba(0,0,0,.10);
+  border-color:rgba(255,91,91,.45);
+}
+
+.seatBadges{
+  position:absolute;
+  left:8px;
+  bottom:8px;
   display:flex;
   gap:6px;
-  flex-wrap:wrap;
-  justify-content:center;
 }
-.pill{
-  font-size:12px;
-  font-weight:900;
-  padding:4px 8px;
-  border-radius:999px;
-  border:2px solid rgba(240,207,165,.9);
-  background:rgba(255,247,230,.85);
+.badge{
+  font-size:16px;
+  line-height:1;
 }
 
-/* =====================
-   Bottom bar（固定 3 顆）
-   ===================== */
+/* ===== Bottom Bar ===== */
 .bottomBar{
   position:fixed;
   left:50%;
   transform:translateX(-50%);
   bottom:0;
   width:min(480px,100%);
-  height:var(--bottomH);
-  padding:10px 10px calc(10px + env(safe-area-inset-bottom));
-  display:grid;
-  grid-template-columns:1fr 1.35fr 1fr;
+  height:var(--barH);
+  padding:10px 10px 12px;
+  display:flex;
   gap:10px;
+  align-items:center;
   z-index:60;
-  background:linear-gradient(180deg, rgba(255,238,201,.45), rgba(255,238,201,.92));
-  backdrop-filter: blur(10px);
-  border-top:1px solid rgba(0,0,0,.05);
+
+  background:linear-gradient(rgba(255,238,201,.25), rgba(255,238,201,1));
+  border-top:2px solid rgba(245,211,166,0.8);
 }
 
 .btn{
+  flex:1;
+  height:56px;
   border-radius:18px;
   border:2px solid var(--stroke);
-  background:linear-gradient(180deg,var(--primary2),var(--primary));
-  color:var(--ink);
-  font-weight:1000;
+  background:linear-gradient(#fff,#fff);
+  box-shadow:0 8px 16px rgba(0,0,0,.12);
   font-size:18px;
-  padding:14px 10px;
+  font-weight:950;
   cursor:pointer;
-  box-shadow:0 10px 20px rgba(0,0,0,.12);
 }
-.btn.ghost{
-  background:rgba(255,255,255,.65);
-  color:#2b6fb3;
-  box-shadow:0 8px 16px rgba(0,0,0,.10);
-}
-.btn.main{
-  background:linear-gradient(180deg,#3a3755,#23213a);
-  color:#fff;
-  border-color:rgba(0,0,0,.15);
-}
+
 .btn:active{ transform:translateY(1px); }
+
+.btn.main{
+  background:linear-gradient(#2a2a3a,#1f1f2b);
+  color:#fff;
+  border-color:rgba(255,255,255,.12);
+}
+
+.btn.ghost{
+  background:rgba(255,255,255,.55);
+  color:var(--ink);
+}
+
+.btn.disabled,
 .btn:disabled{
   opacity:.45;
-  filter:saturate(.8);
-  transform:none;
+  filter:saturate(.7);
   cursor:not-allowed;
 }
 
-/* =====================
-   Drawer / Backdrop
-   ===================== */
+/* ===== Drawer + Backdrop ===== */
 .backdrop{
   position:fixed;
   inset:0;
-  background:rgba(0,0,0,.22);
+  background:rgba(0,0,0,.25);
   z-index:80;
 }
+
 .drawer{
   position:fixed;
   left:50%;
   transform:translateX(-50%);
   bottom:0;
   width:min(480px,100%);
-  background:linear-gradient(180deg,var(--card),var(--card2));
+  max-height:80vh;
+  background:var(--card);
   border:2px solid var(--stroke);
-  border-radius:22px 22px 0 0;
-  box-shadow:0 -14px 28px rgba(0,0,0,.20);
+  border-bottom:none;
+  border-radius:18px 18px 0 0;
+  box-shadow:0 -10px 25px rgba(0,0,0,.18);
   z-index:90;
-  max-height:78vh;
   display:flex;
   flex-direction:column;
+  overflow:hidden;
 }
+
 .drawerTop{
   display:flex;
   align-items:center;
   justify-content:space-between;
-  padding:12px 12px 10px;
-  border-bottom:1px solid rgba(0,0,0,.06);
+  padding:10px 12px;
+  border-bottom:1px dashed rgba(245,211,166,.9);
 }
 .drawerTitle{
   font-size:18px;
@@ -470,103 +371,90 @@ pre, .cardText{
 .drawerBody{
   padding:12px;
   overflow:auto;
-  -webkit-overflow-scrolling:touch;
 }
 
-.hidden{ display:none !important; }
+/* timer */
+.timerBig{
+  font-size:44px;
+  font-weight:1000;
+  text-align:center;
+}
 
-/* seg buttons（設定） */
 .seg{
   display:flex;
   gap:10px;
 }
 .segBtn{
   flex:1;
-  border-radius:16px;
+  height:46px;
+  border-radius:14px;
   border:2px solid var(--stroke);
-  background:rgba(255,255,255,.65);
-  padding:12px 10px;
-  font-weight:1000;
+  background:rgba(255,255,255,.55);
+  font-weight:900;
   cursor:pointer;
 }
 .segBtn.primary{
-  background:linear-gradient(180deg,var(--primary2),var(--primary));
-  border-color:var(--selStroke);
+  background:linear-gradient(#ffd892,#f4a63a);
+  border-color:#eaa12a;
 }
 
-/* Timer big */
-.timerBig{
-  font-size:44px;
-  font-weight:1100;
-  text-align:center;
-  padding:12px 8px;
-  border-radius:20px;
-  border:2px solid rgba(240,207,165,.9);
-  background:rgba(255,255,255,.55);
-}
-
-/* =====================
-   Modal
-   ===================== */
+/* ===== Modal ===== */
 .modal{
   position:fixed;
   inset:0;
   display:grid;
   place-items:center;
-  background:rgba(0,0,0,.25);
-  z-index:120;
-  padding:14px;
+  background:rgba(0,0,0,.22);
+  z-index:100;
+  padding:16px;
 }
+
 .modalCard{
   width:min(460px,100%);
-  background:linear-gradient(180deg,var(--card),var(--card2));
+  background:var(--card);
   border:2px solid var(--stroke);
-  border-radius:22px;
-  box-shadow:0 16px 34px rgba(0,0,0,.22);
-  padding:14px 14px 12px;
+  border-radius:18px;
+  box-shadow:0 16px 30px rgba(0,0,0,.22);
+  overflow:hidden;
 }
+
 .modalTitle{
-  font-weight:1100;
+  padding:14px 14px 10px;
   font-size:22px;
+  font-weight:1000;
 }
 .modalBody{
-  margin-top:10px;
-}
-.roleLine{
-  font-weight:1100;
-  font-size:28px;
-}
-.roleLine.small{
-  margin-top:6px;
-  font-size:14px;
-  font-weight:900;
-  color:var(--muted);
+  padding:0 14px 12px;
 }
 .modalActions{
   display:flex;
   gap:10px;
-  margin-top:12px;
-}
-.modalActions .btn{
-  flex:1;
+  padding:12px 14px 14px;
 }
 
-/* 小卡片（盜賊 Modal 用） */
-.card.mini{
-  border-radius:18px;
-  box-shadow:none;
-  border:2px solid rgba(240,207,165,.9);
-  background:rgba(255,255,255,.45);
-  padding:12px;
+.roleLine{
+  font-size:26px;
+  font-weight:1000;
+  margin-top:6px;
+}
+.roleLine.small{
+  font-size:14px;
+  font-weight:800;
+  color:var(--muted);
 }
 
-/* =====================
-   RWD：小手機
-   ===================== */
-@media (max-width:360px){
-  .cardTitle{ font-size:20px; }
-  .seat{ min-height:74px; }
-  .seat .num{ font-size:24px; }
-  .btn{ font-size:17px; padding:13px 10px; }
-  .iconBtn{ width:42px; height:42px; }
+.diceResult{
+  font-size:44px;
+  font-weight:1000;
+  text-align:center;
+  padding:10px 0;
+}
+
+.hidden{ display:none !important; }
+
+/* 小螢幕更緊湊 */
+@media (max-height: 700px){
+  .scrollBox{ max-height:120px; }
+  .seatsGrid{ gap:10px; }
+  .seat{ min-height:70px; }
 }
