@@ -458,3 +458,26 @@ a{ color:inherit; text-decoration:none; }
   .seatsGrid{ gap:10px; }
   .seat{ min-height:70px; }
 }
+/* ===== 底部流程按鈕：縮小 ===== */
+:root{
+  --barH:72px;        /* 原本 86px -> 72px */
+}
+
+.bottomBar{
+  height:var(--barH);
+  padding:8px 10px 10px;
+}
+
+.btn{
+  height:48px;        /* 原本 56px -> 48px */
+  border-radius:16px;
+  font-size:16px;     /* 原本 18px -> 16px */
+}
+
+/* ===== iOS：避免長按出現「複製/選取」呼叫 ===== */
+.btn, .iconBtn, .chip, .boardItem, .seat{
+  -webkit-touch-callout:none !important;
+  -webkit-user-select:none !important;
+  user-select:none !important;
+  touch-action:manipulation; /* 只允許點擊，不要長按手勢 */
+}
