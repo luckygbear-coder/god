@@ -1,0 +1,34 @@
+{
+  "id": "12-thief-city",
+  "title": "12人含盜賊（+2底牌・屠城）",
+  "players": 12,
+  "winMode": "city",
+  "hasPolice": true,
+  "extraCards": 2,
+  "notes": [
+    "只有平民才是民，白痴與盜賊皆屬神。",
+    "發牌總數 = 玩家數 + 2 底牌。",
+    "盜賊從兩張底牌中選一張成為最終角色。",
+    "被盜賊放棄的角色不會進入遊戲。",
+    "若底牌包含狼與好人，盜賊必須選狼。",
+    "若兩張皆為狼，選一張成狼，另一張移出遊戲，最終仍為4狼。"
+  ],
+  "roles": [
+    "wolf",
+    "wolf",
+    "wolf",
+    "wolf",
+
+    "seer",
+    "witch",
+    "guard",
+    "idiot",
+    "thief",
+
+    "villager",
+    "villager",
+    "villager",
+    "villager"
+  ],
+  "tags": ["變體", "盜賊", "屠城"]
+}
