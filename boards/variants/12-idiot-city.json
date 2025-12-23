@@ -1,0 +1,23 @@
+{
+  "id": "12-idiot-city",
+  "title": "12人（含白痴・屠城）",
+  "players": 12,
+  "winMode": "city",
+  "hasPolice": true,
+  "notes": "只有「平民」才算民；白痴屬於神。配置：4狼 5神 3民。",
+  "roles": [
+    "wolf",
+    "wolf",
+    "wolf",
+    "wolf",
+    "seer",
+    "witch",
+    "hunter",
+    "guard",
+    "idiot",
+    "villager",
+    "villager",
+    "villager"
+  ],
+  "tags": ["變體", "屠城", "含白痴"]
+}
