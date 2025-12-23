@@ -1,0 +1,36 @@
+{
+  "id": "12-thief-edge",
+  "title": "12人盜賊（+2底牌・屠邊・2小狼+黑白狼王）",
+  "players": 12,
+  "winMode": "edge",
+  "hasPolice": true,
+  "extraCards": 2,
+  "notes": [
+    "屠邊勝利條件：狼人勝 = 神全滅 或 民全滅；好人勝 = 狼全滅。",
+    "狼人上限四隻：2小狼 + 白狼王 + 黑狼王。",
+    "只有平民才是民；白痴與盜賊皆為神。",
+    "總牌數14張（12玩家 + 2底牌）。",
+    "盜賊於抽身分階段立即二選一，被放棄角色完全移出遊戲。",
+    "若底牌含狼與好人，盜賊必須選狼。",
+    "若底牌為雙狼，盜賊選一張成狼，另一張狼移出，最終為3狼配置。"
+  ],
+  "roles": [
+    "wolf",
+    "wolf",
+    "whitewolf",
+    "blackwolf",
+
+    "seer",
+    "witch",
+    "guard",
+    "hunter",
+    "idiot",
+    "thief",
+
+    "villager",
+    "villager",
+    "villager",
+    "villager"
+  ],
+  "tags": ["變體", "盜賊", "屠邊", "黑白狼王"]
+}
