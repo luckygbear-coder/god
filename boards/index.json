@@ -1,33 +1,103 @@
 {
   "version": "1.0",
+  "generated_by": "狼人殺上帝輔助",
   "updated_at": "2025-12-23",
   "groups": [
     {
       "key": "official",
-      "title": "官方",
+      "title": "官方標準局",
       "items": [
-        { "id": "official-9", "path": "./official-9.json", "players": 9, "tags": ["官方"] },
-        { "id": "official-10", "path": "./official-10.json", "players": 10, "tags": ["官方"] },
-        { "id": "official-12", "path": "./official-12.json", "players": 12, "tags": ["官方"] }
+        {
+          "id": "official-9",
+          "title": "9人官方標準局",
+          "players": 9,
+          "path": "boards/official-9.json",
+          "tags": ["官方", "標準"]
+        },
+        {
+          "id": "official-10",
+          "title": "10人官方標準局",
+          "players": 10,
+          "path": "boards/official-10.json",
+          "tags": ["官方", "標準"]
+        },
+        {
+          "id": "official-12",
+          "title": "12人官方標準局",
+          "players": 12,
+          "path": "boards/official-12.json",
+          "tags": ["官方", "標準"]
+        }
       ]
     },
     {
       "key": "variants",
-      "title": "變體",
+      "title": "變體板子",
       "items": [
-        { "id": "9-edge", "path": "./variants/9-edge.json", "players": 9, "tags": ["屠邊"] },
-        { "id": "9-nohunter-city", "path": "./variants/9-nohunter-city.json", "players": 9, "tags": ["屠城", "無獵人"] },
+        {
+          "id": "9-edge",
+          "title": "9人（屠邊）",
+          "players": 9,
+          "path": "boards/variants/9-edge.json",
+          "tags": ["變體", "屠邊"]
+        },
+        {
+          "id": "9-nohunter-city",
+          "title": "9人（無獵人・屠城）",
+          "players": 9,
+          "path": "boards/variants/9-nohunter-city.json",
+          "tags": ["變體", "無獵人", "屠城"]
+        },
+        {
+          "id": "10-edge",
+          "title": "10人（屠邊）",
+          "players": 10,
+          "path": "boards/variants/10-edge.json",
+          "tags": ["變體", "屠邊"]
+        },
+        {
+          "id": "10-city-police",
+          "title": "10人（屠城・上警）",
+          "players": 10,
+          "path": "boards/variants/10-city-police.json",
+          "tags": ["變體", "屠城", "上警"]
+        },
+        {
+          "id": "12-city",
+          "title": "12人（標準角色・屠城）",
+          "players": 12,
+          "path": "boards/variants/12-city.json",
+          "tags": ["變體", "屠城"]
+        },
+        {
+          "id": "12-edge-nopolice",
+          "title": "12人（屠邊・無上警）",
+          "players": 12,
+          "path": "boards/variants/12-edge-nopolice.json",
+          "tags": ["變體", "屠邊", "無上警"]
+        },
+        {
+          "id": "12-noidiot-city",
+          "title": "12人（無白痴・屠城）",
+          "players": 12,
+          "path": "boards/variants/12-noidiot-city.json",
+          "tags": ["變體", "無白痴", "屠城"]
+        },
 
-        { "id": "10-edge", "path": "./variants/10-edge.json", "players": 10, "tags": ["屠邊"] },
-        { "id": "10-city-police", "path": "./variants/10-city-police.json", "players": 10, "tags": ["屠城", "上警"] },
-
-        { "id": "12-city", "path": "./variants/12-city.json", "players": 12, "tags": ["屠城"] },
-        { "id": "12-edge-nopolice", "path": "./variants/12-edge-nopolice.json", "players": 12, "tags": ["屠邊", "無上警"] },
-        { "id": "12-noidiot-city", "path": "./variants/12-noidiot-city.json", "players": 12, "tags": ["屠城", "無白痴"] },
-
-        { "id": "12-idiot-city", "path": "./variants/12-idiot-city.json", "players": 12, "tags": ["屠城", "含白痴"] },
-        { "id": "10-idiot-city", "path": "./variants/10-idiot-city.json", "players": 10, "tags": ["屠城", "含白痴"] },
-        { "id": "9-idiot-city", "path": "./variants/9-idiot-city.json", "players": 9, "tags": ["屠城", "含白痴"] }
+        {
+          "id": "12-thief-city",
+          "title": "12人含盜賊（+2底牌・屠城）",
+          "players": 12,
+          "path": "boards/variants/12-thief-city.json",
+          "tags": ["變體", "盜賊", "屠城", "底牌+2"]
+        },
+        {
+          "id": "12-thief-edge",
+          "title": "12人含盜賊（+2底牌・屠邊・2小狼+黑白狼王）",
+          "players": 12,
+          "path": "boards/variants/12-thief-edge.json",
+          "tags": ["變體", "盜賊", "屠邊", "底牌+2", "黑狼王", "白狼王"]
+        }
       ]
     }
   ]
