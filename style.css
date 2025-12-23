@@ -6,375 +6,456 @@
   --muted:#7a5a6a;
   --shadow:0 8px 18px rgba(0,0,0,0.14);
 
-  --accent:#f4a63a;
-  --accent2:#243047;
+  --wolf:#c0392b;
+  --wolfSoft:rgba(192,57,43,0.15);
+  --good:#2c6ec0;
+  --goodSoft:rgba(44,110,192,0.14);
 
-  --good:#46a46a;
-  --wolf:#d25a5a;
+  --sel:#ffd36a;
+  --selStroke:#f1a93a;
 
-  --seat:#fffdf8;
-  --seatStroke:#e7c9a3;
+  --dead:#c9c1c7;
+
+  --radius:18px;
+  --radiusSm:14px;
+
+  --btn:#f4a63a;
+  --btnInk:#4b3044;
+
+  --dockH:64px; /* 底部三顆按鈕高度（縮小版） */
+  --topH:54px;  /* 頂部列高度（縮小版） */
 }
 
-*{ box-sizing:border-box; -webkit-tap-highlight-color: transparent; }
-html,body{ height:100%; margin:0; padding:0; }
-body{
+/* ====== iOS 防選取 / 防放大（CSS 端） ====== */
+*{
+  box-sizing:border-box;
+  -webkit-tap-highlight-color: transparent;
+  -webkit-touch-callout: none;
+  -webkit-user-select: none;
+  user-select: none;
+}
+html,body{
+  height:100%;
+  margin:0;
+  padding:0;
   background:var(--bg);
   font-family:"Noto Sans TC",-apple-system,BlinkMacSystemFont,sans-serif;
   color:var(--ink);
-  overflow-x:hidden;
-  -webkit-user-select:none;
-  user-select:none;
-  -webkit-touch-callout:none;
-  touch-action: manipulation; /* 盡量抑制雙擊縮放 */
+  overscroll-behavior: none;
+  touch-action: manipulation; /* 降低雙擊放大機率 */
+}
+body{
+  overflow:hidden; /* ✅ 禁止整頁滾動，改為內部區塊滾動 */
 }
 
-pre{ margin:0; font-family:inherit; white-space:pre-wrap; }
+pre{
+  margin:0;
+  white-space:pre-wrap;
+  word-break:break-word;
+}
 
+/* ====== Layout ====== */
 .app{
   max-width:480px;
+  height:100vh;
   margin:0 auto;
-  min-height:100vh;
-  display:flex;
-  flex-direction:column;
-  padding-bottom:92px;
+  position:relative;
+  padding-bottom: calc(var(--dockH) + env(safe-area-inset-bottom));
 }
 
-/* ===== Top ===== */
+/* Top bar */
 .top{
   position:sticky;
   top:0;
   z-index:20;
-  background:linear-gradient(#ffe7b3,#ffe3a3);
-  padding:10px 10px 8px;
-  border-bottom:2px solid var(--stroke);
-}
-.topLeft{
+  height:var(--topH);
   display:flex;
-  flex-direction:column;
-  gap:2px;
+  align-items:center;
+  justify-content:space-between;
+  padding:8px 10px;
+  background:linear-gradient(#ffeec9, rgba(255,238,201,0.92));
+  border-bottom:1px solid rgba(0,0,0,0.05);
+}
+
+.topLeft{
+  min-width:0;
 }
 .uiStatus{
+  font-weight:900;
   font-size:13px;
-  color:var(--muted);
+  line-height:1.1;
 }
 .uiBoard{
-  font-size:26px;
-  font-weight:900;
-  letter-spacing:.2px;
+  font-size:11px;
+  color:var(--muted);
+  line-height:1.1;
+  margin-top:2px;
+  max-width:240px;
+  overflow:hidden;
+  text-overflow:ellipsis;
+  white-space:nowrap;
 }
+
 .topRight{
-  margin-top:8px;
   display:flex;
-  gap:10px;
-  justify-content:flex-end;
+  gap:6px;
   align-items:center;
 }
+
 .iconBtn{
-  width:46px; height:46px;
-  border-radius:14px;
+  width:34px;
+  height:34px;
+  border-radius:12px;
   border:2px solid var(--stroke);
-  background:#fff8ea;
-  box-shadow:var(--shadow);
-  font-size:20px;
+  background:var(--card);
+  box-shadow: 0 4px 10px rgba(0,0,0,0.12);
   display:flex;
   align-items:center;
   justify-content:center;
+  font-size:16px;
+  padding:0;
+}
+.iconBtn:active{
+  transform: translateY(1px);
 }
 
-/* ===== Main ===== */
+/* Main area */
 .main{
-  flex:1;
-  padding:10px 10px 0;
+  height: calc(100vh - var(--topH) - var(--dockH) - env(safe-area-inset-bottom));
+  padding:10px 10px 10px;
   display:flex;
   flex-direction:column;
   gap:10px;
+  overflow:hidden; /* ✅ main 不滾，子區塊滾 */
 }
 
+/* Cards */
 .card{
   background:var(--card);
   border:2px solid var(--stroke);
-  border-radius:18px;
+  border-radius:var(--radius);
   box-shadow:var(--shadow);
-  padding:12px 12px 12px;
+  padding:10px 10px 12px;
 }
-.card.tight{ padding:10px 12px; }
+.card.tight{ padding:10px; }
 .cardTitle{
-  font-size:22px;
   font-weight:900;
-}
-.cardText{
-  font-size:15px;
-  line-height:1.55;
-  color:var(--ink);
+  font-size:16px;
+  margin:0 0 6px;
 }
 .hint{
-  font-size:13px;
+  font-size:12px;
   color:var(--muted);
-  line-height:1.35;
 }
 .row{
   display:flex;
-  justify-content:space-between;
   align-items:center;
-  gap:10px;
+  justify-content:space-between;
+  gap:8px;
 }
-.scrollBox{
-  max-height:200px;
-  overflow:auto;
-  padding-right:4px;
+.cardFoot{
+  margin-top:8px;
 }
 
-/* ===== Setup chips & board list ===== */
-.chips{
-  display:flex;
-  gap:10px;
-  flex-wrap:wrap;
+/* Prompt card: 佔上半 */
+.promptCard{
+  flex: 0 0 auto;
 }
-.chip{
-  padding:10px 14px;
-  border-radius:999px;
-  border:2px solid var(--stroke);
-  background:#fff8ea;
-  font-weight:800;
-}
-.chip.active{
-  background:linear-gradient(#ffd88e,#f4a63a);
-  border-color:#e6a63c;
-}
-.boardList{
-  display:flex;
-  flex-direction:column;
-  gap:10px;
-  max-height:320px;
+.cardText.scrollBox{
+  max-height: 120px; /* ✅ 不佔太多，留空間給座位 */
   overflow:auto;
-  padding-right:4px;
+  padding:8px 10px;
+  border-radius:14px;
+  border:1px dashed rgba(0,0,0,0.15);
+  background: rgba(255,255,255,0.45);
+  font-size:13px;
+  line-height:1.55;
 }
-.boardItem{
-  border-radius:18px;
-  border:2px solid var(--stroke);
-  background:#fff3dc;
-  padding:12px 12px;
+
+/* Setup card：允許內部滾動，避免板子被切到 */
+.setupCard{
+  flex: 0 0 auto;
 }
-.boardItem.active{
-  outline:3px solid var(--accent);
-}
-.boardName{
-  font-size:20px;
-  font-weight:900;
-  margin-bottom:4px;
-}
-.boardMeta{
-  font-size:14px;
-  color:var(--muted);
-}
-.tags{
-  margin-top:8px;
+.setupCard .chips{
   display:flex;
   gap:8px;
   flex-wrap:wrap;
 }
-.tag{
-  padding:6px 10px;
-  border-radius:999px;
+
+.chip{
   border:2px solid var(--stroke);
-  background:#fff8ea;
-  font-size:13px;
+  background:#fff;
+  color:var(--ink);
+  border-radius:999px;
+  padding:7px 12px;
   font-weight:800;
+  font-size:13px;
 }
+.chip.primary,
+.chip.active{
+  background: var(--sel);
+  border-color: var(--selStroke);
+}
+.chip:active{ transform: translateY(1px); }
 
-/* ===== Seats ===== */
-.seatsHeader .hint{ margin-left:auto; }
-.seatsGrid{
+/* 板子格子按鈕：清楚分格 + 會變色 */
+.boardList{
   display:grid;
-  grid-template-columns:repeat(4,1fr);
-  gap:12px;
-  padding:2px;
+  grid-template-columns: 1fr;
+  gap:8px;
+  max-height: 210px;     /* ✅ 可滑，避免被切到 */
+  overflow:auto;
+  padding-right:2px;
+}
+.boardBtn{
+  width:100%;
+  text-align:left;
+  padding:10px 12px;
+  border-radius:14px;
+  border:2px solid var(--stroke);
+  background:#fff;
+  font-weight:900;
+  color:var(--ink);
+  box-shadow: 0 4px 10px rgba(0,0,0,0.10);
+}
+.boardBtn.active{
+  background: var(--sel);
+  border-color: var(--selStroke);
+}
+.boardBtn:active{
+  transform: translateY(1px);
 }
 
+/* Seats header */
+.seatsHeader{
+  flex: 0 0 auto;
+}
+
+/* Seats grid：你喜歡的原本樣式（格子） */
+.seatsGrid{
+  flex: 1 1 auto;
+  overflow:auto; /* ✅ 座位可滑動，不會被底部擋住 */
+  padding-bottom: 10px;
+  display:grid;
+  grid-template-columns: repeat(4, 1fr); /* 12人 = 3列*4欄 */
+  gap:10px;
+}
+
+/* Seat button */
 .seat{
-  border-radius:18px;
-  border:2px solid var(--seatStroke);
-  background:var(--seat);
-  box-shadow:0 8px 14px rgba(0,0,0,0.08);
-  padding:12px 10px 12px;
-  min-height:82px;
+  position:relative;
+  border-radius:16px;
+  border:2px solid var(--stroke);
+  background:#fff;
+  box-shadow: 0 6px 14px rgba(0,0,0,0.12);
+  height: 64px;
   display:flex;
-  flex-direction:column;
-  justify-content:center;
   align-items:center;
+  justify-content:center;
+  padding:0;
 }
 .seatNum{
-  font-size:26px;
   font-weight:1000;
-  color:#2a7de1;
+  font-size:20px;
 }
-.seatSub{
-  margin-top:6px;
-  font-size:13px;
-  color:var(--muted);
-  text-align:center;
-  line-height:1.2;
+.seat.selected{
+  background: var(--sel);
+  border-color: var(--selStroke);
+  box-shadow: 0 8px 16px rgba(241,169,58,0.35);
 }
-
-.seat.isSelected{
-  outline:3px solid var(--accent);
-  box-shadow:0 10px 18px rgba(0,0,0,0.14);
-  transform:translateY(-1px);
+.seat.dead{
+  opacity:0.55;
+  filter: grayscale(0.2);
 }
 
 /* 上帝視角：依陣營框色 */
-.seat.campGood{ outline:3px solid rgba(70,164,106,.55); }
-.seat.campWolf{ outline:3px solid rgba(210,90,90,.60); }
-.seat.campGood.isSelected{ outline:3px solid rgba(70,164,106,.95); }
-.seat.campWolf.isSelected{ outline:3px solid rgba(210,90,90,.95); }
-
-.seat.dead{
-  opacity:.55;
-  filter:grayscale(.15);
+.seat.campWolf{
+  border-color: var(--wolf);
+  box-shadow: 0 8px 16px rgba(192,57,43,0.20);
 }
-.seat .eventLine{
-  margin-top:6px;
+.seat.campGood{
+  border-color: var(--good);
+  box-shadow: 0 8px 16px rgba(44,110,192,0.18);
+}
+
+/* 角色簡寫徽章 */
+.seatBadge{
+  position:absolute;
+  left:6px;
+  top:6px;
   font-size:12px;
-  color:#7b4b5f;
+  font-weight:1000;
+  border-radius:10px;
+  padding:2px 6px;
+  border:1px solid rgba(0,0,0,0.12);
+  background: rgba(255,255,255,0.78);
 }
 
-/* ===== Bottom bar ===== */
+/* 事件圖示（死亡/藥/盾） */
+.seatEvents{
+  position:absolute;
+  right:6px;
+  bottom:6px;
+  font-size:14px;
+  opacity:0.95;
+}
+
+/* Bottom bar (3 buttons) */
 .bottomBar{
   position:fixed;
   left:50%;
   transform:translateX(-50%);
   bottom:0;
-  width:min(480px,100%);
-  padding:10px 10px calc(10px + env(safe-area-inset-bottom));
-  background:linear-gradient(#ffeec9,#ffe3a3);
-  border-top:2px solid var(--stroke);
+  width:min(480px, 100%);
+  height: calc(var(--dockH) + env(safe-area-inset-bottom));
+  padding:8px 10px calc(8px + env(safe-area-inset-bottom));
+  background:linear-gradient(rgba(255,238,201,0.75), rgba(255,238,201,0.98));
+  border-top:1px solid rgba(0,0,0,0.06);
   display:grid;
-  grid-template-columns:1fr 1.2fr 1fr;
-  gap:10px;
+  grid-template-columns: 1fr 1.15fr 1fr;
+  gap:8px;
   z-index:30;
 }
 
+/* Buttons */
 .btn{
-  height:54px;            /* 比你現在小一點但仍好按 */
-  border-radius:18px;
-  border:2px solid var(--stroke);
-  background:#fff8ea;
-  font-size:18px;
+  border:none;
+  border-radius:14px;
+  padding:10px 10px;
   font-weight:1000;
-  color:var(--ink);
-  box-shadow:var(--shadow);
+  font-size:14px;   /* ✅ 縮小 */
+  background: var(--btn);
+  color: var(--btnInk);
+  box-shadow: 0 6px 14px rgba(0,0,0,0.14);
+}
+.btn:active{ transform: translateY(1px); }
+
+.btn.ghost{
+  background:#fff;
+  border:2px solid var(--stroke);
+  box-shadow: 0 4px 12px rgba(0,0,0,0.10);
 }
 .btn.main{
-  background:linear-gradient(#2c3350,#161a2a);
-  border-color:#1f2540;
-  color:#fff;
-}
-.btn.ghost{
-  background:#fff8ea;
+  font-size:14px; /* 中間重要流程按鈕，但不再巨大 */
 }
 .btn:disabled{
-  opacity:.45;
-  filter:grayscale(.1);
-  box-shadow:none;
+  opacity:0.55;
+  filter: grayscale(0.1);
 }
 
-/* ===== Backdrop / Drawer / Modal ===== */
+/* Drawer / Backdrop */
 .backdrop{
   position:fixed;
   inset:0;
-  background:rgba(0,0,0,.35);
-  z-index:60;
+  background: rgba(0,0,0,0.35);
+  z-index:50;
 }
+.hidden{ display:none !important; }
+
 .drawer{
   position:fixed;
   left:50%;
   transform:translateX(-50%);
   bottom:0;
-  width:min(480px,100%);
-  background:var(--card);
+  width:min(480px, 100%);
+  max-height: 82vh;
+  background: var(--card);
   border:2px solid var(--stroke);
   border-bottom:none;
-  border-radius:18px 18px 0 0;
-  box-shadow:0 -14px 24px rgba(0,0,0,.18);
-  z-index:70;
-  max-height:75vh;
-  display:flex;
-  flex-direction:column;
+  border-radius: 18px 18px 0 0;
+  box-shadow: 0 -10px 28px rgba(0,0,0,0.25);
+  z-index:60;
+  overflow:hidden;
 }
 .drawerTop{
-  padding:10px 12px;
   display:flex;
-  justify-content:space-between;
   align-items:center;
-  border-bottom:2px dashed var(--stroke);
+  justify-content:space-between;
+  padding:10px 12px;
+  border-bottom:1px solid rgba(0,0,0,0.06);
 }
 .drawerTitle{
-  font-size:18px;
   font-weight:1000;
+  font-size:16px;
 }
 .drawerBody{
   padding:12px;
   overflow:auto;
+  max-height: calc(82vh - 52px);
 }
 
+/* Seg */
+.seg{
+  display:grid;
+  grid-template-columns: 1fr 1fr 1fr;
+  gap:8px;
+}
+.segBtn{
+  padding:10px 10px;
+  border-radius:14px;
+  border:2px solid var(--stroke);
+  background:#fff;
+  font-weight:1000;
+}
+.segBtn.active,
+.segBtn.primary{
+  background: var(--sel);
+  border-color: var(--selStroke);
+}
+
+/* Modal */
 .modal{
   position:fixed;
   inset:0;
+  background: rgba(0,0,0,0.38);
+  z-index:80;
   display:flex;
   align-items:center;
   justify-content:center;
   padding:16px;
-  z-index:80;
-  background:rgba(0,0,0,.35);
 }
 .modalCard{
-  width:min(480px,100%);
-  background:var(--card);
+  width:min(460px, 100%);
+  background: var(--card);
   border:2px solid var(--stroke);
   border-radius:18px;
-  box-shadow:0 18px 28px rgba(0,0,0,.22);
-  padding:14px;
+  box-shadow: 0 16px 34px rgba(0,0,0,0.30);
+  padding:12px;
 }
 .modalTitle{
-  font-size:22px;
   font-weight:1000;
-  margin-bottom:8px;
+  font-size:18px;
 }
-.modalBody{ font-size:16px; line-height:1.55; }
-.modalActions{
-  display:flex;
-  gap:10px;
-  margin-top:12px;
+.modalBody{
+  margin-top:10px;
 }
-.modalActions .btn{ height:52px; flex:1; }
-
 .roleLine{
-  font-size:26px;
   font-weight:1000;
-  margin-top:6px;
+  font-size:16px;
 }
 .roleLine.small{
-  font-size:15px;
-  font-weight:900;
+  margin-top:6px;
+  font-size:13px;
   color:var(--muted);
 }
-
-.seg{
-  display:grid;
-  grid-template-columns:repeat(3,1fr);
-  gap:10px;
+.modalActions{
+  display:flex;
+  gap:8px;
+  margin-top:12px;
 }
-.segBtn{
-  height:44px;
-  border-radius:14px;
-  border:2px solid var(--stroke);
-  background:#fff8ea;
+
+/* Dice */
+.diceResult{
+  font-size:30px;
   font-weight:1000;
-}
-.segBtn.primary{
-  background:linear-gradient(#ffd88e,#f4a63a);
-  border-color:#e6a63c;
+  text-align:center;
+  padding:10px 0;
 }
 
-.hidden{ display:none !important; }
+/* Mini card in thief modal */
+.card.mini{
+  background: rgba(255,255,255,0.55);
+  border:1px dashed rgba(0,0,0,0.18);
+  border-radius:14px;
+  padding:10px;
+}
